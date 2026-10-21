@@ -1,0 +1,252 @@
+<Window x:Class="Nodify_ETLBox.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:nodify="https://miroiu.github.io/nodify"
+        xmlns:vm="clr-namespace:EtlDesigner.UI.ViewModels"
+        xmlns:conv="clr-namespace:EtlDesigner.UI.Converters"
+        Title="Data Flow ETL Designer"
+        Height="700"
+        Width="1200">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <conv:NodeStateToColorConverter x:Key="StateToBrush" />
+        <conv:PendingConnectionStrokeConverter x:Key="PendingStroke" />
+
+        <!-- ===== Settings editors, chosen by SettingViewModel.Kind ===== -->
+        <DataTemplate x:Key="TextSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="FilePathSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="..."
+                        Width="28"
+                        Margin="4,0,0,0"
+                        Command="{Binding BrowseCommand}" />
+                <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+            </DockPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ComboSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <ComboBox IsEditable="True"
+                      ItemsSource="{Binding ComboBoxItems}"
+                      Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+        </DataTemplate>
+
+        <!-- One row in the settings panel: label, red * when required and empty, editor -->
+        <DataTemplate x:Key="SettingRowTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <StackPanel Margin="0,0,0,10">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                    <TextBlock Text=" *"
+                               Foreground="Red"
+                               FontWeight="Bold"
+                               Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+                <ContentControl Content="{Binding}" Margin="0,2,0,0">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Setter Property="ContentTemplate" Value="{StaticResource TextSettingTemplate}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Kind}" Value="FilePath">
+                                    <Setter Property="ContentTemplate" Value="{StaticResource FilePathSettingTemplate}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="ComboBox">
+                                    <Setter Property="ContentTemplate" Value="{StaticResource ComboSettingTemplate}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+
+    <DockPanel>
+
+        <!-- ===== Toolbar ===== -->
+        <ToolBar DockPanel.Dock="Top">
+            <Button Content="Run" Width="60" Command="{Binding Editor.ValidateCommand}" />
+            <Separator />
+            <Button Content="Sample" Width="60" Command="{Binding Editor.LoadSampleGraphCommand}" />
+            <Separator />
+            <Label Content="Theme" />
+            <ComboBox x:Name="ThemeSelector"
+                      Width="100"
+                      SelectedIndex="0"
+                      SelectionChanged="ThemeSelector_SelectionChanged">
+                <ComboBoxItem Content="Light" />
+                <ComboBoxItem Content="Dark" />
+            </ComboBox>
+            <TextBlock Text="{Binding Editor.Nodes.Count, StringFormat=Nodes: {0}}" Margin="8,0" VerticalAlignment="Center" />
+        </ToolBar>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="260" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="220" />
+            </Grid.RowDefinitions>
+
+            <!-- ===== Left: palette (drag onto the editor, or click to add at a default spot) ===== -->
+            <StackPanel Grid.Row="0" Grid.Column="0" Margin="6">
+                <TextBlock Text="Node types" FontWeight="Bold" Margin="0,0,0,8" />
+                <Button Content="CsvSource" Tag="CsvSource" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="FilterByCountry" Tag="FilterByCountry" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="ToJson" Tag="ToJson" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="ParseJson" Tag="ParseJson" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="ResultJson" Tag="ResultJson" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+            </StackPanel>
+
+            <!-- ===== Center: Nodify editor. NOT wrapped in a ScrollViewer: Nodify owns pan/zoom. ===== -->
+            <nodify:NodifyEditor x:Name="EditorControl"
+                                 Grid.Row="0"
+                                 Grid.Column="1"
+                                 AllowDrop="True"
+                                 Drop="EditorControl_Drop"
+                                 ItemsSource="{Binding Editor.Nodes}"
+                                 SelectedItems="{Binding Editor.SelectedNodes}"
+                                 Connections="{Binding Editor.Connections}"
+                                 PendingConnection="{Binding Editor.PendingConnection}"
+                                 ConnectionCompletedCommand="{Binding Editor.CreateConnectionCommand}"
+                                 DisconnectConnectorCommand="{Binding Editor.DisconnectConnectorCommand}">
+
+                <nodify:NodifyEditor.InputBindings>
+                    <KeyBinding Key="Delete" Command="{Binding Editor.DeleteSelectedCommand}" />
+                </nodify:NodifyEditor.InputBindings>
+
+                <!-- Node position, two-way, so dragging updates the ViewModel -->
+                <nodify:NodifyEditor.ItemContainerStyle>
+                    <Style TargetType="{x:Type nodify:ItemContainer}">
+                        <Setter Property="Location" Value="{Binding Location, Mode=TwoWay}" />
+                    </Style>
+                </nodify:NodifyEditor.ItemContainerStyle>
+
+                <!-- Established connection: curved line with an arrowhead at the target -->
+                <nodify:NodifyEditor.ConnectionTemplate>
+                    <DataTemplate DataType="{x:Type vm:ConnectionViewModel}">
+                        <nodify:Connection Source="{Binding Source.Anchor}"
+                                           Target="{Binding Target.Anchor}"
+                                           ArrowEnds="End" />
+                    </DataTemplate>
+                </nodify:NodifyEditor.ConnectionTemplate>
+
+                <!-- Connection being dragged: green when valid, red when not -->
+                <nodify:NodifyEditor.PendingConnectionTemplate>
+                    <DataTemplate DataType="{x:Type vm:PendingConnectionViewModel}">
+                        <nodify:PendingConnection Source="{Binding Source, Mode=OneWayToSource}"
+                                                  Target="{Binding Target, Mode=OneWayToSource}"
+                                                  PreviewTarget="{Binding PreviewTarget, Mode=OneWayToSource}"
+                                                  EnablePreview="True"
+                                                  Stroke="{Binding IsValid, Converter={StaticResource PendingStroke}}" />
+                    </DataTemplate>
+                </nodify:NodifyEditor.PendingConnectionTemplate>
+
+                <!-- A node: title, typed input/output connectors, state footer -->
+                <nodify:NodifyEditor.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:NodeViewModel}">
+                        <nodify:Node Header="{Binding Title}"
+                                     Input="{Binding Inputs}"
+                                     Output="{Binding Outputs}"
+                                     FooterBrush="{Binding State, Converter={StaticResource StateToBrush}}">
+
+                            <nodify:Node.InputConnectorTemplate>
+                                <DataTemplate DataType="{x:Type vm:ConnectorViewModel}">
+                                    <nodify:NodeInput Header="{Binding Name}"
+                                                      IsConnected="{Binding IsConnected}"
+                                                      Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                                      ToolTip="{Binding Kind}" />
+                                </DataTemplate>
+                            </nodify:Node.InputConnectorTemplate>
+
+                            <nodify:Node.OutputConnectorTemplate>
+                                <DataTemplate DataType="{x:Type vm:ConnectorViewModel}">
+                                    <nodify:NodeOutput Header="{Binding Name}"
+                                                       IsConnected="{Binding IsConnected}"
+                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                                       ToolTip="{Binding Kind}" />
+                                </DataTemplate>
+                            </nodify:Node.OutputConnectorTemplate>
+
+                            <nodify:Node.Footer>
+                                <StackPanel Orientation="Horizontal" Margin="4,2">
+                                    <TextBlock Text="{Binding State}" FontSize="10" />
+                                    <TextBlock Text=" | rows: " FontSize="10" />
+                                    <TextBlock Text="{Binding RowCount}" FontSize="10" />
+                                </StackPanel>
+                            </nodify:Node.Footer>
+                        </nodify:Node>
+                    </DataTemplate>
+                </nodify:NodifyEditor.ItemTemplate>
+            </nodify:NodifyEditor>
+
+            <!-- ===== Right: settings of the single selected node (no code-behind) ===== -->
+            <Border Grid.Row="0" Grid.Column="2" Padding="8" BorderBrush="Gray" BorderThickness="1,0,0,0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Settings" FontWeight="Bold" Margin="0,0,0,8" />
+                    <Grid>
+                        <TextBlock Text="Select a node" Foreground="Gray">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Editor.SelectedNode}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Editor.SelectedNode.Settings}"
+                                          ItemTemplate="{StaticResource SettingRowTemplate}" />
+                        </ScrollViewer>
+                    </Grid>
+                </DockPanel>
+            </Border>
+
+            <!-- ===== Bottom: issues and the two JSON outputs ===== -->
+            <TabControl Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
+                <TabItem Header="Issues">
+                    <ListBox ItemsSource="{Binding Editor.Issues}" Margin="4" />
+                </TabItem>
+                <TabItem Header="Filtered JSON">
+                    <TextBox Text="{Binding FilteredJsonOutput, Mode=OneWay}"
+                             Margin="4"
+                             IsReadOnly="True"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto" />
+                </TabItem>
+                <TabItem Header="Parsed JSON">
+                    <TextBox Text="{Binding ParsedJsonOutput, Mode=OneWay}"
+                             Margin="4"
+                             IsReadOnly="True"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto" />
+                </TabItem>
+            </TabControl>
+        </Grid>
+    </DockPanel>
+</Window>
