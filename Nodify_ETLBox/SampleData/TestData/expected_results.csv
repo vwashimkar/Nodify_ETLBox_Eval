@@ -1,0 +1,53 @@
+test_id,file,delimiter,country,expectation,expected_filtered,expected_parsed,expected_skipped,expected_filtered_keys,expected_parsed_keys,expected_ids_sha1,has_values,what_it_tests
+T001,00_original_employee_list.csv,",",India,strict,11,11,0,8,3,0a1bd9a115db18595bcafa92e4f211b10da97a8b,yes,Original sample file (identical to employee_list_1.csv). Has duplicate ids and emails.
+T002,00_original_employee_list.csv,",",USA,strict,5,5,0,8,3,c0b104983120c180809cdc6caf96297d87ffacd0,yes,Original sample file
+T003,00_original_employee_list.csv,",",Germany,strict,2,2,0,8,3,0306d239086e735258b6453727ef74cf3c2cf0f8,yes,Original sample file
+T004,00_original_employee_list.csv,",",France,strict,0,0,0,8,3,da39a3ee5e6b4b0d3255bfef95601890afd80709,yes,Original sample file - zero-match country
+T005,01_baseline_clean.csv,",",India,strict,20,20,0,8,3,6f81395d37fbfaedf15d5ad2e3634fbacc3582c0,yes,"Clean data, 7 countries, unique ids"
+T006,01_baseline_clean.csv,",",USA,strict,14,14,0,8,3,22065015044ed63e2eb40a6b74ef04aa47a4b01c,yes,"Clean data, 7 countries, unique ids"
+T007,01_baseline_clean.csv,",",Germany,strict,9,9,0,8,3,ed7a656f15e4a217e10b7fe172cd6330901c6d57,yes,"Clean data, 7 countries, unique ids"
+T008,01_baseline_clean.csv,",",United Kingdom,strict,7,7,0,8,3,b3af0ad0394888bd660c7229fb0dd7e196c0cc40,yes,"Clean data, 7 countries, unique ids"
+T009,01_baseline_clean.csv,",",Japan,strict,5,5,0,8,3,d6d1c7d5404928a31d34765161b882feefc97dcf,yes,"Clean data, 7 countries, unique ids"
+T010,01_baseline_clean.csv,",",Brazil,strict,3,3,0,8,3,ecc6734d11334de6b62137f3f78758ea2e15ac4a,yes,"Clean data, 7 countries, unique ids"
+T011,01_baseline_clean.csv,",",Canada,strict,2,2,0,8,3,e7be9ac03ff01306f2891b401405e175e1e6bc98,yes,"Clean data, 7 countries, unique ids"
+T012,01_baseline_clean.csv,",",France,strict,0,0,0,8,3,da39a3ee5e6b4b0d3255bfef95601890afd80709,yes,"Clean data, 7 countries, unique ids - zero matches, expect [] in both panes"
+T013,01_baseline_clean.csv,",",india,strict,20,20,0,8,3,6f81395d37fbfaedf15d5ad2e3634fbacc3582c0,yes,"Clean data, 7 countries, unique ids - lowercase query must match (case-insensitive)"
+T014,02_location_edge_cases.csv,",",India,strict,7,7,6,8,3,9a8f6b53ec9579949ffbe23ebf926ec2cb01a827,yes,"7 valid variants (case, padding, extra pipes, empty city) must match; 6 malformed rows skipped"
+T015,02_location_edge_cases.csv,",",USA,strict,1,1,6,8,3,17ba0791499db908433b80f37c5fbc89b870084b,yes,Only 'USA|Austin' matches
+T016,02_location_edge_cases.csv,",",Germany,strict,1,1,6,8,3,1b6453892473a467d07372d45eb05abc2031647a,yes,Only 'Germany|Berlin' matches
+T017,02_location_edge_cases.csv,",",Indiana,strict,1,1,6,8,3,0716d9708d321ffb6a00818614779e779925365c,yes,"Prefix look-alike: equality, not StartsWith/Contains"
+T018,02_location_edge_cases.csv,",",United States,strict,1,1,6,8,3,bd307a3ec329e10a2cff8fb87480823da114f8f4,yes,Different country string than USA - must not merge
+T019,02_location_edge_cases.csv,",",France,strict,0,0,6,8,3,da39a3ee5e6b4b0d3255bfef95601890afd80709,yes,Zero matches but malformed rows still reported
+T020,03_quoting_and_escaping.csv,",",India,strict,8,8,0,8,3,778e31e6ef6fbd467cc38c7b64bb63028a6df259,yes,"Commas, quotes, newline in quoted field, backslash, <>&, emoji, padding - filtered and parsed JSON must round-trip every value exactly"
+T021,03_quoting_and_escaping.csv,",",USA,strict,4,4,0,8,3,6897324189a2173e7dc2a1e448936285709ef3b6,yes,"Tab char, literal \u0041 text, slash - JSON escaping"
+T022,04_unicode.csv,",",Türkiye,strict,3,3,0,8,3,b85e2d4914e22b5ad3b82b312b3dc405dc17dcb8,yes,3 case variants (Türkiye/TÜRKIYE/türkiye) - ordinal ignore-case
+T023,04_unicode.csv,",",日本,strict,2,2,0,8,3,299fb75279434d46c472ce01b4214088975cdc1b,yes,CJK country and names
+T024,04_unicode.csv,",",Côte d'Ivoire,strict,2,2,0,8,3,0306d239086e735258b6453727ef74cf3c2cf0f8,yes,"Apostrophe + accents, case variants"
+T025,04_unicode.csv,",",México,strict,1,1,0,8,3,fe5dbbcea5ce7e2988b8c69bcfdfde8904aabc1f,yes,Accent-sensitive: must NOT match 'Mexico'
+T026,04_unicode.csv,",",Mexico,strict,1,1,0,8,3,0ade7c2cf97f75d009975f4d720d1fa6c19f4897,yes,Accent-sensitive: must NOT match 'México'
+T027,04_unicode.csv,",",Österreich,strict,1,1,0,8,3,17ba0791499db908433b80f37c5fbc89b870084b,yes,Umlaut country
+T028,05_encoding_utf8_bom.csv,",",India,strict,4,4,0,8,3,fd2e1f89b57b8bd27d95292a19c95a405963a020,yes,"UTF-8 BOM: first JSON key must be exactly 'id', not '\ufeffid'"
+T029,05_encoding_utf8_bom.csv,",",USA,strict,3,3,0,8,3,c0944c9aabfed9a95bdb07c8a4c52cf062e3b8b9,yes,"UTF-8 BOM, second query"
+T030,06_encoding_windows1252.csv,",",México,observe,2,2,0,8,3,1f02f98cf775a9e0ce9252ff5972dce728c4ddb0,yes,Windows-1252 bytes read as UTF-8 usually garble accents. Ideal = 2 matches; record what actually happens
+T031,07_line_endings_lf.csv,",",India,strict,20,20,0,8,3,6f81395d37fbfaedf15d5ad2e3634fbacc3582c0,yes,"LF-only line endings, same rows as file 01"
+T032,07_line_endings_lf.csv,",",USA,strict,14,14,0,8,3,22065015044ed63e2eb40a6b74ef04aa47a4b01c,yes,"LF-only line endings, same rows as file 01"
+T033,08_columns_reordered_extra.csv,",",India,strict,6,6,0,10,3,1e42bc506cd8ed53e3b2d60a0081443fc5a16dae,yes,"Columns in different order + 2 extra columns: filtered keeps all 10 keys, parsed has only 3"
+T034,08_columns_reordered_extra.csv,",",Germany,strict,4,4,0,10,3,af8865d4bf1e13b110cf08ace74fe318e8a48a64,yes,"Same file, other country"
+T035,09_missing_location_column.csv,",",India,error_expected,,,,,,,no,"No 'location' column: expect a clear error naming the column, no crash, no partial output"
+T036,10_semicolon.csv,;,India,strict,8,8,0,8,3,873a91f9d4164147c0beb04b6237de4b5c9213da,yes,Semicolon delimiter (set Delimiter to ;) and decimal-comma salaries kept as text
+T037,10_semicolon.csv,;,Germany,strict,5,5,0,8,3,528158febffa95f6de3e635c8bda82bb05a16a36,yes,"Semicolon delimiter, second query"
+T038,10_semicolon.csv,",",India,error_expected,,,,,,,no,"Same file with WRONG delimiter ',': whole line becomes one column, so expect a clear 'location column not found' error"
+T039,11_tab_delimited.tsv,\t,India,strict,6,6,0,8,3,932b71720422e01faf6fc4740548902c3bab5dc8,yes,Tab delimiter (set Delimiter to \t)
+T040,12_ragged_rows.csv,",",India,observe,3,3,,8,3,,no,"Too-few and too-many fields, blank and whitespace-only lines. Ideal: well-formed India rows 1,2,5 processed, bad rows reported. Record real behaviour"
+T041,12b_unterminated_quote.csv,",",India,observe,5,5,,8,3,,no,"Unterminated quote on row 6. Ideal: rows 1-5 processed and an error reported, no hang. Record real behaviour"
+T042,13_empty_values.csv,",",India,strict,7,7,0,8,3,4aa987e72cb21c4d630d2e510e5f006214ddb047,yes,"Empty email/age/salary/joined: rows kept; parsed values must be """" (not null, not missing)"
+T043,14_header_only.csv,",",India,strict,0,0,0,8,3,da39a3ee5e6b4b0d3255bfef95601890afd80709,yes,"Header only, zero data rows: expect [] in both panes and no error"
+T044,15_empty_file.csv,",",India,error_expected,,,,,,,no,"Zero-byte file: expect a clear error (no header), no crash or hang"
+T045,16_all_malformed.csv,",",India,strict,0,0,10,8,3,da39a3ee5e6b4b0d3255bfef95601890afd80709,yes,Every row malformed: expect [] and '10 rows skipped'
+T046,16_all_malformed.csv,",",USA,strict,0,0,10,8,3,da39a3ee5e6b4b0d3255bfef95601890afd80709,yes,Every row malformed ('USA' without pipe is malformed): expect [] and '10 rows skipped'
+T047,17_headers_variant.csv,",",India,observe,4,4,0,8,3,,no,Headers with different case and padding: does Fields='first_name' still match? Ideal = 4 rows with 3 keys. Record real behaviour
+T048,18_volume_source_over_limit.csv,",",India,strict,3000,3000,0,8,3,1a5a3dc3bb02475e586a0c4088644129ec4cc84b,no,"12,000 rows in file, only 3,000 match: output below ETLBox free limit, source above it (limit-sensitive)"
+T049,18_volume_source_over_limit.csv,",",USA,strict,4000,4000,0,8,3,e6708977da883dd280f8da6e915eaadab6e74ff2,no,"4,000 matches (limit-sensitive)"
+T050,18_volume_source_over_limit.csv,",",Germany,strict,5000,5000,0,8,3,93be8a46ef4ed67310a07aa408e4fa09a3937402,no,"Exactly 5,000 matches: right at the free-edition limit (limit-sensitive)"
+T051,19_volume_output_over_limit.csv,",",India,strict,5001,5001,0,8,3,7f5a72a499bd1230891293b1a2d9a1e87601d846,no,"5,001 matches: one over the 5,000-row free limit (limit-sensitive)"
+T052,19_volume_output_over_limit.csv,",",USA,strict,2999,2999,0,8,3,d062ec95ec25fdfbbfb7112591ccffb96cfb7c93,no,"2,999 matches (limit-sensitive)"

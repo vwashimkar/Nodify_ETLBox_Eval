@@ -1,0 +1,9 @@
+id,first_name,last_name,email,age,location,salary,joined
+1,José,Pérez,josé.pérez1@sample.net,61,México|Puebla,158421.64,03-08-2017
+2,Zoë,Núñez,zoë.núñez2@sample.net,42,España|Madrid,74579.90,04-03-2017
+3,Inés,Ñandú,inés.ñandú3@sample.net,52,México|León,68997.03,13-09-2012
+4,Anna,Smith,anna.smith4@sample.net,26,USA|Austin,73467.92,11-02-2024
+5,Raúl,Gómez,raúl.gómez5@sample.net,53,España|Sevilla,160237.62,01-11-2025
+6,Ben,Lee,ben.lee6@example.com,50,USA|Denver,90252.09,07-09-2017
+7,Chloé,Tremblay,chloé.tremblay7@example.com,52,Canada|Montréal,126319.49,25-01-2015
+8,Jürgen,Müller,jürgen.müller8@sample.net,56,Germany|Köln,42272.25,10-08-2023

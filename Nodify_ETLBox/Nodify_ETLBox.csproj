@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	
 
 	<PropertyGroup>
@@ -33,6 +33,20 @@
 		<ApplicationDefinition Remove="reference\**" />
 		<EmbeddedResource Remove="reference\**" />
 		<None Remove="reference\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="SampleData\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="SampleData\employee_list.csv">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+		<None Update="SampleData\TestData\**" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+	<ItemGroup Condition="Exists('etlbox.lic')">
+		<None Update="etlbox.lic" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 </Project>

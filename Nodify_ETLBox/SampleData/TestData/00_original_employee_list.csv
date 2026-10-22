@@ -1,0 +1,19 @@
+id,first_name,last_name,email,age,location,salary,joined
+1,Liam,Williams,liam.williams1@sample.net,49,USA|Riverside,156973.24,18-04-2020
+2,Jane,Williams,jane.williams2@example.com,71,USA|Fairview,50435.05,27-01-2024
+3,Emma,Moore,emma.moore3@test.org,76,USA|Fairview,128705.61,06-01-2022
+4,Emma,Martinez,emma.martinez4@example.com,43,USA|Burlington,106198.11,05-01-2016
+5,Benjamin,Rodriguez,benjamin.rodriguez5@sample.net,62,USA|Manchester,189641.05,19-04-2023
+6,Amelia,Williams,amelia.williams6@demo.io,34,Germany|Berlin,26628.09,19-08-2016
+7,Mia,Jones,mia.jones7@demo.io,21,Germany|Ashland,33038.53,03-01-2021
+8,Emma,Lopez,emma.lopez8@demo.io,30,India|New Delhi,146867.05,15-12-2015
+9,Isabella,Lopez,isabella.lopez9@sample.net,29,India|Kolkata,175981.13,27-01-2015
+10,Amelia,Johnson,amelia.johnson10@demo.io,54,India|Banglore,22669.84,09-03-2020
+11,Emma,Lopez,emma.lopez8@demo.io,30,India|Hyederabad,146867.05,15-12-2015
+12,Isabella,Lopez,isabella.lopez9@sample.net,29,India|Chandigarh,175981.13,27-01-2015
+13,Emma,Lopez,emma.lopez8@demo.io,30,India|Asansol,146867.05,15-12-2015
+14,Isabella,Lopez,isabella.lopez9@sample.net,29,India|Chennai,175981.13,27-01-2015
+8,Emma,Lopez,emma.lopez8@demo.io,30,India|Gurgaon,146867.05,15-12-2015
+9,Isabella,Lopez,isabella.lopez9@sample.net,29,India|New Delhi,175981.13,27-01-2015
+8,Emma,Lopez,emma.lopez8@demo.io,30,India|New Delhi,146867.05,15-12-2015
+9,Isabella,Lopez,isabella.lopez9@sample.net,29,India|New Delhi,175981.13,27-01-2015

@@ -70,7 +70,13 @@
         <ToolBar DockPanel.Dock="Top">
             <Button Content="Run" Width="60" Command="{Binding Editor.ValidateCommand}" />
             <Separator />
+            <Button Content="Delete" Width="60" Command="{Binding Editor.DeleteSelectedCommand}" />
+            <Separator />
             <Button Content="Sample" Width="60" Command="{Binding Editor.LoadSampleGraphCommand}" />
+            <Separator />
+            <Button Content="Spike" Width="60" Click="Spike_Click" />
+            <Separator />
+            <Button Content="Run all tests" Width="100" Click="RunAllTests_Click" />
             <Separator />
             <Label Content="Theme" />
             <ComboBox x:Name="ThemeSelector"
@@ -80,7 +86,6 @@
                 <ComboBoxItem Content="Light" />
                 <ComboBoxItem Content="Dark" />
             </ComboBox>
-            <TextBlock Text="{Binding Editor.Nodes.Count, StringFormat=Nodes: {0}}" Margin="8,0" VerticalAlignment="Center" />
         </ToolBar>
 
         <Grid>
@@ -99,18 +104,23 @@
                 <TextBlock Text="Node types" FontWeight="Bold" Margin="0,0,0,8" />
                 <Button Content="CsvSource" Tag="CsvSource" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
                 <Button Content="FilterByCountry" Tag="FilterByCountry" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
                 <Button Content="ToJson" Tag="ToJson" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
                 <Button Content="ParseJson" Tag="ParseJson" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
                 <Button Content="ResultJson" Tag="ResultJson" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
             </StackPanel>
 
@@ -186,9 +196,9 @@
 
                             <nodify:Node.Footer>
                                 <StackPanel Orientation="Horizontal" Margin="4,2">
-                                    <TextBlock Text="{Binding State}" FontSize="10" />
-                                    <TextBlock Text=" | rows: " FontSize="10" />
-                                    <TextBlock Text="{Binding RowCount}" FontSize="10" />
+                                    <TextBlock Text="{Binding State}" FontSize="10" Foreground="Black" />
+                                    <TextBlock Text=" | rows: " FontSize="10" Foreground="Black" />
+                                    <TextBlock Text="{Binding RowCount}" FontSize="10" Foreground="Black" />
                                 </StackPanel>
                             </nodify:Node.Footer>
                         </nodify:Node>

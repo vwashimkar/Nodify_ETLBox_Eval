@@ -1,0 +1,9 @@
+ID, First_Name ,LAST_NAME,Email,AGE,Location,Salary,Joined
+1,Rohan,Brown,rohan.brown1@demo.io,29,USA|Riverside,46340.68,10-02-2020
+2,Hans,Schmidt,hans.schmidt2@example.com,54,India|Kolkata,26417.07,11-10-2014
+3,Yuki,Wilson,yuki.wilson3@demo.io,31,USA|Seattle,50743.81,23-10-2024
+4,Ethan,Patel,ethan.patel4@sample.net,23,India|Lucknow,89845.96,22-12-2015
+5,Priya,Anderson,priya.anderson5@sample.net,49,USA|Riverside,59780.50,08-05-2024
+6,Rohan,Tanaka,rohan.tanaka6@demo.io,44,India|Jaipur,135312.16,19-08-2019
+7,Mason,Mukherjee,mason.mukherjee7@sample.net,53,India|Pune,109668.16,06-04-2024
+8,Yuki,Lopez,yuki.lopez8@sample.net,24,USA|Austin,129000.44,28-06-2020

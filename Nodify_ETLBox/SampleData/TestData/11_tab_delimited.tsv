@@ -1,0 +1,16 @@
+id	first_name	last_name	email	age	location	salary	joined
+1	Aarav	Patel	aarav.patel1@demo.io	41	India|Delhi	92549.88	22-05-2017
+2	Ava	Sharma	ava.sharma2@sample.net	25	India|Delhi	35508.21	03-02-2018
+3	Noah	Patel	noah.patel3@example.com	44	India|Kolkata	158000.78	18-01-2021
+4	Hans	Taylor	hans.taylor4@sample.net	63	India|Jaipur	40779.32	12-11-2024
+5	Aarav	Schmidt	aarav.schmidt5@example.com	24	USA|Riverside	184627.77	20-05-2017
+6	Noah	Anderson	noah.anderson6@example.com	34	Germany|Cologne	46304.13	16-04-2025
+7	Noah	Miller	noah.miller7@example.com	44	USA|Riverside	39530.50	09-10-2015
+8	Aarav	Schmidt	aarav.schmidt8@example.com	60	USA|Denver	124307.46	21-09-2012
+9	Yuki	Tanaka	yuki.tanaka9@example.com	38	India|Kolkata	24922.04	09-12-2024
+10	Mason	Tanaka	mason.tanaka10@sample.net	43	USA|Riverside	21037.98	28-03-2021
+11	Sofia	Johnson	sofia.johnson11@demo.io	61	USA|Denver	185207.75	03-12-2020
+12	Mia	Wilson	mia.wilson12@sample.net	50	Germany|Cologne	77952.32	12-05-2023
+13	Isabella	Mukherjee	isabella.mukherjee13@example.com	59	Germany|Cologne	34442.70	02-03-2014
+14	Yuki	Williams	yuki.williams14@example.com	26	Germany|Hamburg	66257.48	22-07-2019
+15	Yuki	Moore	yuki.moore15@sample.net	38	India|Delhi	56646.72	17-02-2017

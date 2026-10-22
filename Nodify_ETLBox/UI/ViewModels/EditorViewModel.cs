@@ -165,6 +165,10 @@ public class EditorViewModel : ObservableObject
         }
 
         var sourceConnector = PendingConnection.Source;
+        if (sourceConnector == null)
+        {
+            return;
+        }
 
         // Validate connection
         var validationResult = ValidateConnection(sourceConnector, targetConnector);
@@ -207,9 +211,9 @@ public class EditorViewModel : ObservableObject
         PendingConnection = null;
 
         // Layout positions (left to right)
-        var x = 50.0;
-        const double y = 100.0;
-        const double spacing = 250.0;
+        var x = 20.0;
+        const double y = 50.0;
+        const double spacing = 180.0;
 
         var csvNode = NodeFactory.CreateCsvSource(new Point(x, y));
         csvNode.Settings.Single(s => s.Key == "FilePath").Value = "employee_list.csv";
@@ -308,6 +312,12 @@ public class EditorViewModel : ObservableObject
 
         // (d) Chain is complete (each output properly connected in sequence)
         // This is implicit from (b) and (c) validation, but we can add additional checks if needed.
+
+        // If no issues found, add the success message
+        if (Issues.Count == 0)
+        {
+            Issues.Add("No issues found.");
+        }
     }
 
     /// <summary>

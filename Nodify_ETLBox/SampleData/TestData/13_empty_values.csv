@@ -1,0 +1,13 @@
+id,first_name,last_name,email,age,location,salary,joined
+1,Ethan,Lopez,,55,USA|Seattle,139624.11,17-09-2025
+2,Logan,Johnson,logan.johnson2@sample.net,23,India|Delhi,94157.33,15-02-2025
+3,Isabella,Anderson,isabella.anderson3@sample.net,57,India|Chennai,,21-07-2016
+4,Noah,Wilson,noah.wilson4@demo.io,41,Germany|Berlin,49218.44,
+5,Logan,Johnson,logan.johnson5@sample.net,27,India|Mumbai,61363.80,19-07-2020
+6,Olivia,Wilson,olivia.wilson6@sample.net,,India|Lucknow,57667.25,25-03-2013
+7,Ananya,Sharma,ananya.sharma7@demo.io,54,USA|Austin,106691.85,25-06-2017
+8,Ava,Brown,ava.brown8@demo.io,30,USA|Riverside,63514.60,
+9,Olivia,Lopez,olivia.lopez9@example.com,52,Germany|Munich,98872.02,19-10-2019
+10,Greta,Sharma,greta.sharma10@example.com,,India|Pune,74945.40,21-06-2014
+11,Priya,Johnson,priya.johnson11@sample.net,49,India|Surat,127335.47,26-05-2021
+12,Emma,Miller,emma.miller12@example.com,25,India|Pune,72769.33,15-01-2012

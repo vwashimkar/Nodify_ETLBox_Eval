@@ -1,0 +1,38 @@
+{
+  "test_india_comma": {
+    "filtered": [
+      { "id": "1", "first_name": "Rajesh", "last_name": "Kumar", "email": "rajesh.kumar@company.com", "age": "28", "location": "India|Mumbai", "salary": "75000", "joined": "2020-01-15" },
+      { "id": "2", "first_name": "Priya", "last_name": "Sharma", "email": "priya.sharma@company.com", "age": "26", "location": "India|Delhi", "salary": "72000", "joined": "2019-06-20" },
+      { "id": "3", "first_name": "Amit", "last_name": "Patel", "email": "amit.patel@company.com", "age": "32", "location": "India|Bangalore", "salary": "85000", "joined": "2018-03-10" },
+      { "id": "4", "first_name": "Neha", "last_name": "Singh", "email": "neha.singh@company.com", "age": "29", "location": "India|Chennai", "salary": "78000", "joined": "2019-11-25" },
+      { "id": "5", "first_name": "Vikram", "last_name": "Reddy", "email": "vikram.reddy@company.com", "age": "35", "location": "India|Hyderabad", "salary": "92000", "joined": "2017-07-01" },
+      { "id": "6", "first_name": "Anjali", "last_name": "Nair", "email": "anjali.nair@company.com", "age": "27", "location": "India|Kochi", "salary": "70000", "joined": "2020-02-14" },
+      { "id": "7", "first_name": "Rohan", "last_name": "Gupta", "email": "rohan.gupta@company.com", "age": "31", "location": "India|Pune", "salary": "82000", "joined": "2018-09-05" },
+      { "id": "8", "first_name": "Divya", "last_name": "Verma", "email": "divya.verma@company.com", "age": "28", "location": "India|Ahmedabad", "salary": "76000", "joined": "2019-04-12" },
+      { "id": "9", "first_name": "Sanjay", "last_name": "Iyer", "email": "sanjay.iyer@company.com", "age": "34", "location": "India|Jaipur", "salary": "88000", "joined": "2018-01-20" },
+      { "id": "10", "first_name": "Pooja", "last_name": "Bhat", "email": "pooja.bhat@company.com", "age": "30", "location": "India|Lucknow", "salary": "80000", "joined": "2019-03-08" },
+      { "id": "11", "first_name": "Arjun", "last_name": "Menon", "email": "arjun.menon@company.com", "age": "33", "location": "India|Chandigarh", "salary": "86000", "joined": "2017-12-15" }
+    ],
+    "parsed": [
+      { "first_name": "Rajesh", "last_name": "Kumar", "email": "rajesh.kumar@company.com" },
+      { "first_name": "Priya", "last_name": "Sharma", "email": "priya.sharma@company.com" },
+      { "first_name": "Amit", "last_name": "Patel", "email": "amit.patel@company.com" },
+      { "first_name": "Neha", "last_name": "Singh", "email": "neha.singh@company.com" },
+      { "first_name": "Vikram", "last_name": "Reddy", "email": "vikram.reddy@company.com" },
+      { "first_name": "Anjali", "last_name": "Nair", "email": "anjali.nair@company.com" },
+      { "first_name": "Rohan", "last_name": "Gupta", "email": "rohan.gupta@company.com" },
+      { "first_name": "Divya", "last_name": "Verma", "email": "divya.verma@company.com" },
+      { "first_name": "Sanjay", "last_name": "Iyer", "email": "sanjay.iyer@company.com" },
+      { "first_name": "Pooja", "last_name": "Bhat", "email": "pooja.bhat@company.com" },
+      { "first_name": "Arjun", "last_name": "Menon", "email": "arjun.menon@company.com" }
+    ]
+  },
+  "test_india_tab": {
+    "filtered": [],
+    "parsed": []
+  },
+  "test_us_comma": {
+    "filtered": [],
+    "parsed": []
+  }
+}

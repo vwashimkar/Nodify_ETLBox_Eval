@@ -1,0 +1,15 @@
+id,first_name,last_name,email,age,location,salary,joined
+1,Emma,"Smith, Jr.","emma.smith,jr.1@sample.net",55,India|Delhi,92824.26,12-02-2020
+2,Isabella,O'Brien,isabella.o'brien2@demo.io,47,India|Pune,159796.26,04-07-2017
+3,"Anne ""Annie""",Sharma,"anne""annie"".sharma3@sample.net",30,India|Surat,94032.81,24-09-2022
+4,Amelia,"van der
+Berg","amelia.vander
+berg4@example.com",55,India|Jaipur,151689.05,15-07-2025
+5,Greta,Back\slash,greta.back\slash5@sample.net,41,India|Mumbai,164791.24,27-02-2016
+6,<b>Bold</b> & Co,Tanaka,<b>bold</b>&co.tanaka6@sample.net,36,India|Chennai,147580.97,19-10-2022
+7,Sam 😀,Wilson,sam😀.wilson7@sample.net,22,India|Kolkata,104032.11,11-03-2019
+8,  Padded  ,Spaces  ,padded.spaces8@demo.io,43,India|Lucknow,155631.50,11-05-2021
+9,Tab	Here,Patel,tab	here.patel9@sample.net,56,USA|Austin,21725.69,07-02-2015
+10,Aarav,\u0041,aarav.\u004110@sample.net,56,USA|Denver,148887.99,23-08-2022
+11,Rohan,a/b,rohan.a/b11@sample.net,22,USA|Boston,35819.07,08-07-2023
+12,Lucas,Davis,lucas.davis12@example.com,58,USA|Seattle,82733.48,18-09-2017

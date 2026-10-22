@@ -1,0 +1,12 @@
+id	first_name	last_name	email	age	location	salary	joined
+1	Rajesh	Kumar	rajesh.kumar@company.com	28	India|Mumbai	75000	2020-01-15
+2	Priya	Sharma	priya.sharma@company.com	26	India|Delhi	72000	2019-06-20
+3	Amit	Patel	amit.patel@company.com	32	India|Bangalore	85000	2018-03-10
+4	Neha	Singh	neha.singh@company.com	29	India|Chennai	78000	2019-11-25
+5	Vikram	Reddy	vikram.reddy@company.com	35	India|Hyderabad	92000	2017-07-01
+6	Anjali	Nair	anjali.nair@company.com	27	India|Kochi	70000	2020-02-14
+7	Rohan	Gupta	rohan.gupta@company.com	31	India|Pune	82000	2018-09-05
+8	Divya	Verma	divya.verma@company.com	28	India|Ahmedabad	76000	2019-04-12
+9	Sanjay	Iyer	sanjay.iyer@company.com	34	India|Jaipur	88000	2018-01-20
+10	Pooja	Bhat	pooja.bhat@company.com	30	India|Lucknow	80000	2019-03-08
+11	Arjun	Menon	arjun.menon@company.com	33	India|Chandigarh	86000	2017-12-15

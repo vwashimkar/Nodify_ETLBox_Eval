@@ -1,0 +1,16 @@
+email,location,first_name,id,department,last_name,salary,manager,age,joined
+sofia.brown1@example.com,Germany|Berlin,Sofia,1,Sales,Brown,146869.73,B. Fox,53,05-02-2016
+ananya.davis2@demo.io,India|Surat,Ananya,2,Sales,Davis,143428.67,A. Rao,39,27-10-2021
+priya.taylor3@sample.net,USA|Seattle,Priya,3,Sales,Taylor,76514.79,B. Fox,43,25-09-2018
+mia.patel4@demo.io,India|Delhi,Mia,4,HR,Patel,85105.04,C. Wu,57,28-07-2012
+rohan.patel5@sample.net,India|Pune,Rohan,5,Sales,Patel,188030.38,A. Rao,45,26-11-2014
+ava.taylor6@example.com,India|Chennai,Ava,6,Sales,Taylor,167849.05,A. Rao,42,28-08-2013
+ava.wilson7@example.com,Germany|Munich,Ava,7,Sales,Wilson,32720.80,C. Wu,30,26-05-2017
+olivia.schmidt8@sample.net,USA|Riverside,Olivia,8,Sales,Schmidt,166088.17,C. Wu,64,13-06-2022
+emma.anderson9@demo.io,Germany|Berlin,Emma,9,Finance,Anderson,127297.37,B. Fox,36,10-04-2023
+noah.mukherjee10@example.com,USA|Riverside,Noah,10,Finance,Mukherjee,95425.35,B. Fox,27,23-05-2012
+emma.davis11@sample.net,India|Kolkata,Emma,11,IT,Davis,93216.75,A. Rao,44,08-09-2018
+ethan.johnson12@example.com,USA|Austin,Ethan,12,IT,Johnson,125350.76,A. Rao,45,08-08-2021
+priya.sharma13@sample.net,India|Mumbai,Priya,13,IT,Sharma,63405.54,A. Rao,50,01-08-2016
+priya.miller14@example.com,Germany|Cologne,Priya,14,Sales,Miller,128619.58,B. Fox,40,14-12-2016
+mia.wilson15@sample.net,USA|Austin,Mia,15,HR,Wilson,60324.97,C. Wu,27,19-06-2021

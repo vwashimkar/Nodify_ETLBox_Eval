@@ -1,0 +1,13 @@
+id,first_name,last_name,email,age,location,salary,joined
+1,José,García,josé.garcía1@sample.net,56,Türkiye|Istanbul,76234.52,23-08-2016
+2,Zoë,Müller,zoë.müller2@sample.net,37,TÜRKIYE|Izmir,59191.47,24-04-2017
+3,Çağla,Yılmaz,çağla.yılmaz3@demo.io,55,türkiye|Ankara,181649.19,23-03-2015
+4,李,雷,李.雷4@demo.io,51,日本|東京,67004.94,19-09-2021
+5,Yuki,Tanaka,yuki.tanaka5@sample.net,27,日本|大阪,161546.82,10-04-2017
+6,Aïcha,Koné,aïcha.koné6@demo.io,40,Côte d'Ivoire|Abidjan,22405.22,18-03-2016
+7,Søren,Østergaard,søren.østergaard7@demo.io,24,côte d'ivoire|Bouaké,114071.02,23-03-2022
+8,Łukasz,Nowak,łukasz.nowak8@sample.net,27,México|Guadalajara,168362.35,19-05-2019
+9,Renée,Dubois,renée.dubois9@sample.net,49,Mexico|Cancun,77920.01,02-05-2025
+10,Seán,Ó Briain,seán.óbriain10@sample.net,28,Ireland|Dublin,159759.66,13-08-2013
+11,Björn,Gruber,björn.gruber11@example.com,61,Österreich|Wien,136696.67,05-03-2024
+12,Anna,Smith,anna.smith12@example.com,40,USA|Austin,34480.75,08-02-2020

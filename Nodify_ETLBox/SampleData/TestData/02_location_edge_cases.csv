@@ -1,0 +1,20 @@
+id,first_name,last_name,email,age,location,salary,joined
+1,Ethan,Patel,ethan.patel1@sample.net,49,India|Mumbai,64062.56,08-11-2016
+2,Ananya,Moore,ananya.moore2@example.com,36,India/Chennai,66681.57,03-12-2016
+3,Lucas,Davis,lucas.davis3@sample.net,41,India,171814.56,03-03-2014
+4,Lucas,Wilson,lucas.wilson4@example.com,30,Germany|Berlin,140091.25,03-07-2018
+5,Isabella,Taylor,isabella.taylor5@sample.net,47,India | Surat,30585.17,27-07-2018
+6,Greta,Patel,greta.patel6@demo.io,57,   ,84664.77,01-06-2016
+7,Sofia,Schmidt,sofia.schmidt7@sample.net,55,India|,147077.66,18-10-2015
+8,Rohan,Brown,rohan.brown8@sample.net,48,India|Mumbai|Maharashtra,102559.14,13-06-2022
+9,Sofia,Patel,sofia.patel9@demo.io,50,British India|Calcutta,176322.08,20-09-2012
+10,Sofia,Anderson,sofia.anderson10@example.com,63,Indonesia|Jakarta,24607.35,21-07-2014
+11,Priya,Lopez,priya.lopez11@demo.io,37,USA|Austin,84447.66,07-08-2017
+12,Isabella,Mukherjee,isabella.mukherjee12@sample.net,38,,147841.67,27-07-2016
+13,Olivia,Moore,olivia.moore13@demo.io,55,United States|Boston,28854.55,12-04-2022
+14,Olivia,Mukherjee,olivia.mukherjee14@example.com,23,INDIA|Jaipur,148219.64,08-04-2025
+15,Liam,Anderson,liam.anderson15@demo.io,36,"Mumbai, India",41457.57,22-02-2021
+16,Mia,Moore,mia.moore16@example.com,37,  India  |Lucknow,150372.68,06-10-2021
+17,Noah,Mukherjee,noah.mukherjee17@demo.io,40,Indiana|Fort Wayne,38376.79,01-05-2021
+18,Sofia,Wilson,sofia.wilson18@example.com,33,|Mumbai,32919.40,23-11-2015
+19,Noah,Patel,noah.patel19@sample.net,64,india|Pune,122069.97,04-10-2024

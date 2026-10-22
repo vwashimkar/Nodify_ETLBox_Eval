@@ -1,0 +1,6 @@
+id,first_name,last_name,email,age,location,salary,joined
+1,Rajesh,Kumar,rajesh.kumar@company.com,28,India|Mumbai,75000,2020-01-15
+2,Priya,Sharma,priya.sharma@company.com,26,NoCountry,72000,2019-06-20
+3,Amit,Patel,amit.patel@company.com,32,India|Bangalore,85000,2018-03-10
+4,Neha,Singh,neha.singh@company.com,29,,78000,2019-11-25
+5,Vikram,Reddy,vikram.reddy@company.com,35,|Hyderabad,92000,2017-07-01
