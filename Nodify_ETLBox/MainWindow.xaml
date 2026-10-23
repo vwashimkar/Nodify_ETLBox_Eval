@@ -30,9 +30,16 @@
         </DataTemplate>
 
         <DataTemplate x:Key="ComboSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
-            <ComboBox IsEditable="True"
-                      ItemsSource="{Binding ComboBoxItems}"
-                      Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+            <StackPanel>
+                <ComboBox IsEditable="True"
+                          ItemsSource="{Binding ComboBoxItems}"
+                          Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Text="{Binding WarningMessage}"
+                           Foreground="DarkOrange"
+                           FontSize="10"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,0" />
+            </StackPanel>
         </DataTemplate>
 
         <!-- One row in the settings panel: label, red * when required and empty, editor -->
@@ -202,9 +209,11 @@
                                         <TextBlock Text="{Binding RowCount}" FontSize="10" Foreground="Black" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding ErrorMessage}"
+                                               ToolTip="{Binding ErrorDetail}"
                                                FontSize="9"
                                                Foreground="DarkSlateGray"
-                                               TextWrapping="Wrap"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap"
                                                MaxWidth="170"
                                                Margin="0,2,0,0" />
                                 </StackPanel>

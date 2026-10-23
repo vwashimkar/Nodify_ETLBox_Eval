@@ -19,40 +19,26 @@ public static class PipelineRunner
         try
         {
             if (string.IsNullOrWhiteSpace(settings.CsvFilePath))
-            {
-                return CreateError("CSV file path is required.");
-            }
+                return CreateError("CSV file path is required.", PipelineFailureNode.CsvSource);
 
             if (!File.Exists(settings.CsvFilePath))
-            {
-                return CreateError($"CSV file not found: {settings.CsvFilePath}");
-            }
+                return CreateError($"CSV file not found: {settings.CsvFilePath}", PipelineFailureNode.CsvSource);
 
             if (string.IsNullOrEmpty(settings.Delimiter))
-            {
-                return CreateError("Delimiter is required.");
-            }
+                return CreateError("Delimiter is required.", PipelineFailureNode.CsvSource);
 
             if (string.IsNullOrEmpty(settings.Separator))
-            {
-                return CreateError("Separator is required.");
-            }
+                return CreateError("Separator is required.", PipelineFailureNode.CsvSource);
 
             if (string.IsNullOrWhiteSpace(settings.LocationColumn))
-            {
-                return CreateError("Location column is required.");
-            }
+                return CreateError("Location column is required.", PipelineFailureNode.CsvSource);
 
             if (settings.ParseFields == null || settings.ParseFields.Count == 0)
-            {
-                return CreateError("At least one parse field is required.");
-            }
+                return CreateError("At least one parse field is required.", PipelineFailureNode.ParseJson);
 
-            var actualDelimiter = settings.Delimiter == "\\t" ? "\t" : settings.Delimiter;
+            var actualDelimiter = NormalizeDelimiter(settings.Delimiter);
             if (actualDelimiter.Length != 1)
-            {
-                return CreateError("Delimiter must be a single character.");
-            }
+                return CreateError("Delimiter must be a single character.", PipelineFailureNode.CsvSource);
 
             var requiredColumns = settings.ParseFields
                 .Concat(new[] { settings.LocationColumn })
@@ -67,13 +53,11 @@ public static class PipelineRunner
             }
             catch (Exception ex)
             {
-                return CreateError($"Error reading CSV header: {ex.Message}");
+                return CreateError($"Error reading CSV header: {ex.Message}", PipelineFailureNode.CsvSource);
             }
 
             if (string.IsNullOrWhiteSpace(headerLine))
-            {
-                return CreateError("CSV file has no header");
-            }
+                return CreateError("CSV file has no header", PipelineFailureNode.CsvSource);
 
             var headers = headerLine
                 .Split(actualDelimiter[0])
@@ -83,9 +67,7 @@ public static class PipelineRunner
             foreach (var requiredColumn in requiredColumns)
             {
                 if (!headers.Contains(requiredColumn))
-                {
-                    return CreateError($"Missing required column: {requiredColumn}");
-                }
+                    return CreateError($"Missing required column: {requiredColumn}", PipelineFailureNode.CsvSource);
             }
 
             int rowsRead = 0;
@@ -94,7 +76,7 @@ public static class PipelineRunner
             int skippedMalformedCount = 0;
 
             var csvSource = new CsvSource<ExpandoObject>(settings.CsvFilePath);
-            TryConfigureDelimiter(csvSource, actualDelimiter);
+            ConfigureCsvSourceDelimiter(csvSource, actualDelimiter);
 
             var countingTap = new RowTransformation(row =>
             {
@@ -147,12 +129,20 @@ public static class PipelineRunner
             var tempFilteredJson = Path.Combine(Path.GetTempPath(), $"pipeline_filtered_{Guid.NewGuid()}.json");
             var jsonDestination = new JsonDestination<ExpandoObject>(tempFilteredJson);
 
-            csvSource.LinkTo(countingTap);
-            countingTap.LinkTo(filterCountry);
-            filterCountry.LinkTo(jsonDestination);
+            try
+            {
+                csvSource.LinkTo(countingTap);
+                countingTap.LinkTo(filterCountry);
+                filterCountry.LinkTo(jsonDestination);
 
-            var network1 = new Network(csvSource, countingTap, filterCountry, jsonDestination);
-            network1.Execute();
+                var network1 = new Network(csvSource, countingTap, filterCountry, jsonDestination);
+                network1.Execute();
+            }
+            catch (Exception ex)
+            {
+                TryDelete(tempFilteredJson);
+                return CreateError($"Pipeline error: {ex.Message}", PipelineFailureNode.CsvSource, rowsRead, rowsMatched, rowsNotMatched, skippedMalformedCount, 0);
+            }
 
             string filteredJsonRaw;
             try
@@ -180,11 +170,10 @@ public static class PipelineRunner
                 TryDelete(tempFilteredJson);
                 var emptyResult = new PipelineResult(filteredJson, "[]", skippedMalformedCount, null);
                 var emptyStats = new PipelineExecutionStats(rowsRead, rowsMatched, rowsNotMatched, skippedMalformedCount, 0);
-                return new PipelineRunResult(emptyResult, emptyStats);
+                return new PipelineRunResult(emptyResult, emptyStats, PipelineFailureNode.Unknown);
             }
 
             var jsonSource = new JsonSource<ExpandoObject>(tempFilteredJson);
-
             var projectFields = new RowTransformation(row =>
             {
                 var dict = (IDictionary<string, object?>)row;
@@ -201,51 +190,188 @@ public static class PipelineRunner
 
             var memoryDestination = new MemoryDestination<ExpandoObject>();
 
-            jsonSource.LinkTo(projectFields);
-            projectFields.LinkTo(memoryDestination);
+            try
+            {
+                jsonSource.LinkTo(projectFields);
+                projectFields.LinkTo(memoryDestination);
 
-            var network2 = new Network(jsonSource, projectFields, memoryDestination);
-            network2.Execute();
+                var network2 = new Network(jsonSource, projectFields, memoryDestination);
+                network2.Execute();
+            }
+            catch (Exception ex)
+            {
+                TryDelete(tempFilteredJson);
+                return CreateError($"Pipeline error: {ex.Message}", PipelineFailureNode.ParseJson, rowsRead, rowsMatched, rowsNotMatched, skippedMalformedCount, 0);
+            }
 
             string parsedJson;
-            if (memoryDestination.Data == null || memoryDestination.Data.Count == 0)
+            try
             {
-                parsedJson = "[]";
-            }
-            else
-            {
-                var dictRecords = memoryDestination.Data.Select(exp =>
+                if (memoryDestination.Data == null || memoryDestination.Data.Count == 0)
                 {
-                    var dict = (IDictionary<string, object?>)exp;
-                    var record = new Dictionary<string, object?>();
-                    foreach (var field in settings.ParseFields)
+                    parsedJson = "[]";
+                }
+                else
+                {
+                    var dictRecords = memoryDestination.Data.Select(exp =>
                     {
-                        record[field] = dict.ContainsKey(field) ? dict[field] : string.Empty;
-                    }
+                        var dict = (IDictionary<string, object?>)exp;
+                        var record = new Dictionary<string, object?>();
+                        foreach (var field in settings.ParseFields)
+                        {
+                            record[field] = dict.ContainsKey(field) ? dict[field] : string.Empty;
+                        }
 
-                    return record;
-                }).ToList();
+                        return record;
+                    }).ToList();
 
-                parsedJson = JsonSerializer.Serialize(dictRecords, new JsonSerializerOptions { WriteIndented = true });
+                    parsedJson = JsonSerializer.Serialize(dictRecords, new JsonSerializerOptions { WriteIndented = true });
+                }
+            }
+            catch (Exception ex)
+            {
+                TryDelete(tempFilteredJson);
+                return CreateError($"Pipeline error: {ex.Message}", PipelineFailureNode.ToJson, rowsRead, rowsMatched, rowsNotMatched, skippedMalformedCount, memoryDestination.Data?.Count ?? 0);
             }
 
             TryDelete(tempFilteredJson);
 
             var result = new PipelineResult(filteredJson, parsedJson, skippedMalformedCount, null);
             var stats = new PipelineExecutionStats(rowsRead, rowsMatched, rowsNotMatched, skippedMalformedCount, memoryDestination.Data?.Count ?? 0);
-            return new PipelineRunResult(result, stats);
+            return new PipelineRunResult(result, stats, PipelineFailureNode.Unknown);
         }
         catch (Exception ex)
         {
-            return CreateError($"Pipeline error: {ex.Message}");
+            return CreateError($"Pipeline error: {ex.Message}", PipelineFailureNode.Unknown);
         }
     }
 
-    private static PipelineRunResult CreateError(string message)
+    public static CountryListResult ReadDistinctCountries(PipelineSettings settings)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(settings.CsvFilePath))
+                return new CountryListResult(Array.Empty<string>(), 0, 0, "CSV file path is required.");
+
+            if (!File.Exists(settings.CsvFilePath))
+                return new CountryListResult(Array.Empty<string>(), 0, 0, $"CSV file not found: {settings.CsvFilePath}");
+
+            if (string.IsNullOrWhiteSpace(settings.LocationColumn))
+                return new CountryListResult(Array.Empty<string>(), 0, 0, "Location column is required.");
+
+            if (string.IsNullOrEmpty(settings.Separator))
+                return new CountryListResult(Array.Empty<string>(), 0, 0, "Separator is required.");
+
+            var actualDelimiter = NormalizeDelimiter(settings.Delimiter);
+            if (actualDelimiter.Length != 1)
+                return new CountryListResult(Array.Empty<string>(), 0, 0, "Delimiter must be a single character.");
+
+            string headerLine;
+            try
+            {
+                using var reader = new StreamReader(settings.CsvFilePath);
+                headerLine = reader.ReadLine() ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                return new CountryListResult(Array.Empty<string>(), 0, 0, $"Error reading CSV header: {ex.Message}");
+            }
+
+            if (string.IsNullOrWhiteSpace(headerLine))
+                return new CountryListResult(Array.Empty<string>(), 0, 0, "CSV file has no header");
+
+            var headers = headerLine
+                .Split(actualDelimiter[0])
+                .Select(h => h.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (!headers.Contains(settings.LocationColumn))
+                return new CountryListResult(Array.Empty<string>(), 0, 0, $"Missing required column: {settings.LocationColumn}");
+
+            int rowsRead = 0;
+            int rowsSkipped = 0;
+            var ordered = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var csvSource = new CsvSource<ExpandoObject>(settings.CsvFilePath);
+            ConfigureCsvSourceDelimiter(csvSource, actualDelimiter);
+
+            var collectCountries = new RowTransformation(row =>
+            {
+                rowsRead++;
+                var dict = (IDictionary<string, object?>)row;
+
+                if (!dict.TryGetValue(settings.LocationColumn, out var locationObj))
+                {
+                    rowsSkipped++;
+                    return null;
+                }
+
+                var location = locationObj?.ToString() ?? string.Empty;
+                var idx = location.IndexOf(settings.Separator, StringComparison.Ordinal);
+                if (idx < 0)
+                {
+                    rowsSkipped++;
+                    return null;
+                }
+
+                var country = location[..idx].Trim();
+                if (string.IsNullOrEmpty(country))
+                {
+                    rowsSkipped++;
+                    return null;
+                }
+
+                if (seen.Add(country))
+                    ordered.Add(country);
+
+                return null;
+            });
+
+            var sink = new VoidDestination();
+
+            csvSource.LinkTo(collectCountries);
+            collectCountries.LinkTo(sink);
+
+            var network = new Network(csvSource, collectCountries, sink);
+            network.Execute();
+
+            var sorted = ordered
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return new CountryListResult(sorted, rowsRead, rowsSkipped, null);
+        }
+        catch (Exception ex)
+        {
+            return new CountryListResult(Array.Empty<string>(), 0, 0, ex.Message);
+        }
+    }
+
+    private static PipelineRunResult CreateError(
+        string message,
+        PipelineFailureNode failureNode,
+        int rowsRead = 0,
+        int rowsMatched = 0,
+        int rowsNotMatched = 0,
+        int rowsSkipped = 0,
+        int parsedCount = 0)
     {
         return new PipelineRunResult(
-            new PipelineResult("[]", "[]", 0, message),
-            new PipelineExecutionStats(0, 0, 0, 0, 0));
+            new PipelineResult("[]", "[]", rowsSkipped, message),
+            new PipelineExecutionStats(rowsRead, rowsMatched, rowsNotMatched, rowsSkipped, parsedCount),
+            failureNode);
+    }
+
+    public static string NormalizeDelimiter(string delimiter)
+        => delimiter == "\\t" ? "\t" : delimiter;
+
+    public static void ConfigureCsvSourceDelimiter(CsvSource<ExpandoObject> csvSource, string delimiter)
+    {
+        if (delimiter == ",")
+            return;
+
+        csvSource.Configuration.Delimiter = delimiter;
     }
 
     private static string TryIndentJson(string json)
@@ -269,38 +395,6 @@ public static class PipelineRunner
         }
         catch
         {
-        }
-    }
-
-    private static void TryConfigureDelimiter(CsvSource<ExpandoObject> csvSource, string delimiter)
-    {
-        if (delimiter == ",")
-        {
-            return;
-        }
-
-        try
-        {
-            var settingsProp = typeof(CsvSource<ExpandoObject>).GetProperty("Settings");
-            if (settingsProp?.GetValue(csvSource) is object settings)
-            {
-                var delimProp = settings.GetType().GetProperty("Delimiter");
-                if (delimProp?.CanWrite == true)
-                {
-                    delimProp.SetValue(settings, delimiter);
-                    return;
-                }
-            }
-
-            var directProp = typeof(CsvSource<ExpandoObject>).GetProperty("Delimiter");
-            if (directProp?.CanWrite == true)
-            {
-                directProp.SetValue(csvSource, delimiter);
-            }
-        }
-        catch
-        {
-            // intentionally no-op; caller relies on header validation and pipeline errors
         }
     }
 }

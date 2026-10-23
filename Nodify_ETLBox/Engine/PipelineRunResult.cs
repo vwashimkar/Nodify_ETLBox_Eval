@@ -7,4 +7,5 @@ namespace EtlDesigner.Engine;
 /// </summary>
 public record PipelineRunResult(
     PipelineResult Result,
-    PipelineExecutionStats Stats);
+    PipelineExecutionStats Stats,
+    PipelineFailureNode FailureNode = PipelineFailureNode.Unknown);

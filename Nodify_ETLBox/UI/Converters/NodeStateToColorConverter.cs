@@ -18,6 +18,7 @@ public class NodeStateToColorConverter : IValueConverter
                 NodeState.Running => new SolidColorBrush(Colors.LightBlue),
                 NodeState.Succeeded => new SolidColorBrush(Colors.LightGreen),
                 NodeState.Failed => new SolidColorBrush(Colors.LightCoral),
+                NodeState.NotRun => new SolidColorBrush(Colors.LightGoldenrodYellow),
                 _ => new SolidColorBrush(Colors.White)
             };
         }

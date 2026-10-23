@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ETLBox.Csv;
 using ETLBox.DataFlow;
+using EtlDesigner.Engine;
 
 namespace EtlDesigner.Spike;
 
@@ -28,7 +29,12 @@ public record TestResult(
     string Result, // PASS, FAIL, OBSERVED
     string Detail,
     long ElapsedMs,
-    bool LicenseFilePresent);
+    bool LicenseFilePresent,
+    int? RowsRead,
+    int? RowsMatched,
+    int? RowsNotMatching,
+    int? RowsSkipped,
+    bool? Reconciles);
 
 /// <summary>
 /// Runs all tests from the test manifest and reports results.
@@ -75,7 +81,8 @@ public class TestRunner
         {
             return new List<TestResult> { new TestResult(
                 "manifest", "", "", "", null, null, null,
-                "FAIL", $"Failed to read test manifest: {ex.Message}", 0, _licenseFilePresent) };
+                "FAIL", $"Failed to read test manifest: {ex.Message}", 0, _licenseFilePresent,
+                null, null, null, null, null) };
         }
 
         // Load expected values
@@ -145,16 +152,27 @@ public class TestRunner
 
             // Run pipeline with timeout
             var cts = new CancellationTokenSource(TimeSpan.FromSeconds(TimeoutSeconds));
+            PipelineRunResult runResult;
             PipelineResult pipelineResult;
             try
             {
-                pipelineResult = await Task.Run(() => ETLBoxSpike.RunPipeline(csvPath, country, delimiter), cts.Token);
+                var settings = new PipelineSettings(
+                    CsvFilePath: csvPath,
+                    Delimiter: delimiter,
+                    LocationColumn: "location",
+                    Separator: "|",
+                    Country: country,
+                    ParseFields: new[] { "first_name", "last_name", "email" });
+
+                runResult = await Task.Run(() => PipelineRunner.RunWithStats(settings), cts.Token);
+                pipelineResult = runResult.Result;
             }
             catch (OperationCanceledException)
             {
                 sw.Stop();
                 return new TestResult(testId, file, country ?? "", expectation, null, null, null,
-                    "FAIL", "Test timeout (> 60 seconds)", sw.ElapsedMilliseconds, _licenseFilePresent);
+                    "FAIL", "Test timeout (> 60 seconds)", sw.ElapsedMilliseconds, _licenseFilePresent,
+                    null, null, null, null, null);
             }
 
             sw.Stop();
@@ -167,6 +185,21 @@ public class TestRunner
             var actualSkipped = pipelineResult.SkippedMalformedCount;
             var hasError = !string.IsNullOrEmpty(pipelineResult.ErrorMessage);
 
+            int? rowsRead = runResult.Stats.RowsRead;
+            int? rowsMatched = runResult.Stats.RowsMatched;
+            int? rowsNotMatching = runResult.Stats.RowsNotMatched;
+            int? rowsSkipped = runResult.Stats.RowsMalformedSkipped;
+            bool? reconciles = rowsRead == (rowsMatched + rowsNotMatching + rowsSkipped);
+
+            if (hasError && rowsRead == 0 && rowsMatched == 0 && rowsNotMatching == 0 && rowsSkipped == 0)
+            {
+                rowsRead = null;
+                rowsMatched = null;
+                rowsNotMatching = null;
+                rowsSkipped = null;
+                reconciles = null;
+            }
+
             // Validate expectations
             var mismatches = new List<string>();
 
@@ -178,7 +211,8 @@ public class TestRunner
                 {
                     sw.Stop();
                     return new TestResult(testId, file, country ?? "", expectation, null, null, null,
-                        "PASS", $"Error as expected: {pipelineResult.ErrorMessage}", sw.ElapsedMilliseconds, _licenseFilePresent);
+                        "PASS", $"Error as expected: {pipelineResult.ErrorMessage}", sw.ElapsedMilliseconds, _licenseFilePresent,
+                        null, null, null, null, null);
                 }
             }
             else if (hasError)
@@ -228,6 +262,8 @@ public class TestRunner
                 detail = $"Filtered: {actualFiltered}, Parsed: {actualParsed}, Skipped: {actualSkipped}";
                 if (!string.IsNullOrEmpty(filteredIdSha1))
                     detail += $", SHA1: {filteredIdSha1}";
+                if (!string.IsNullOrWhiteSpace(pipelineResult.ErrorMessage))
+                    detail += $", Error: {pipelineResult.ErrorMessage}";
             }
             else if (mismatches.Count > 0)
             {
@@ -235,13 +271,15 @@ public class TestRunner
                 detail = string.Join("; ", mismatches);
             }
 
-            return new TestResult(testId, file, country ?? "", expectation, actualFiltered, actualParsed, actualSkipped, result, detail, sw.ElapsedMilliseconds, _licenseFilePresent);
+            return new TestResult(testId, file, country ?? "", expectation, actualFiltered, actualParsed, actualSkipped, result, detail, sw.ElapsedMilliseconds, _licenseFilePresent,
+                rowsRead, rowsMatched, rowsNotMatching, rowsSkipped, reconciles);
         }
         catch (Exception ex)
         {
             sw.Stop();
             return new TestResult(testId, file, country ?? "", expectation, null, null, null,
-                "FAIL", $"Exception: {ex.Message}", sw.ElapsedMilliseconds, _licenseFilePresent);
+                "FAIL", $"Exception: {ex.Message}", sw.ElapsedMilliseconds, _licenseFilePresent,
+                null, null, null, null, null);
         }
     }
 

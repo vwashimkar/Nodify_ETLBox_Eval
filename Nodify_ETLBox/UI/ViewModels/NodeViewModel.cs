@@ -18,7 +18,8 @@ public enum NodeState
     Idle,
     Running,
     Succeeded,
-    Failed
+    Failed,
+    NotRun
 }
 
 public class NodeViewModel : ObservableObject
@@ -28,6 +29,7 @@ public class NodeViewModel : ObservableObject
     private NodeState _state;
     private long _rowCount;
     private string? _errorMessage;
+    private string? _errorDetail;
     private bool _isSelected;
     private System.Windows.Size _size;
 
@@ -42,6 +44,7 @@ public class NodeViewModel : ObservableObject
         _state = NodeState.Idle;
         _rowCount = 0;
         _errorMessage = null;
+        _errorDetail = null;
         _isSelected = false;
 
         Inputs = new ObservableCollection<ConnectorViewModel>();
@@ -89,6 +92,12 @@ public class NodeViewModel : ObservableObject
     {
         get => _errorMessage;
         set => SetProperty(ref _errorMessage, value);
+    }
+
+    public string? ErrorDetail
+    {
+        get => _errorDetail;
+        set => SetProperty(ref _errorDetail, value);
     }
 
     public bool IsSelected

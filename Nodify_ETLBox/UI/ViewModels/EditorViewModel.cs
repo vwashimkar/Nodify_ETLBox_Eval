@@ -584,6 +584,7 @@ public class EditorViewModel : ObservableObject
             node.State = NodeState.Idle;
             node.RowCount = 0;
             node.ErrorMessage = null;
+            node.ErrorDetail = null;
         }
     }
 

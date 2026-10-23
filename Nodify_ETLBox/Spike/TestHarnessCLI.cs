@@ -76,7 +76,7 @@ public static class TestHarnessCLI
         using var writer = new StreamWriter(new FileStream(filePath, FileMode.Create, FileAccess.Write), System.Text.Encoding.UTF8);
 
         // Header
-        writer.WriteLine("test_id,file,country,expectation,actual_filtered,actual_parsed,actual_skipped,result,detail,elapsed_ms,license_file_present");
+        writer.WriteLine("test_id,file,country,expectation,actual_filtered,actual_parsed,actual_skipped,result,detail,elapsed_ms,license_file_present,rows_read,rows_matched,rows_not_matching,rows_skipped,reconciles");
 
         // Rows
         foreach (var result in results)
@@ -85,9 +85,14 @@ public static class TestHarnessCLI
             var parsedStr = result.ActualParsed?.ToString() ?? "";
             var skippedStr = result.ActualSkipped?.ToString() ?? "";
             var licenseStr = result.LicenseFilePresent ? "true" : "false";
+            var rowsReadStr = result.RowsRead?.ToString() ?? "";
+            var rowsMatchedStr = result.RowsMatched?.ToString() ?? "";
+            var rowsNotMatchingStr = result.RowsNotMatching?.ToString() ?? "";
+            var rowsSkippedStr = result.RowsSkipped?.ToString() ?? "";
+            var reconcilesStr = result.Reconciles.HasValue ? (result.Reconciles.Value ? "true" : "false") : "";
 
             var detail = CsvEscape(result.Detail);
-            writer.WriteLine($"{result.TestId},{result.File},{result.Country},{result.Expectation},{filteredStr},{parsedStr},{skippedStr},{result.Result},{detail},{result.ElapsedMs},{licenseStr}");
+            writer.WriteLine($"{result.TestId},{result.File},{result.Country},{result.Expectation},{filteredStr},{parsedStr},{skippedStr},{result.Result},{detail},{result.ElapsedMs},{licenseStr},{rowsReadStr},{rowsMatchedStr},{rowsNotMatchingStr},{rowsSkippedStr},{reconcilesStr}");
         }
 
         writer.Flush();

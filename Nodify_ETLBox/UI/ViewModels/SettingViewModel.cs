@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Microsoft.Win32;
 using EtlDesigner.UI.Mvvm;
 
@@ -14,6 +15,7 @@ public enum SettingKind
 public class SettingViewModel : ObservableObject
 {
     private string _value;
+    private string? _warningMessage;
 
     public SettingViewModel(string key, string label, SettingKind kind, bool required, string defaultValue = "")
     {
@@ -37,7 +39,19 @@ public class SettingViewModel : ObservableObject
     public string Value
     {
         get => _value;
-        set => SetProperty(ref _value, value ?? "");
+        set
+        {
+            if (SetProperty(ref _value, value ?? ""))
+            {
+                OnValueChanged();
+            }
+        }
+    }
+
+    public string? WarningMessage
+    {
+        get => _warningMessage;
+        set => SetProperty(ref _warningMessage, value);
     }
 
     /// <summary>
@@ -48,7 +62,7 @@ public class SettingViewModel : ObservableObject
     /// <summary>
     /// For ComboBox settings only: the list of selectable items.
     /// </summary>
-    public List<string> ComboBoxItems { get; } = new();
+    public ObservableCollection<string> ComboBoxItems { get; } = new();
 
     public RelayCommand BrowseCommand { get; }
 
@@ -73,4 +87,11 @@ public class SettingViewModel : ObservableObject
     }
 
     public override string ToString() => $"{Label}: {Value}";
+
+    public event EventHandler? ValueChanged;
+
+    protected virtual void OnValueChanged()
+    {
+        ValueChanged?.Invoke(this, EventArgs.Empty);
+    }
 }

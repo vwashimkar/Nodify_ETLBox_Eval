@@ -184,12 +184,18 @@ public partial class MainWindow : Window
         using (var writer = new StreamWriter(path))
         {
             // Write header
-            writer.WriteLine("test_id,file,country,expectation,actual_filtered,actual_parsed,actual_skipped,result,detail,elapsed_ms,license_file_present");
+            writer.WriteLine("test_id,file,country,expectation,actual_filtered,actual_parsed,actual_skipped,result,detail,elapsed_ms,license_file_present,rows_read,rows_matched,rows_not_matching,rows_skipped,reconciles");
 
             // Write results
             foreach (var result in results)
             {
                 var licenseStr = result.LicenseFilePresent ? "true" : "false";
+                var rowsReadStr = result.RowsRead?.ToString() ?? "";
+                var rowsMatchedStr = result.RowsMatched?.ToString() ?? "";
+                var rowsNotMatchingStr = result.RowsNotMatching?.ToString() ?? "";
+                var rowsSkippedStr = result.RowsSkipped?.ToString() ?? "";
+                var reconcilesStr = result.Reconciles.HasValue ? (result.Reconciles.Value ? "true" : "false") : "";
+
                 var fields = new[]
                 {
                     CsvEscape(result.TestId),
@@ -202,7 +208,12 @@ public partial class MainWindow : Window
                     CsvEscape(result.Result),
                     CsvEscape(result.Detail),
                     result.ElapsedMs.ToString(),
-                    licenseStr
+                    licenseStr,
+                    rowsReadStr,
+                    rowsMatchedStr,
+                    rowsNotMatchingStr,
+                    rowsSkippedStr,
+                    reconcilesStr
                 };
                 writer.WriteLine(string.Join(",", fields));
             }
