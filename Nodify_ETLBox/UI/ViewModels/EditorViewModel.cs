@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
+using EtlDesigner.Engine;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -268,16 +270,12 @@ public class EditorViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Validates the graph.
-    /// Checks: (a) every node's required settings are non-empty, (b) every input is connected,
-    /// (c) exactly one of each node type, (d) chain is complete.
-    /// Issues are added to the Issues collection.
+    /// Validates the graph for the supported linear 5-node chain.
     /// </summary>
     public void Validate()
     {
         Issues.Clear();
 
-        // (a) Check required settings
         foreach (var node in Nodes)
         {
             var emptyRequired = node.Settings.Where(s => s.Required && string.IsNullOrWhiteSpace(s.Value)).ToList();
@@ -287,37 +285,122 @@ public class EditorViewModel : ObservableObject
             }
         }
 
-        // (b) Check every input is connected
-        foreach (var node in Nodes)
+        if (TryBuildLinearChain(out _, out var chainIssues) == false)
         {
-            foreach (var input in node.Inputs)
+            foreach (var issue in chainIssues)
             {
-                if (!input.IsConnected)
-                {
-                    Issues.Add($"{node.Title}: Input '{input.Name}' is not connected.");
-                }
+                Issues.Add(issue);
             }
         }
 
-        // (c) Exactly one of each node type
-        var nodeTypeCounts = Nodes.GroupBy(n => n.NodeType).ToDictionary(g => g.Key, g => g.Count());
-        foreach (var nodeType in Enum.GetValues(typeof(NodeType)).Cast<NodeType>())
-        {
-            var count = nodeTypeCounts.GetValueOrDefault(nodeType, 0);
-            if (count != 1)
-            {
-                Issues.Add($"Expected exactly 1 {nodeType} node, found {count}.");
-            }
-        }
-
-        // (d) Chain is complete (each output properly connected in sequence)
-        // This is implicit from (b) and (c) validation, but we can add additional checks if needed.
-
-        // If no issues found, add the success message
         if (Issues.Count == 0)
         {
             Issues.Add("No issues found.");
         }
+    }
+
+    private bool TryBuildLinearChain(out List<NodeViewModel> chain, out List<string> issues)
+    {
+        chain = new List<NodeViewModel>();
+        issues = new List<string>();
+
+        var expectedOrder = new[]
+        {
+            NodeType.CsvSource,
+            NodeType.FilterByCountry,
+            NodeType.ToJson,
+            NodeType.ParseJson,
+            NodeType.ResultJson
+        };
+
+        if (Nodes.Count != expectedOrder.Length)
+        {
+            issues.Add($"Graph supports only a linear 5-node chain (CsvSource -> FilterByCountry -> ToJson -> ParseJson -> ResultJson). Found {Nodes.Count} nodes.");
+        }
+
+        foreach (var nodeType in expectedOrder)
+        {
+            var count = Nodes.Count(n => n.NodeType == nodeType);
+            if (count != 1)
+            {
+                issues.Add($"Expected exactly 1 {nodeType} node, found {count}.");
+            }
+        }
+
+        var csvNode = Nodes.SingleOrDefault(n => n.NodeType == NodeType.CsvSource);
+        if (csvNode == null)
+        {
+            issues.Add("CsvSource: node is missing.");
+            return false;
+        }
+
+        if (csvNode.Inputs.Count > 0)
+        {
+            issues.Add("CsvSource: wrong node definition, source node must not have input ports.");
+        }
+
+        if (Connections.Count != expectedOrder.Length - 1)
+        {
+            issues.Add($"Graph supports only one linear chain with 4 connections. Found {Connections.Count} connections.");
+        }
+
+        var current = csvNode;
+        chain.Add(current);
+
+        for (int i = 0; i < expectedOrder.Length - 1; i++)
+        {
+            var currentType = expectedOrder[i];
+            var expectedNextType = expectedOrder[i + 1];
+
+            var outgoing = Connections.Where(c => c.Source.ParentNode == current).ToList();
+            if (outgoing.Count == 0)
+            {
+                issues.Add($"{current.Title}: node has no outgoing connection.");
+                break;
+            }
+
+            if (outgoing.Count > 1)
+            {
+                issues.Add($"{current.Title}: branching is not supported. Expected 1 outgoing connection, found {outgoing.Count}.");
+                break;
+            }
+
+            var next = outgoing[0].Target.ParentNode;
+            if (next.NodeType != expectedNextType)
+            {
+                issues.Add($"Wrong node order: expected {currentType} -> {expectedNextType}, but found {currentType} -> {next.NodeType}.");
+                break;
+            }
+
+            var incomingToNext = Connections.Count(c => c.Target.ParentNode == next);
+            if (incomingToNext != 1)
+            {
+                issues.Add($"{next.Title}: expected exactly 1 incoming connection, found {incomingToNext}.");
+                break;
+            }
+
+            chain.Add(next);
+            current = next;
+        }
+
+        if (issues.Count == 0)
+        {
+            var endNode = chain[^1];
+            if (endNode.NodeType != NodeType.ResultJson)
+            {
+                issues.Add($"Wrong node order: chain must end at ResultJson, found {endNode.NodeType}.");
+            }
+            else
+            {
+                var extraOutgoing = Connections.Count(c => c.Source.ParentNode == endNode);
+                if (extraOutgoing > 0)
+                {
+                    issues.Add("ResultJson: node must not have outgoing connections.");
+                }
+            }
+        }
+
+        return issues.Count == 0;
     }
 
     /// <summary>
@@ -419,6 +502,119 @@ public class EditorViewModel : ObservableObject
         }
 
         return false;
+    }
+
+    public bool TryCreatePipelineSettings(out PipelineSettings? settings)
+    {
+        settings = null;
+
+        if (TryBuildLinearChain(out var chain, out var chainIssues) == false)
+        {
+            foreach (var issue in chainIssues)
+            {
+                Issues.Add(issue);
+            }
+
+            return false;
+        }
+
+        var csvNode = chain[0];
+        var filterNode = chain[1];
+        var parseNode = chain[3];
+
+        var filePath = GetSettingValue(csvNode, "FilePath");
+        var delimiter = GetSettingValue(csvNode, "Delimiter");
+        var locationColumn = GetSettingValue(filterNode, "LocationColumn");
+        var separator = GetSettingValue(filterNode, "Separator");
+        var country = GetSettingValue(filterNode, "Country");
+        var fieldsRaw = GetSettingValue(parseNode, "Fields");
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            Issues.Add("CsvSource: Setting 'File Path' is required.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(delimiter))
+        {
+            Issues.Add("CsvSource: Setting 'Delimiter' is required.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(locationColumn))
+        {
+            Issues.Add("FilterByCountry: Setting 'Location Column' is required.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(separator))
+        {
+            Issues.Add("FilterByCountry: Setting 'Separator' is required.");
+            return false;
+        }
+
+        var fields = fieldsRaw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(f => f.Trim())
+            .Where(f => !string.IsNullOrEmpty(f))
+            .ToList();
+
+        if (fields.Count == 0)
+        {
+            Issues.Add("ParseJson: Setting 'Fields' is required.");
+            return false;
+        }
+
+        var resolvedPath = ResolveCsvPath(filePath);
+        settings = new PipelineSettings(
+            CsvFilePath: resolvedPath,
+            Delimiter: delimiter,
+            LocationColumn: locationColumn,
+            Separator: separator,
+            Country: string.IsNullOrWhiteSpace(country) ? null : country,
+            ParseFields: fields);
+
+        return true;
+    }
+
+    public void ResetNodeRunState()
+    {
+        foreach (var node in Nodes)
+        {
+            node.State = NodeState.Idle;
+            node.RowCount = 0;
+            node.ErrorMessage = null;
+        }
+    }
+
+    public bool TryGetLinearChain(out List<NodeViewModel> chain, out List<string> issues)
+        => TryBuildLinearChain(out chain, out issues);
+
+    private static string GetSettingValue(NodeViewModel node, string key)
+    {
+        return node.Settings.FirstOrDefault(s => s.Key == key)?.Value ?? string.Empty;
+    }
+
+    private static string ResolveCsvPath(string filePath)
+    {
+        if (Path.IsPathRooted(filePath))
+        {
+            return filePath;
+        }
+
+        var appBasePath = Path.Combine(AppContext.BaseDirectory, filePath);
+        if (File.Exists(appBasePath))
+        {
+            return appBasePath;
+        }
+
+        var sampleDataPath = Path.Combine(AppContext.BaseDirectory, "SampleData", filePath);
+        if (File.Exists(sampleDataPath))
+        {
+            return sampleDataPath;
+        }
+
+        return appBasePath;
     }
 
     private struct ConnectionValidationResult

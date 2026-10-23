@@ -34,3 +34,6 @@ Plain MVVM with hand-written ObservableObject (INotifyPropertyChanged + SetPrope
 - Treat all values as strings, use ordinal/invariant culture, never parse dates or numbers.
 - No swallowed exceptions: errors must appear in the Issues pane with the node name.
 - Small focused changes, one class per file, build and fix errors after every step. Do not refactor unrelated files.
+
+# Roslyn
+- Microsoft.CodeAnalysis.CSharp (Roslyn) is allowed ONLY for Stage 4 (DLL generation). Do not add or use it before that stage is requested.

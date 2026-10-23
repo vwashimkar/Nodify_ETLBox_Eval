@@ -17,7 +17,7 @@ public enum NodeState
 {
     Idle,
     Running,
-    Completed,
+    Succeeded,
     Failed
 }
 
