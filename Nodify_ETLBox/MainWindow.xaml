@@ -77,6 +77,8 @@
         <ToolBar DockPanel.Dock="Top">
             <Button Content="Run" Width="60" Command="{Binding RunCommand}" />
             <Separator />
+            <Button Content="Generate DLL" Width="100" Command="{Binding GenerateDllCommand}" />
+            <Separator />
             <Button Content="Delete" Width="60" Command="{Binding Editor.DeleteSelectedCommand}" />
             <Separator />
             <Button Content="Sample" Width="60" Command="{Binding Editor.LoadSampleGraphCommand}" />

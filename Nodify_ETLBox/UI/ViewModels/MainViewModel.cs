@@ -1,13 +1,30 @@
+using System.IO;
+using System.Text;
+using System.Windows;
+using Microsoft.Win32;
 using EtlDesigner.Engine;
+using EtlDesigner.Engine.Generation;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
 
 public class MainViewModel : ObservableObject
 {
+    private static readonly HashSet<string> ForbiddenAssemblyNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ETLBox",
+        "ETLBox.Csv",
+        "ETLBox.Json",
+        "ETLBox.Licensing",
+        "CsvHelper"
+    };
+
     private string _filteredJsonOutput;
     private string _parsedJsonOutput;
     private int _countryLoadVersion;
+    private PipelineSettings? _lastSuccessfulRunSettings;
+    private bool _isRunInProgress;
+    private bool _isGenerating;
 
     public MainViewModel()
     {
@@ -15,15 +32,19 @@ public class MainViewModel : ObservableObject
         _filteredJsonOutput = "";
         _parsedJsonOutput = "";
 
-        RunCommand = new AsyncRelayCommand(async _ => await RunAsync());
+        RunCommand = new AsyncRelayCommand(async _ => await RunAsync(), _ => !_isGenerating);
+        GenerateDllCommand = new AsyncRelayCommand(async _ => await GenerateDllAsync(), _ => CanGenerateDll());
 
         HookCountryRefreshListeners();
         _ = RefreshCountriesAsync();
+        UpdateCommandStates();
     }
 
     public EditorViewModel Editor { get; }
 
     public AsyncRelayCommand RunCommand { get; }
+
+    public AsyncRelayCommand GenerateDllCommand { get; }
 
     public string FilteredJsonOutput
     {
@@ -39,65 +60,83 @@ public class MainViewModel : ObservableObject
 
     private async Task RunAsync()
     {
-        Editor.Issues.Clear();
-        Editor.ResetNodeRunState();
+        _isRunInProgress = true;
+        ClearSuccessfulRunSnapshot();
+        UpdateCommandStates();
 
-        if (Editor.TryCreatePipelineSettings(out var settings) == false || settings == null)
-        {
-            if (string.IsNullOrWhiteSpace(FilteredJsonOutput))
-            {
-                FilteredJsonOutput = "";
-            }
-
-            ParsedJsonOutput = "";
-            return;
-        }
-
-        if (Editor.TryGetLinearChain(out var chain, out var chainIssues) == false)
-        {
-            foreach (var issue in chainIssues)
-            {
-                Editor.Issues.Add(issue);
-            }
-
-            return;
-        }
-
-        SetRunningChain(chain, 0);
-
-        PipelineRunResult runResult;
         try
         {
-            runResult = await Task.Run(() => PipelineRunner.RunWithStats(settings));
+            Editor.Issues.Clear();
+            Editor.ResetNodeRunState();
+
+            if (Editor.TryCreatePipelineSettings(out var settings) == false || settings == null)
+            {
+                if (string.IsNullOrWhiteSpace(FilteredJsonOutput))
+                {
+                    FilteredJsonOutput = "";
+                }
+
+                ParsedJsonOutput = "";
+                return;
+            }
+
+            if (Editor.TryGetLinearChain(out var chain, out var chainIssues) == false)
+            {
+                foreach (var issue in chainIssues)
+                {
+                    Editor.Issues.Add(issue);
+                }
+
+                return;
+            }
+
+            SetRunningChain(chain, 0);
+
+            PipelineRunResult runResult;
+            try
+            {
+                runResult = await Task.Run(() => PipelineRunner.RunWithStats(settings));
+            }
+            catch (Exception ex)
+            {
+                Editor.Issues.Add($"CsvSource: {ex}");
+                return;
+            }
+
+            var result = runResult.Result;
+            var stats = runResult.Stats;
+
+            SetNodeStats(chain, stats);
+
+            if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+            {
+                ApplyFailureState(chain, runResult.FailureNode, result.ErrorMessage);
+                Editor.Issues.Add($"{GetFailureNodeTitle(runResult.FailureNode)}: {result.ErrorMessage}");
+                FilteredJsonOutput = result.FilteredJson;
+                ParsedJsonOutput = result.ParsedJson;
+                return;
+            }
+
+            FilteredJsonOutput = string.IsNullOrWhiteSpace(result.FilteredJson) ? "[]" : result.FilteredJson;
+            ParsedJsonOutput = string.IsNullOrWhiteSpace(result.ParsedJson) ? "[]" : result.ParsedJson;
+
+            foreach (var node in chain)
+            {
+                node.State = NodeState.Succeeded;
+                node.ErrorMessage = null;
+                node.ErrorDetail = null;
+            }
+
+            if (chain.All(n => n.State == NodeState.Succeeded))
+            {
+                _lastSuccessfulRunSettings = settings.ToCoreSettings();
+                UpdateCommandStates();
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            Editor.Issues.Add($"CsvSource: {ex.Message}");
-            return;
-        }
-
-        var result = runResult.Result;
-        var stats = runResult.Stats;
-
-        SetNodeStats(chain, stats);
-
-        if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
-        {
-            ApplyFailureState(chain, runResult.FailureNode, result.ErrorMessage);
-            Editor.Issues.Add($"{GetFailureNodeTitle(runResult.FailureNode)}: {result.ErrorMessage}");
-            FilteredJsonOutput = result.FilteredJson;
-            ParsedJsonOutput = result.ParsedJson;
-            return;
-        }
-
-        FilteredJsonOutput = string.IsNullOrWhiteSpace(result.FilteredJson) ? "[]" : result.FilteredJson;
-        ParsedJsonOutput = string.IsNullOrWhiteSpace(result.ParsedJson) ? "[]" : result.ParsedJson;
-
-        foreach (var node in chain)
-        {
-            node.State = NodeState.Succeeded;
-            node.ErrorMessage = null;
-            node.ErrorDetail = null;
+            _isRunInProgress = false;
+            UpdateCommandStates();
         }
     }
 
@@ -196,6 +235,193 @@ public class MainViewModel : ObservableObject
         {
             countrySetting.WarningMessage = null;
         }
+    }
+
+    private async Task GenerateDllAsync()
+    {
+        if (_lastSuccessfulRunSettings == null)
+        {
+            return;
+        }
+
+        _isGenerating = true;
+        UpdateCommandStates();
+
+        try
+        {
+            var saveFileDialog = new SaveFileDialog
+            {
+                AddExtension = true,
+                DefaultExt = ".dll",
+                FileName = "EtlPipeline.dll",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                Filter = "DLL files (*.dll)|*.dll"
+            };
+
+            if (saveFileDialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            var outputFolder = Path.GetDirectoryName(saveFileDialog.FileName);
+            if (string.IsNullOrWhiteSpace(outputFolder))
+            {
+                Editor.Issues.Add("Generate DLL: Could not determine the selected output folder.");
+                return;
+            }
+
+            try
+            {
+                if (IsInsideProjectFolder(outputFolder))
+                {
+                    Editor.Issues.Add("This folder is inside a project. The generated .cs files would be compiled into it. Choose a folder outside any project.");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Editor.Issues.Add($"Generate DLL: {ex}");
+                return;
+            }
+
+            var selectedName = Path.GetFileNameWithoutExtension(saveFileDialog.FileName);
+            var assemblyName = SanitizeAssemblyName(selectedName);
+
+            if (TryGetForbiddenAssemblyNameReason(assemblyName, out var reason))
+            {
+                Editor.Issues.Add($"Generate DLL: {reason}");
+                return;
+            }
+
+            DllGenerationResult result;
+            try
+            {
+                result = await Task.Run(() => DllGenerator.Generate(_lastSuccessfulRunSettings, outputFolder, assemblyName));
+            }
+            catch (Exception ex)
+            {
+                Editor.Issues.Add($"Generate DLL: {ex}");
+                return;
+            }
+
+            if (!result.Success)
+            {
+                var failureText = string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? "DLL generation failed."
+                    : result.ErrorMessage;
+                Editor.Issues.Add($"Generate DLL: {failureText}");
+
+                foreach (var diagnostic in result.Diagnostics)
+                {
+                    Editor.Issues.Add($"Generate DLL: {diagnostic}");
+                }
+
+                return;
+            }
+
+            var dllPath = string.IsNullOrWhiteSpace(result.DllPath)
+                ? Path.Combine(outputFolder, $"{assemblyName}.dll")
+                : result.DllPath;
+
+            var successMessage =
+                $"DLL generated at:\n{dllPath}\n\n" +
+                "Generated .cs files are in the same folder.\n" +
+                "Using the DLL needs the ETLBox 3.11.1 packages and a valid ETLBox license at runtime. The free edition is limited to 5,000 rows.";
+            System.Windows.MessageBox.Show(successMessage, "Generate DLL", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        finally
+        {
+            _isGenerating = false;
+            UpdateCommandStates();
+        }
+    }
+
+    private bool CanGenerateDll()
+    {
+        return _lastSuccessfulRunSettings != null && !_isRunInProgress && !_isGenerating;
+    }
+
+    private void ClearSuccessfulRunSnapshot()
+    {
+        _lastSuccessfulRunSettings = null;
+    }
+
+    private void UpdateCommandStates()
+    {
+        RunCommand.RaiseCanExecuteChanged();
+        GenerateDllCommand.RaiseCanExecuteChanged();
+    }
+
+    private static bool IsInsideProjectFolder(string folderPath)
+    {
+        var current = new DirectoryInfo(folderPath);
+
+        while (current != null)
+        {
+            if (current.EnumerateFiles("*.csproj", SearchOption.TopDirectoryOnly).Any()
+                || current.EnumerateFiles("*.sln", SearchOption.TopDirectoryOnly).Any())
+            {
+                return true;
+            }
+
+            current = current.Parent;
+        }
+
+        return false;
+    }
+
+    private static string SanitizeAssemblyName(string selectedName)
+    {
+        if (string.IsNullOrWhiteSpace(selectedName))
+        {
+            return "EtlPipeline";
+        }
+
+        var builder = new StringBuilder(selectedName.Length);
+
+        foreach (var ch in selectedName.Trim())
+        {
+            if (char.IsLetterOrDigit(ch) || ch == '_')
+            {
+                builder.Append(ch);
+            }
+            else
+            {
+                builder.Append('_');
+            }
+        }
+
+        var sanitized = builder.ToString().Trim('_');
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return "EtlPipeline";
+        }
+
+        if (char.IsDigit(sanitized[0]))
+        {
+            sanitized = $"_{sanitized}";
+        }
+
+        return sanitized;
+    }
+
+    private static bool TryGetForbiddenAssemblyNameReason(string assemblyName, out string reason)
+    {
+        if (assemblyName.StartsWith("System", StringComparison.OrdinalIgnoreCase)
+            || assemblyName.StartsWith("Microsoft", StringComparison.OrdinalIgnoreCase))
+        {
+            reason = $"Assembly name '{assemblyName}' is not allowed because names starting with System or Microsoft are reserved.";
+            return true;
+        }
+
+        if (ForbiddenAssemblyNames.Contains(assemblyName))
+        {
+            reason = $"Assembly name '{assemblyName}' is not allowed because it conflicts with a referenced assembly.";
+            return true;
+        }
+
+        reason = "";
+        return false;
     }
 
     private static void SetRunningChain(IReadOnlyList<NodeViewModel> chain, int startIndex)
