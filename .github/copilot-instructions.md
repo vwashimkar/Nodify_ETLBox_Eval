@@ -37,3 +37,5 @@ Plain MVVM with hand-written ObservableObject (INotifyPropertyChanged + SetPrope
 
 # Roslyn
 - Microsoft.CodeAnalysis.CSharp (Roslyn) is allowed ONLY for Stage 4 (DLL generation). Do not add or use it before that stage is requested.
+
+- Microsoft.CodeAnalysis.CSharp (Roslyn) is allowed for Stage 4 only, and only inside Engine/Generation. Settings values must be embedded using Roslyn's literal escaping, never string concatenation. Never read, copy or embed etlbox.lic.

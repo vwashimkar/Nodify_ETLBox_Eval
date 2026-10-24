@@ -504,7 +504,7 @@ public class EditorViewModel : ObservableObject
         return false;
     }
 
-    public bool TryCreatePipelineSettings(out PipelineSettings? settings)
+    public bool TryCreatePipelineSettings(out PipelineSettingsWithSource? settings)
     {
         settings = null;
 
@@ -566,7 +566,7 @@ public class EditorViewModel : ObservableObject
         }
 
         var resolvedPath = ResolveCsvPath(filePath);
-        settings = new PipelineSettings(
+        settings = new PipelineSettingsWithSource(
             CsvFilePath: resolvedPath,
             Delimiter: delimiter,
             LocationColumn: locationColumn,

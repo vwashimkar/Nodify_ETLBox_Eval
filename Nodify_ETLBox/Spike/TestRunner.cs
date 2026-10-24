@@ -156,7 +156,7 @@ public class TestRunner
             PipelineResult pipelineResult;
             try
             {
-                var settings = new PipelineSettings(
+                var settings = new PipelineSettingsWithSource(
                     CsvFilePath: csvPath,
                     Delimiter: delimiter,
                     LocationColumn: "location",

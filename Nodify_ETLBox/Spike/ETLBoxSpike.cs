@@ -14,13 +14,12 @@ public class ETLBoxSpike
     public static PipelineResult RunPipeline(string csvPath, string? country, string delimiter)
     {
         var settings = new PipelineSettings(
-            CsvFilePath: csvPath,
             Delimiter: delimiter,
             LocationColumn: "location",
             Separator: "|",
-            Country: country,
             ParseFields: new[] { "first_name", "last_name", "email" });
 
-        return PipelineRunner.Run(settings);
+        var core = PipelineCore.Run(settings, csvPath, country ?? string.Empty);
+        return new PipelineResult(core.FilteredJson, core.ParsedJson, core.SkippedMalformedCount, core.ErrorMessage);
     }
 }

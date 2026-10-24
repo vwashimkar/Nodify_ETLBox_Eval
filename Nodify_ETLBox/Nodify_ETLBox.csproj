@@ -40,6 +40,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <EmbeddedResource Include="Engine\PipelineCore.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <None Update="SampleData\employee_list.csv">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
