@@ -49,4 +49,8 @@ public record PipelineSettingsWithSource(
     string LocationColumn,
     string Separator,
     string? Country,
-    IReadOnlyList<string> ParseFields);
+    IReadOnlyList<string> ParseFields)
+{
+    public PipelineSettings ToCoreSettings()
+        => new(Delimiter, LocationColumn, Separator, ParseFields);
+}

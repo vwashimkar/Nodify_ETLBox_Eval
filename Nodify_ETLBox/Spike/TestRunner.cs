@@ -46,12 +46,29 @@ public class TestRunner
     private readonly string _expectedValuesPath;
     private readonly string _sampleDataDir;
     private readonly bool _licenseFilePresent;
+    private readonly Func<string, string?, string, PipelineRunResult> _pipelineExecutor;
 
     public TestRunner(string sampleDataDir)
+        : this(sampleDataDir, (csvPath, country, delimiter) =>
+        {
+            var settings = new PipelineSettingsWithSource(
+                CsvFilePath: csvPath,
+                Delimiter: delimiter,
+                LocationColumn: "location",
+                Separator: "|",
+                Country: country,
+                ParseFields: new[] { "first_name", "last_name", "email" });
+            return PipelineRunner.RunWithStats(settings);
+        })
+    {
+    }
+
+    public TestRunner(string sampleDataDir, Func<string, string?, string, PipelineRunResult> pipelineExecutor)
     {
         _sampleDataDir = sampleDataDir;
         _testManifestPath = Path.Combine(sampleDataDir, "TestData", "expected_results.csv");
         _expectedValuesPath = Path.Combine(sampleDataDir, "TestData", "expected_values.json");
+        _pipelineExecutor = pipelineExecutor;
 
         // Check if license file exists in AppContext.BaseDirectory or if etlbox env var is set
         var licenseInAppDir = File.Exists(Path.Combine(AppContext.BaseDirectory, "etlbox.lic"));
@@ -156,15 +173,7 @@ public class TestRunner
             PipelineResult pipelineResult;
             try
             {
-                var settings = new PipelineSettingsWithSource(
-                    CsvFilePath: csvPath,
-                    Delimiter: delimiter,
-                    LocationColumn: "location",
-                    Separator: "|",
-                    Country: country,
-                    ParseFields: new[] { "first_name", "last_name", "email" });
-
-                runResult = await Task.Run(() => PipelineRunner.RunWithStats(settings), cts.Token);
+                runResult = await Task.Run(() => _pipelineExecutor(csvPath, country, delimiter), cts.Token);
                 pipelineResult = runResult.Result;
             }
             catch (OperationCanceledException)

@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Reflection;
 using System.Windows;
+using EtlDesigner.Engine;
+using EtlDesigner.Engine.Generation;
 using EtlDesigner.Spike;
 using EtlDesigner.UI.ViewModels;
 
@@ -15,10 +18,24 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Check for --run-tests command line argument
+        // Check CLI arguments
+        if (e.Args.Contains("--generate-dll"))
+        {
+            RunGenerateDllAndExit(e.Args);
+            return;
+        }
+
         if (e.Args.Contains("--run-tests"))
         {
-            RunTestsAndExit();
+            var dllIndex = Array.IndexOf(e.Args, "--dll");
+            if (dllIndex >= 0 && dllIndex + 1 < e.Args.Length)
+            {
+                RunTestsAndExit(e.Args[dllIndex + 1]);
+            }
+            else
+            {
+                RunTestsAndExit(null);
+            }
             return;
         }
 
@@ -32,7 +49,7 @@ public partial class App : Application
         }
     }
 
-    private void RunTestsAndExit()
+    private void RunTestsAndExit(string? dllPath)
     {
         Task.Run(async () =>
         {
@@ -53,7 +70,9 @@ public partial class App : Application
                     return;
                 }
 
-                var runner = new TestRunner(sampleDataDir);
+                var runner = string.IsNullOrWhiteSpace(dllPath)
+                    ? new TestRunner(sampleDataDir)
+                    : new TestRunner(sampleDataDir, BuildGeneratedDllExecutor(dllPath));
                 Console.WriteLine("Running all tests...");
                 Console.WriteLine();
 
@@ -91,7 +110,7 @@ public partial class App : Application
                 }
 
                 // Write SpikeResults.csv
-                var resultsPath = Path.Combine(baseDir, "SpikeResults.csv");
+                var resultsPath = Path.Combine(baseDir, string.IsNullOrWhiteSpace(dllPath) ? "SpikeResults.csv" : "SpikeResults_dll.csv");
                 WriteSpikeResultsCsv(resultsPath, results);
                 Console.WriteLine($"Results written to: {resultsPath}");
 
@@ -131,6 +150,119 @@ public partial class App : Application
         }
 
         writer.Flush();
+    }
+
+    private static Func<string, string?, string, PipelineRunResult> BuildGeneratedDllExecutor(string dllPath)
+    {
+        if (!File.Exists(dllPath))
+            throw new FileNotFoundException($"DLL not found: {dllPath}");
+
+        var asm = Assembly.LoadFrom(dllPath);
+        var pipelineType = asm.GetType("EtlDesigner.Generated.GeneratedPipeline", throwOnError: true)!;
+        var runMethod = pipelineType.GetMethod("Run", BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException("GeneratedPipeline.Run method not found.");
+
+        return (csvPath, country, delimiter) =>
+        {
+            var runResultObj = runMethod.Invoke(null, new object?[] { csvPath, country ?? string.Empty, delimiter });
+            if (runResultObj == null)
+                return new PipelineRunResult(new PipelineResult("[]", "[]", 0, "Generated pipeline returned null."), new PipelineExecutionStats(0, 0, 0, 0, 0), PipelineFailureNode.Unknown);
+
+            var resultType = runResultObj.GetType();
+            var filteredJson = resultType.GetProperty("FilteredJson")?.GetValue(runResultObj)?.ToString() ?? "[]";
+            var parsedJson = resultType.GetProperty("ParsedJson")?.GetValue(runResultObj)?.ToString() ?? "[]";
+            var skipped = Convert.ToInt32(resultType.GetProperty("SkippedMalformedCount")?.GetValue(runResultObj) ?? 0);
+            var error = resultType.GetProperty("ErrorMessage")?.GetValue(runResultObj)?.ToString();
+
+            var statsObj = resultType.GetProperty("Stats")?.GetValue(runResultObj);
+            var rowsRead = Convert.ToInt32(statsObj?.GetType().GetProperty("RowsRead")?.GetValue(statsObj) ?? 0);
+            var rowsMatched = Convert.ToInt32(statsObj?.GetType().GetProperty("RowsMatched")?.GetValue(statsObj) ?? 0);
+            var rowsNotMatched = Convert.ToInt32(statsObj?.GetType().GetProperty("RowsNotMatched")?.GetValue(statsObj) ?? 0);
+            var rowsSkipped = Convert.ToInt32(statsObj?.GetType().GetProperty("RowsMalformedSkipped")?.GetValue(statsObj) ?? 0);
+            var parsedRecordCount = Convert.ToInt32(statsObj?.GetType().GetProperty("ParsedRecordCount")?.GetValue(statsObj) ?? 0);
+
+            var failureNodeObj = resultType.GetProperty("FailureNode")?.GetValue(runResultObj)?.ToString();
+            var failureNode = failureNodeObj switch
+            {
+                "CsvSource" => PipelineFailureNode.CsvSource,
+                "ToJson" => PipelineFailureNode.ToJson,
+                "ParseJson" => PipelineFailureNode.ParseJson,
+                _ => PipelineFailureNode.Unknown
+            };
+
+            return new PipelineRunResult(
+                new PipelineResult(filteredJson, parsedJson, skipped, error),
+                new PipelineExecutionStats(rowsRead, rowsMatched, rowsNotMatched, rowsSkipped, parsedRecordCount),
+                failureNode);
+        };
+    }
+
+    private void RunGenerateDllAndExit(string[] args)
+    {
+        Task.Run(() =>
+        {
+            string outputFolder;
+            string logPath;
+            try
+            {
+                var idx = Array.IndexOf(args, "--generate-dll");
+                outputFolder = (idx >= 0 && idx + 1 < args.Length) ? args[idx + 1] : AppContext.BaseDirectory;
+                Directory.CreateDirectory(outputFolder);
+                logPath = Path.Combine(outputFolder, "generate-dll.log");
+
+                var settings = new PipelineSettings(
+                    Delimiter: ",",
+                    LocationColumn: "location",
+                    Separator: "|",
+                    ParseFields: new[] { "first_name", "last_name", "email" });
+
+                var result = DllGenerator.Generate(settings, outputFolder, "GeneratedPipeline");
+
+                var logLines = new List<string>();
+                if (result.Success)
+                {
+                    var successLine = $"DLL: {result.DllPath}";
+                    Console.WriteLine(successLine);
+                    logLines.Add(successLine);
+                    foreach (var d in result.Diagnostics)
+                    {
+                        Console.WriteLine(d);
+                        logLines.Add(d);
+                    }
+
+                    File.WriteAllLines(logPath, logLines);
+                    Environment.Exit(0);
+                    return;
+                }
+
+                var failReason = string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Unknown error." : result.ErrorMessage;
+                var failedLine = $"FAILED: {failReason}";
+                Console.Error.WriteLine(failedLine);
+                logLines.Add(failedLine);
+                foreach (var d in result.Diagnostics)
+                {
+                    Console.Error.WriteLine(d);
+                    logLines.Add(d);
+                }
+
+                File.WriteAllLines(logPath, logLines);
+                Environment.Exit(1);
+            }
+            catch (Exception ex)
+            {
+                outputFolder = Array.IndexOf(args, "--generate-dll") is var i && i >= 0 && i + 1 < args.Length
+                    ? args[i + 1]
+                    : AppContext.BaseDirectory;
+                Directory.CreateDirectory(outputFolder);
+                logPath = Path.Combine(outputFolder, "generate-dll.log");
+
+                var failedLine = $"FAILED: {ex.Message}";
+                Console.Error.WriteLine(failedLine);
+                Console.Error.WriteLine(ex.ToString());
+                File.WriteAllLines(logPath, new[] { failedLine, ex.ToString() });
+                Environment.Exit(1);
+            }
+        }).Wait();
     }
 
     private static string CsvEscape(string value)

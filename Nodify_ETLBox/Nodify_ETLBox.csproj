@@ -24,6 +24,7 @@
 		<PackageReference Include="ETLBox" Version="3.11.1" />
 		<PackageReference Include="ETLBox.Csv" Version="3.11.1" />
 		<PackageReference Include="ETLBox.Json" Version="3.11.1" />
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
 		<PackageReference Include="Nodify" Version="7.3.0" />
 	</ItemGroup>
 
@@ -41,6 +42,10 @@
 
 	<ItemGroup>
 	  <EmbeddedResource Include="Engine\PipelineCore.cs" />
+	  <EmbeddedResource Include="Engine\PipelineSettings.cs" />
+	  <EmbeddedResource Include="Engine\PipelineExecutionStats.cs" />
+	  <EmbeddedResource Include="Engine\PipelineFailureNode.cs" />
+	  <EmbeddedResource Include="Engine\CountryListResult.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
