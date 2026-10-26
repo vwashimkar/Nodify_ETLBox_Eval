@@ -12,6 +12,9 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <conv:NodeStateToColorConverter x:Key="StateToBrush" />
         <conv:PendingConnectionStrokeConverter x:Key="PendingStroke" />
+        <SolidColorBrush x:Key="GraphConnectionBrush" Color="#1E88E5" />
+        <SolidColorBrush x:Key="NodeInput.BorderBrush" Color="#1E88E5" />
+        <SolidColorBrush x:Key="NodeOutput.BorderBrush" Color="#1E88E5" />
 
         <!-- ===== Settings editors, chosen by SettingViewModel.Kind ===== -->
         <DataTemplate x:Key="TextSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
@@ -143,6 +146,7 @@
                                  SelectedItems="{Binding Editor.SelectedNodes}"
                                  Connections="{Binding Editor.Connections}"
                                  PendingConnection="{Binding Editor.PendingConnection}"
+                                 ConnectionStartedCommand="{Binding Editor.StartConnectionCommand}"
                                  ConnectionCompletedCommand="{Binding Editor.CreateConnectionCommand}"
                                  DisconnectConnectorCommand="{Binding Editor.DisconnectConnectorCommand}">
 
@@ -162,7 +166,9 @@
                     <DataTemplate DataType="{x:Type vm:ConnectionViewModel}">
                         <nodify:Connection Source="{Binding Source.Anchor}"
                                            Target="{Binding Target.Anchor}"
-                                           ArrowEnds="End" />
+                                           ArrowEnds="End"
+                                           Stroke="{StaticResource GraphConnectionBrush}"
+                                           StrokeThickness="2" />
                     </DataTemplate>
                 </nodify:NodifyEditor.ConnectionTemplate>
 
@@ -190,6 +196,8 @@
                                     <nodify:NodeInput Header="{Binding Name}"
                                                       IsConnected="{Binding IsConnected}"
                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                                      Background="{StaticResource GraphConnectionBrush}"
+                                                      BorderBrush="{StaticResource GraphConnectionBrush}"
                                                       ToolTip="{Binding Kind}" />
                                 </DataTemplate>
                             </nodify:Node.InputConnectorTemplate>
@@ -197,9 +205,11 @@
                             <nodify:Node.OutputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type vm:ConnectorViewModel}">
                                     <nodify:NodeOutput Header="{Binding Name}"
-                                                       IsConnected="{Binding IsConnected}"
-                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}"
-                                                       ToolTip="{Binding Kind}" />
+                                                        IsConnected="{Binding IsConnected}"
+                                                        Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                                        Background="{StaticResource GraphConnectionBrush}"
+                                                        BorderBrush="{StaticResource GraphConnectionBrush}"
+                                                        ToolTip="{Binding Kind}" />
                                 </DataTemplate>
                             </nodify:Node.OutputConnectorTemplate>
 

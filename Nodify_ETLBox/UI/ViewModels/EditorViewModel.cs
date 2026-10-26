@@ -34,18 +34,52 @@ public class EditorViewModel : ObservableObject
 
         ValidateCommand = new RelayCommand(_ => Validate());
 
+        StartConnectionCommand = new RelayCommand(param =>
+        {
+            if (param is ConnectorViewModel connector && connector.IsInput == false)
+            {
+                StartConnection(connector);
+            }
+        });
+
         CreateConnectionCommand = new RelayCommand(param =>
         {
             // Nodify passes the result tuple. Extract source and target ConnectorViewModels.
-            if (param is (object source, object target))
+            if (param is ValueTuple<object, object> completed)
             {
+                var source = completed.Item1;
+                var target = completed.Item2;
+
+                // Drop on empty canvas: clear pending and no issue.
+                if (target == null)
+                {
+                    PendingConnection = null;
+                    return;
+                }
+
                 // Try to resolve the objects to ConnectorViewModels
                 ConnectorViewModel? sourceConnector = ResolveConnectorFromNodifyObject(source);
                 ConnectorViewModel? targetConnector = ResolveConnectorFromNodifyObject(target);
 
                 if (sourceConnector != null && targetConnector != null)
                 {
-                    CompleteConnection(targetConnector);
+                    var normalizedSource = sourceConnector;
+                    var normalizedTarget = targetConnector;
+
+                    if (sourceConnector.IsInput && !targetConnector.IsInput)
+                    {
+                        normalizedSource = targetConnector;
+                        normalizedTarget = sourceConnector;
+                    }
+
+                    if (PendingConnection == null)
+                    {
+                        Issues.Clear();
+                        Issues.Add("Connection drag did not start");
+                        return;
+                    }
+
+                    CompleteConnection(normalizedTarget);
                 }
             }
         });
@@ -86,6 +120,8 @@ public class EditorViewModel : ObservableObject
     public RelayCommand LoadSampleGraphCommand { get; }
 
     public RelayCommand ValidateCommand { get; }
+
+    public RelayCommand StartConnectionCommand { get; }
 
     public RelayCommand CreateConnectionCommand { get; }
 
@@ -185,7 +221,8 @@ public class EditorViewModel : ObservableObject
         else
         {
             Issues.Clear();
-            Issues.Add(validationResult.ErrorMessage ?? "Connection is invalid.");
+            var message = validationResult.ErrorMessage ?? "Connection is invalid.";
+            Issues.Add(message);
         }
 
         PendingConnection = null;
@@ -410,6 +447,11 @@ public class EditorViewModel : ObservableObject
     /// </summary>
     private ConnectorViewModel? ResolveConnectorFromNodifyObject(object nobj)
     {
+        if (nobj is ConnectorViewModel c)
+        {
+            return c;
+        }
+
         // Simple fallback: if the object has a DataContext that is a ConnectorViewModel, use it.
         if (nobj is FrameworkElement fe && fe.DataContext is ConnectorViewModel cvm)
         {
