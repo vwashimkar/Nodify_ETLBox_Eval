@@ -1,0 +1,635 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>ETL Designer Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column; three figures that carry the argument; a catalog table; short decision lists. */
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --fg: #17202e;
+  --muted: #566175;
+  --line: #c9d0da;
+  --accent: #0a6c8a;
+  --accent-soft: #d9eef5;
+  --warn: #9a4d00;
+  --warn-soft: #fbeedd;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151e; --panel: #171f2b; --fg: #e6ebf2; --muted: #9aa6b8; --line: #2e3a4b;
+    --accent: #52b8d6; --accent-soft: #12303b; --warn: #e3a15c; --warn-soft: #33260f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151e; --panel: #171f2b; --fg: #e6ebf2; --muted: #9aa6b8; --line: #2e3a4b;
+  --accent: #52b8d6; --accent-soft: #12303b; --warn: #e3a15c; --warn-soft: #33260f;
+  color-scheme: dark;
+}
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+h1 { font-size: 30px; line-height: 1.15; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 19px; line-height: 1.25; font-weight: 600; margin: 0 0 6px; text-wrap: balance; }
+p { margin: 0 0 10px; max-width: 68ch; }
+.meta { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-top: 8px; }
+.lede { font-size: 16px; margin-top: 12px; max-width: 64ch; }
+code, .mono { font-family: var(--mono); font-size: 0.9em; }
+section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.scope > div { background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; min-width: 0; }
+.scope .tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px; }
+.scope .gap { border-style: dashed; background: var(--warn-soft); border-color: var(--warn); }
+.scope .gap .tag { color: var(--warn); }
+.scope p { margin: 0; font-size: 14px; }
+
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.fig-scroll { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
+figure svg { display: block; width: 100%; min-width: 800px; height: auto; color: var(--fg); }
+figcaption { font-size: 13px; color: var(--muted); max-width: 78ch; }
+
+/* SVG parts, styled from page tokens so both themes work */
+svg text { font-family: var(--sans); font-size: 12px; fill: currentColor; }
+svg .sm { font-size: 11px; }
+svg .xs { font-size: 10px; }
+svg .b { font-weight: 600; }
+svg .mut { fill: var(--muted); }
+svg .acc { fill: var(--accent); }
+svg .warn { fill: var(--warn); }
+svg .m { font-family: var(--mono); }
+svg .cap { font-size: 10px; letter-spacing: 0.08em; fill: var(--muted); font-weight: 600; }
+svg .frame { fill: var(--panel); stroke: var(--line); }
+svg .bar { fill: var(--bg); stroke: var(--line); }
+svg .pane { fill: var(--panel); stroke: var(--line); }
+svg .canvas { fill: var(--bg); stroke: var(--line); }
+svg .chip { fill: var(--bg); stroke: var(--line); }
+svg .btn { fill: var(--bg); stroke: var(--line); }
+svg .input { fill: var(--bg); stroke: var(--line); }
+svg .box { fill: var(--panel); stroke: var(--fg); stroke-width: 1.2; }
+svg .box-soft { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+svg .slot { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.2; stroke-dasharray: 5 4; }
+svg .node { fill: var(--panel); stroke: var(--fg); stroke-width: 1.2; }
+svg .node-sel { fill: var(--panel); stroke: var(--accent); stroke-width: 2.4; }
+svg .node-head { fill: var(--accent-soft); stroke: none; }
+svg .ghost { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 4 3; }
+svg .port { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
+svg .wire { fill: none; stroke: var(--accent); stroke-width: 2; }
+svg .ln { fill: none; stroke: var(--fg); stroke-width: 1.3; }
+svg .ln-dash { fill: none; stroke: var(--warn); stroke-width: 1.3; stroke-dasharray: 5 4; }
+svg .rule { stroke: var(--line); stroke-width: 1; }
+svg .dot { fill: var(--line); }
+
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--bg); }
+tr.grp td { background: var(--bg); font-weight: 600; font-size: 12px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+tr:last-child td { border-bottom: 0; }
+.ev { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border: 1px solid var(--line); white-space: nowrap; }
+.ev.d { color: var(--accent); border-color: var(--accent); }
+.ev.p { color: var(--fg); border-color: var(--fg); }
+.ev.u { color: var(--warn); border-color: var(--warn); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; min-width: 0; }
+.card h3 { font-size: 14px; margin: 0 0 4px; font-weight: 600; }
+.card p { margin: 0; font-size: 14px; }
+ol.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 72ch; }
+ul.q { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-width: 72ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.code { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); padding: 10px 12px; margin: 8px 0 0; overflow-x: auto; white-space: pre; }
+footer { color: var(--muted); font-size: 12px; max-width: 72ch; }
+a { color: var(--accent); }
+</style>
+
+<main>
+  <header>
+    <h1>ETL Designer Blueprint</h1>
+    <p class="lede">A second proof of concept, a visual ETL tool like the first one but with configurable data sources. The user drags nodes onto a Nodify canvas, configures them, runs the pipeline with ETLBox, and generates a DLL that a different WPF application uses.</p>
+    <div class="meta">ETLBox 3.11.0 · Nodify 7.3 · WPF · drawn 2026-10-27</div>
+  </header>
+
+  <section>
+    <div class="scope">
+      <div><span class="tag">Feature 1 · designed</span><p>Left-hand palette of ETL nodes. Drag onto the canvas, connect ports to build the pipeline.</p></div>
+      <div><span class="tag">Feature 2 · designed</span><p>Source nodes for the standard ETLBox data sources, configured in the UI: address and port, protocol, database details, file paths, REST endpoints. The first slice is CSV.</p></div>
+      <div><span class="tag">Feature 3 · designed</span><p>A Generate DLL button on the toolbar. The DLL is built with Roslyn, as in the first POC, and used by a different WPF application.</p></div>
+    </div>
+    <div class="legend" aria-label="Evidence tags">
+      <span><span class="ev d">D</span> read in ETLBox's public docs on 2026-10-27</span>
+      <span><span class="ev p">P</span> proven in our first POC</span>
+      <span><span class="ev u">U</span> not confirmed; check against the 3.11.0 packages</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>The screen</h2>
+    <p>Four areas. The palette lists node types, the canvas holds the graph, the properties panel edits whichever node is selected, and the bottom tabs show validation, a data preview and the run log.</p>
+    <figure>
+      <div class="fig-scroll">
+      <svg viewBox="0 0 960 500" role="img" aria-label="Wireframe of the designer window: a toolbar with a Generate DLL button, node palette on the left, Nodify canvas with three connected nodes in the centre, a properties form for the selected REST endpoint node on the right, and an Issues tab along the bottom.">
+        <defs>
+          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" class="dot"/></pattern>
+        </defs>
+        <rect class="frame" x="1" y="1" width="958" height="498" rx="6"/>
+        <!-- toolbar -->
+        <rect class="bar" x="1" y="1" width="958" height="34"/>
+        <rect class="btn" x="12" y="7" width="52" height="22" rx="3"/><text x="38" y="22" text-anchor="middle" class="sm b">Run</text>
+        <rect class="btn" x="72" y="7" width="72" height="22" rx="3"/><text x="108" y="22" text-anchor="middle" class="sm">Validate</text>
+        <rect class="btn" x="152" y="7" width="92" height="22" rx="3"/><text x="198" y="22" text-anchor="middle" class="sm">Save graph</text>
+        <rect class="btn" x="252" y="7" width="84" height="22" rx="3"/><text x="294" y="22" text-anchor="middle" class="sm">Profiles…</text>
+        <rect class="box-soft" x="344" y="7" width="104" height="22" rx="3"/><text x="396" y="22" text-anchor="middle" class="sm b">Generate DLL</text><text x="460" y="22" class="xs mut">enabled after a successful run</text>
+
+        <!-- palette -->
+        <rect class="pane" x="1" y="35" width="199" height="330"/>
+        <text x="12" y="52" class="cap">NODE PALETTE</text>
+        <text x="12" y="72" class="sm b">Sources</text>
+        <g class="sm">
+          <rect class="chip" x="12" y="76" width="176" height="18" rx="3"/><text x="20" y="89">CSV / JSON / Excel file</text>
+          <rect class="chip" x="12" y="97" width="176" height="18" rx="3"/><text x="20" y="110">Database</text>
+          <rect class="chip" x="12" y="118" width="176" height="18" rx="3"/><text x="20" y="131">REST endpoint</text>
+          <rect class="chip" x="12" y="139" width="176" height="18" rx="3"/><text x="20" y="152">Azure Blob</text>
+          <rect class="chip" x="12" y="160" width="176" height="18" rx="3"/><text x="20" y="173">Kafka / Service Bus</text>
+        </g>
+        <text x="12" y="194" class="sm b">Transforms</text>
+        <g class="sm">
+          <rect class="chip" x="12" y="198" width="176" height="18" rx="3"/><text x="20" y="211">Filter</text>
+          <rect class="chip" x="12" y="219" width="176" height="18" rx="3"/><text x="20" y="232">Rename / map columns</text>
+          <rect class="chip" x="12" y="240" width="176" height="18" rx="3"/><text x="20" y="253">Row transform</text>
+        </g>
+        <text x="12" y="274" class="sm b">Destinations</text>
+        <g class="sm">
+          <rect class="chip" x="12" y="278" width="176" height="18" rx="3"/><text x="20" y="291">File</text>
+          <rect class="chip" x="12" y="299" width="176" height="18" rx="3"/><text x="20" y="312">Database</text>
+          <rect class="chip" x="12" y="320" width="176" height="18" rx="3"/><text x="20" y="333">REST POST</text>
+        </g>
+
+        <!-- canvas -->
+        <rect class="canvas" x="200" y="35" width="500" height="330"/>
+        <rect x="200" y="35" width="500" height="330" fill="url(#grid)"/>
+        <text x="212" y="52" class="cap">CANVAS</text>
+
+        <!-- node A (selected) -->
+        <rect class="node-sel" x="215" y="100" width="130" height="64" rx="4"/>
+        <path class="node-head" d="M216 101h128v20h-128z"/>
+        <text x="224" y="115" class="sm b">REST endpoint</text>
+        <text x="224" y="140" class="xs m mut">GET /v1/orders</text>
+        <text x="224" y="154" class="xs mut">rows out</text>
+        <circle class="port" cx="345" cy="142" r="6"/>
+        <!-- node B -->
+        <rect class="node" x="385" y="170" width="130" height="64" rx="4"/>
+        <path class="node-head" d="M386 171h128v20h-128z"/>
+        <text x="394" y="185" class="sm b">Filter</text>
+        <text x="394" y="210" class="xs m mut">status = "paid"</text>
+        <circle class="port" cx="385" cy="212" r="6"/><circle class="port" cx="515" cy="212" r="6"/>
+        <!-- node C -->
+        <rect class="node" x="555" y="240" width="130" height="64" rx="4"/>
+        <path class="node-head" d="M556 241h128v20h-128z"/>
+        <text x="564" y="255" class="sm b">SQL Server</text>
+        <text x="564" y="280" class="xs m mut">orders_clean</text>
+        <circle class="port" cx="555" cy="282" r="6"/>
+        <!-- wires -->
+        <path class="wire" d="M351 142 C370 142 365 212 379 212"/>
+        <path class="wire" d="M521 212 C540 212 535 282 549 282"/>
+        <text x="360" y="182" text-anchor="end" class="xs acc m">Rows</text>
+        <text x="530" y="252" text-anchor="end" class="xs acc m">Rows</text>
+        <!-- ghost node being dragged -->
+        <rect class="ghost" x="215" y="300" width="130" height="40" rx="4"/>
+        <text x="280" y="324" text-anchor="middle" class="xs mut">dragged in from palette</text>
+        <path class="ln" d="M188 87 C205 120 206 280 213 318" stroke-dasharray="4 3"/>
+        <polygon points="213,318 207,310 215,309" fill="currentColor"/>
+
+        <!-- properties -->
+        <rect class="pane" x="700" y="35" width="259" height="330"/>
+        <text x="712" y="52" class="cap">PROPERTIES · REST ENDPOINT</text>
+        <text x="712" y="74" class="xs mut">Profile</text>
+        <rect class="input" x="712" y="78" width="180" height="22" rx="3"/><text x="720" y="93" class="sm">Orders API ▾</text>
+        <rect class="btn" x="898" y="78" width="49" height="22" rx="3"/><text x="922" y="93" text-anchor="middle" class="sm">Edit</text>
+        <text x="712" y="116" class="xs mut">Protocol</text><text x="778" y="116" class="xs mut">Host</text><text x="904" y="116" class="xs mut">Port</text>
+        <rect class="input" x="712" y="120" width="60" height="22" rx="3"/><text x="720" y="135" class="sm m">https ▾</text>
+        <rect class="input" x="778" y="120" width="120" height="22" rx="3"/><text x="784" y="135" class="sm m">api.example.com</text>
+        <rect class="input" x="904" y="120" width="43" height="22" rx="3"/><text x="910" y="135" class="sm m">443</text>
+        <text x="712" y="158" class="xs mut">Path</text>
+        <rect class="input" x="712" y="162" width="235" height="22" rx="3"/><text x="720" y="177" class="sm m">/v1/orders</text>
+        <text x="712" y="200" class="xs mut">Authentication</text>
+        <rect class="input" x="712" y="204" width="235" height="22" rx="3"/><text x="720" y="219" class="sm">Bearer token ▾</text>
+        <text x="712" y="242" class="xs mut">Token</text>
+        <rect class="input" x="712" y="246" width="235" height="22" rx="3"/><text x="720" y="261" class="sm mut">•••••••• kept in the profile</text>
+        <rect class="btn" x="712" y="290" width="112" height="24" rx="3"/><text x="768" y="306" text-anchor="middle" class="sm b">Test connection</text>
+        <text x="834" y="306" class="sm acc b">✓ 200 OK</text>
+        <text x="712" y="340" class="xs mut">Fields are generated from the node's settings schema.</text>
+
+        <!-- bottom -->
+        <rect class="pane" x="1" y="365" width="958" height="134"/>
+        <rect class="box-soft" x="12" y="372" width="64" height="24" rx="3"/><text x="44" y="388" text-anchor="middle" class="sm b">Issues</text>
+        <text x="106" y="388" text-anchor="middle" class="sm mut">Preview</text>
+        <text x="168" y="388" text-anchor="middle" class="sm mut">Run log</text>
+        <line class="rule" x1="1" y1="402" x2="959" y2="402"/>
+        <text x="14" y="426" class="sm m">Filter: setting 'Condition' is required.</text>
+        <text x="14" y="446" class="sm m">SQL Server: choose a connection profile.</text>
+      </svg>
+      </div>
+      <figcaption>Figure 1. The REST node is selected, so the right panel shows its fields. The dashed outline is a node being dragged in from the palette. Wires carry rows between ports; the Issues tab lists what blocks a run. Generate DLL stays disabled until a run succeeds, as in the first POC.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>First slice: CSV to a C# collection</h2>
+    <p>Build one complete path first: a CSV file in, a collection out that a different WPF application can bind to. Databases and REST reuse the same shape afterwards.</p>
+    <figure>
+      <div class="fig-scroll">
+      <svg viewBox="0 0 960 360" role="img" aria-label="Four nodes left to right: CsvSource lists the columns found in the file; Filter picks the location column, splits on a bar, compares the first part and keeps India; ToJson writes indented JSON; Output deserializes the JSON to a typed list. Below each node, example data shows what flows through it.">
+        <defs>
+          <marker id="ah6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        </defs>
+        <text x="20" y="22" class="cap">CONFIGURED IN THE UI</text>
+        <!-- stage 1 -->
+        <rect class="box" x="20" y="40" width="210" height="150" rx="3"/>
+        <text x="32" y="62" class="b">CsvSource</text>
+        <text x="32" y="82" class="sm mut">File</text><text x="92" y="82" class="sm m">employees.csv</text>
+        <text x="32" y="98" class="sm mut">Delimiter</text><text x="92" y="98" class="sm m">,</text>
+        <text x="32" y="114" class="sm mut">Header row</text><text x="92" y="114" class="sm m">yes</text>
+        <text x="32" y="136" class="xs mut">Columns found in the file</text>
+        <text x="32" y="152" class="xs m">id  first_name  last_name  email</text>
+        <text x="32" y="166" class="xs m">age  <tspan class="acc b">location</tspan>  salary  joined</text>
+        <!-- stage 2 -->
+        <rect class="box-soft" x="270" y="40" width="230" height="150" rx="3"/>
+        <text x="282" y="62" class="b">Filter</text>
+        <text x="282" y="82" class="sm mut">Column</text><text x="372" y="82" class="sm m">location ▾</text>
+        <text x="282" y="98" class="sm mut">Split on</text><text x="372" y="98" class="sm m">|</text>
+        <text x="282" y="114" class="sm mut">Compare part</text><text x="372" y="114" class="sm m">1  (India|Pune)</text>
+        <text x="282" y="136" class="xs mut">Values found in that part</text>
+        <text x="282" y="154" class="sm m"><tspan class="acc b">☑</tspan> India   ☐ USA   ☐ Germany</text>
+        <text x="282" y="172" class="xs mut">tick the ones to keep</text>
+        <!-- stage 3 -->
+        <rect class="box" x="540" y="40" width="180" height="150" rx="3"/>
+        <text x="552" y="62" class="b">ToJson</text>
+        <text x="552" y="82" class="sm mut">Destination</text><text x="624" y="82" class="sm m">JSON</text>
+        <text x="552" y="98" class="sm mut">Indented</text><text x="624" y="98" class="sm m">yes</text>
+        <text x="552" y="114" class="sm mut">Columns</text><text x="624" y="114" class="sm m">all 8</text>
+        <!-- stage 4 -->
+        <rect class="box" x="760" y="40" width="180" height="150" rx="3"/>
+        <text x="772" y="62" class="b">Output</text>
+        <text x="772" y="82" class="sm mut">Deserialize to</text>
+        <text x="772" y="98" class="sm m">List&lt;T&gt; ▾</text>
+        <text x="772" y="114" class="sm mut">T</text><text x="790" y="114" class="sm m">Employee</text>
+        <text x="772" y="136" class="xs mut">Columns kept</text>
+        <text x="772" y="152" class="xs m">first_name  last_name</text>
+        <text x="772" y="166" class="xs m">email</text>
+        <!-- arrows -->
+        <line class="ln" x1="230" y1="115" x2="270" y2="115" marker-end="url(#ah6)"/><text x="250" y="109" text-anchor="middle" class="xs mut">Rows</text>
+        <line class="ln" x1="500" y1="115" x2="540" y2="115" marker-end="url(#ah6)"/><text x="520" y="109" text-anchor="middle" class="xs mut">Rows</text>
+        <line class="ln" x1="720" y1="115" x2="760" y2="115" marker-end="url(#ah6)"/><text x="740" y="109" text-anchor="middle" class="xs mut">Json</text>
+        <!-- ties to data row -->
+        <line class="rule" x1="125" y1="190" x2="125" y2="224" stroke-dasharray="3 3"/>
+        <line class="rule" x1="385" y1="190" x2="385" y2="224" stroke-dasharray="3 3"/>
+        <line class="rule" x1="630" y1="190" x2="630" y2="224" stroke-dasharray="3 3"/>
+        <line class="rule" x1="850" y1="190" x2="850" y2="224" stroke-dasharray="3 3"/>
+        <text x="20" y="216" class="cap">WHAT FLOWS (EXAMPLE DATA)</text>
+        <rect class="pane" x="20" y="224" width="210" height="116" rx="3"/>
+        <text x="32" y="246" class="xs mut">three rows read</text>
+        <text x="32" y="266" class="xs m">1  Asha   Rao   India|Pune</text>
+        <text x="32" y="282" class="xs m">2  Tom    Lee   USA|Austin</text>
+        <text x="32" y="298" class="xs m">3  Ravi   Nair  India|Kochi</text>
+        <rect class="pane" x="270" y="224" width="230" height="116" rx="3"/>
+        <text x="282" y="246" class="xs mut">part 1 compared with the ticked values</text>
+        <text x="282" y="266" class="xs m">India|Pune    India  <tspan class="acc b">keep</tspan></text>
+        <text x="282" y="282" class="xs m">USA|Austin   USA    drop</text>
+        <text x="282" y="298" class="xs m">India|Kochi   India  <tspan class="acc b">keep</tspan></text>
+        <rect class="pane" x="540" y="224" width="180" height="116" rx="3"/>
+        <text x="552" y="246" class="xs mut">two rows as JSON</text>
+        <text x="552" y="266" class="xs m">[ { "id": "1",</text>
+        <text x="552" y="282" class="xs m">    "first_name": "Asha",</text>
+        <text x="552" y="298" class="xs m">    … },</text>
+        <text x="552" y="314" class="xs m">  { "id": "3", … } ]</text>
+        <rect class="pane" x="760" y="224" width="180" height="116" rx="3"/>
+        <text x="772" y="246" class="xs mut">a C# collection</text>
+        <text x="772" y="266" class="xs m">List&lt;Employee&gt;  Count = 2</text>
+        <text x="772" y="282" class="xs m">[0]  Asha  Rao</text>
+        <text x="772" y="298" class="xs m">[1]  Ravi  Nair</text>
+      </svg>
+      </div>
+      <figcaption>Figure 2. Top: what the user configures in each node. Bottom: what flows through it, with made-up example rows. The dashed lines only tie a node to its data; the arrows carry the rows.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li><b>CsvSource.</b> Pick the file, the delimiter and whether there is a header row. The designer reads the header and lists the columns.</li>
+      <li><b>Filter.</b> Pick a column, here <code>location</code>. If its values hold several parts, such as <code>India|Pune</code>, set the separator and which part to compare. The designer lists the values it finds in that part, and you tick the ones to keep.</li>
+      <li><b>ToJson.</b> Writes the kept rows as indented JSON with all columns.</li>
+      <li><b>Output.</b> Chooses what the JSON becomes in C#, and which columns it keeps.</li>
+      <li><b>Run.</b> Each node shows its row count, and the Preview tab shows what it produced.</li>
+      <li><b>Generate DLL.</b> The toolbar button builds the DLL once a run has succeeded.</li>
+    </ol>
+    <div class="cols">
+      <div class="card"><h3>Output type</h3><p>A typed list is the default: the generator writes a class from the chosen columns, and a WPF DataGrid binds to it. A <code>DataTable</code> suits columns that are not known when the app is built. An <code>ObservableCollection</code> suits an app that edits rows. Plain JSON text stays available.</p></div>
+      <div class="card"><h3>Column types</h3><p>Start with every value as text, as in the first POC. Later each column can be marked int, decimal or date. A row that fails conversion is either reported and skipped, or stops the run. You choose which.</p></div>
+      <div class="card"><h3>The values list</h3><p>The designer reads the whole file to list every value in the chosen column. You will have an ETLBox licence, so the 5,000-row limit does not apply.</p></div>
+    </div>
+    <div class="card">
+      <h3>Using the DLL in a different WPF application</h3>
+      <p>The app references the DLL and the ETLBox packages, and calls <code>Run</code>. The filter values saved in the designer are the defaults, and the call can override them.</p>
+      <pre class="code">var all     = GeneratedPipeline.Run(csvPath);
+var india   = GeneratedPipeline.Run(csvPath, new PipelineArgs { Keep = new[] { "India" } });
+EmployeeGrid.ItemsSource = india.Rows;   // IReadOnlyList&lt;Employee&gt;</pre>
+      <p class="mono" style="margin-top:8px;font-size:12px;color:var(--muted)">A sketch of the call. The final names come from the generator.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The configurator rule: everything is a setting</h2>
+    <p>Each node is a form with no hard-coded behaviour. Where the first POC fixed something in code (the case-insensitive match, the separator, an empty country accepting every row), the new tool shows it as a setting with a default. Settings that most people leave alone sit under an Advanced heading.</p>
+    <p>The Filter shows what this means. Figure 2 is the simplest case. The general form is a list of rules:</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Part of a rule</th><th>Choices</th></tr></thead>
+        <tbody>
+          <tr><td>Column</td><td>Any column the designer found in the file</td></tr>
+          <tr><td>Prepare the value</td><td>Nothing (a plain column), or split on a separator and take part N, trim, change case</td></tr>
+          <tr><td>Test</td><td>equals, is one of, contains, starts with, ends with, matches a pattern, greater than, less than, between, is empty; each can be negated</td></tr>
+          <tr><td>Value or values</td><td>Typed in, or ticked from the list of values found in the file</td></tr>
+          <tr><td>Case sensitive</td><td>On or off</td></tr>
+          <tr><td>Combine with the next rule</td><td>AND or OR</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <pre class="code">location   split on "|", part 1   is one of      India, USA        AND
+age        (plain)                 greater than    30                AND
+email      (plain)                 ends with       @example.com</pre>
+    <p class="mono" style="font-size:12px;color:var(--muted);margin:0">Example rule list. The first rule is the country case from the first POC; the other two are plain columns.</p>
+    <div class="cols">
+      <div class="card"><h3>Numbers and dates</h3><p>Greater than and between need a number or a date, so those rules convert the text first. The rule also says what happens to a row that will not convert: skip it, or stop the run.</p></div>
+      <div class="card"><h3>Source and output settings</h3><p>CsvSource exposes delimiter, header row, and (once tested) quote character and encoding. Only the delimiter was proven in the first POC; encoding and header handling were open experiments there. Output exposes the class name, the columns kept and their types.</p></div>
+      <div class="card"><h3>Settings the host can override</h3><p>Any setting can be marked as a parameter. The saved value is the default, and the app that uses the DLL can replace it in its call to <code>Run</code>.</p></div>
+      <div class="card"><h3>The cost of freedom</h3><p>More settings mean more ways to build a pipeline that cannot run. The validator, the Issues tab and the Preview tab carry more weight: every setting needs a default and a clear message when its value is wrong.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>C# expressions and parameters</h2>
+    <p>A rule can be a typed C# expression instead of the form. The designer compiles it as you type. The generator compiles it into the DLL, so the app that uses the DLL needs no compiler.</p>
+    <pre class="code">row.age &gt; p.MinAge &amp;&amp; row.email.EndsWith(p.Domain)</pre>
+    <p class="mono" style="font-size:12px;color:var(--muted);margin:0">Example Filter expression. It returns true to keep the row.</p>
+    <div class="cols">
+      <div class="card"><h3>What an expression sees</h3><p><code>row</code> has one property per column, typed by the column settings (text unless you set a type). <code>p</code> holds the declared parameters. A fixed set of namespaces is available (<code>System</code>, <code>System.Linq</code>, <code>System.Globalization</code>); more can be added under Advanced.</p></div>
+      <div class="card"><h3>In the designer</h3><p>The expression is compiled while you type. Errors appear in the Issues tab with line and column, and Preview runs it on the sample rows. This is a new use of Roslyn inside the designer; the first POC used it only in the generator. I would use the same compile path as the generator, so a pipeline behaves the same in both places.</p></div>
+      <div class="card"><h3>In the DLL</h3><p>The expression text becomes a compiled method in the generated DLL. The host app does not need Roslyn at run time.</p></div>
+      <div class="card"><h3>Safety</h3><p>.NET has no sandbox for this. An expression runs with the permissions of the app that hosts it, and a saved pipeline file can contain code. Open only pipelines you trust, and show a warning when a file with expressions is opened.</p></div>
+      <div class="card"><h3>Parameters</h3><p>Declared in a Parameters panel: name, type, default. Any setting can take its value from a parameter, and expressions read them through <code>p</code>. Only declared parameters become fields of the generated <code>PipelineArgs</code>, so everything else is fixed when the DLL is generated.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How the parts fit</h2>
+    <p>Two lookups drive the whole UI. The <b>NodeRegistry</b> says which nodes exist and what each one asks for. The <b>ProfileStore</b> says where each external system lives. A node saves only a profile ID, so addresses are entered once and passwords stay out of the graph file.</p>
+    <figure>
+      <div class="fig-scroll">
+      <svg viewBox="0 0 960 450" role="img" aria-label="Layer diagram. The UI row has palette, canvas and properties panel. Below, NodeRegistry, GraphViewModel and ProfileStore. Below, Validator, PipelineBuilder and Executor. At the bottom the ETLBox connectors, and the DllGenerator under the Validator.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+          <marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--warn)"/></marker>
+        </defs>
+        <text x="20" y="14" class="cap">UI (WPF + NODIFY)</text>
+        <rect class="box" x="20" y="20" width="280" height="56" rx="3"/><text x="32" y="42" class="b">Node palette</text><text x="32" y="60" class="sm mut">one entry per NodeDefinition</text>
+        <rect class="box" x="340" y="20" width="280" height="56" rx="3"/><text x="352" y="42" class="b">Nodify canvas</text><text x="352" y="60" class="sm mut">NodifyEditor: drag, connect, select</text>
+        <rect class="box" x="660" y="20" width="280" height="56" rx="3"/><text x="672" y="42" class="b">Properties panel</text><text x="672" y="60" class="sm mut">form built from the settings schema</text>
+
+        <text x="20" y="134" class="cap">APPLICATION MODEL</text>
+        <rect class="box-soft" x="20" y="140" width="280" height="64" rx="3"/><text x="32" y="162" class="b">NodeRegistry</text><text x="32" y="180" class="sm mut">ports + settings schema + builder,</text><text x="32" y="194" class="sm mut">one NodeDefinition per node type</text>
+        <rect class="box" x="340" y="140" width="280" height="64" rx="3"/><text x="352" y="162" class="b">GraphViewModel</text><text x="352" y="180" class="sm mut">nodes, connections, selected node,</text><text x="352" y="194" class="sm mut">each node holds a ProfileId</text>
+        <rect class="box-soft" x="660" y="140" width="280" height="64" rx="3"/><text x="672" y="162" class="b">ProfileStore</text><text x="672" y="180" class="sm mut">host, port, protocol, database, path, URL;</text><text x="672" y="194" class="sm mut">secrets protected, never in the graph file</text>
+
+        <text x="20" y="264" class="cap">ENGINE</text>
+        <rect class="box" x="20" y="270" width="280" height="64" rx="3"/><text x="32" y="292" class="b">Validator</text><text x="32" y="310" class="sm mut">ports match, required settings set,</text><text x="32" y="324" class="sm mut">no cycles, profile resolves</text>
+        <rect class="box" x="340" y="270" width="280" height="64" rx="3"/><text x="352" y="292" class="b">PipelineBuilder</text><text x="352" y="310" class="sm mut">graph to ETLBox components,</text><text x="352" y="324" class="sm mut">joined with LinkTo</text>
+        <rect class="box" x="660" y="270" width="280" height="64" rx="3"/><text x="672" y="292" class="b">Executor</text><text x="672" y="310" class="sm mut">Network.ExecuteAsync, progress,</text><text x="672" y="324" class="sm mut">cancel, per-node row counts</text>
+
+        <rect class="box-soft" x="20" y="392" width="280" height="44" rx="3"/><text x="32" y="412" class="b">DllGenerator</text><text x="32" y="428" class="sm mut">Roslyn, from a validated graph</text>
+        <rect class="box" x="340" y="392" width="600" height="44" rx="3"/><text x="352" y="412" class="b">ETLBox 3.11.0 connectors</text><text x="352" y="428" class="sm mut">files · databases · REST · Azure Blob · messaging</text>
+
+        <!-- arrows -->
+        <line class="ln" x1="160" y1="76" x2="160" y2="140" marker-end="url(#ah)"/><text x="168" y="112" class="xs mut">lists definitions</text>
+        <line class="ln" x1="480" y1="76" x2="480" y2="140" marker-start="url(#ah)" marker-end="url(#ah)"/><text x="488" y="112" class="xs mut">binds nodes and connections</text>
+        <line class="ln" x1="800" y1="76" x2="800" y2="140" marker-start="url(#ah)" marker-end="url(#ah)"/><text x="808" y="112" class="xs mut">pick or edit a profile</text>
+        <line class="ln" x1="300" y1="172" x2="340" y2="172" marker-end="url(#ah)"/><text x="320" y="166" text-anchor="middle" class="xs mut">creates</text>
+        <line class="ln" x1="620" y1="172" x2="660" y2="172" marker-end="url(#ah)"/><text x="640" y="166" text-anchor="middle" class="xs mut">refers</text>
+        <path class="ln" d="M400 204 V238 H160 V270" marker-end="url(#ah)"/><text x="280" y="232" text-anchor="middle" class="xs mut">snapshot of the graph</text>
+        <path class="ln" d="M700 204 V244 H560 V270" marker-end="url(#ah)"/><text x="630" y="238" text-anchor="middle" class="xs mut">resolve profile</text>
+        <line class="ln" x1="300" y1="302" x2="340" y2="302" marker-end="url(#ah)"/><text x="320" y="296" text-anchor="middle" class="xs mut">valid</text>
+        <line class="ln" x1="620" y1="302" x2="660" y2="302" marker-end="url(#ah)"/><text x="640" y="296" text-anchor="middle" class="xs mut">network</text>
+        <line class="ln" x1="800" y1="334" x2="800" y2="392" marker-end="url(#ah)"/><text x="808" y="366" class="xs mut">reads and writes</text>
+        <line class="ln" x1="160" y1="334" x2="160" y2="392" marker-end="url(#ah)"/><text x="168" y="366" class="xs mut">valid graph</text>
+      </svg>
+      </div>
+      <figcaption>Figure 3. Adding a data source means adding one NodeDefinition (its fields and its builder). The palette, the properties form and the validator pick it up without new XAML. The DllGenerator accepts only a validated graph, so a DLL is never built from a broken pipeline.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Where host, port and protocol go</h2>
+    <p>ETLBox does not have a host, port or protocol setting on its sources. It takes a file path, a URL, or a connection string. So the UI keeps typed fields (the ones you asked for) and a small composer per source type turns them into what ETLBox accepts. This is the main piece of code the POC has to get right.</p>
+    <figure>
+      <div class="fig-scroll">
+      <svg viewBox="0 0 960 372" role="img" aria-label="Five lanes. Each lane maps the fields a user types, through a composer, to what ETLBox receives: REST to a URI with ResourceType.Http, database fields to a connection string, file fields to a path with ResourceType.File, Azure Blob fields to ResourceType.AzureBlob settings, and messaging fields to a connector package.">
+        <defs>
+          <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        </defs>
+        <text x="20" y="22" class="cap">WHAT THE USER TYPES</text>
+        <text x="380" y="22" class="cap">COMPOSER (OUR CODE)</text>
+        <text x="620" y="22" class="cap">WHAT ETLBOX RECEIVES</text>
+        <line class="rule" x1="20" y1="30" x2="940" y2="30"/>
+
+        <!-- lane 0: REST -->
+        <rect class="box" x="20" y="40" width="320" height="56" rx="3"/>
+        <text x="32" y="60" class="b sm">REST endpoint</text><text x="32" y="78" class="sm mut">scheme · host · port · path · headers · token</text>
+        <rect class="box-soft" x="380" y="40" width="200" height="56" rx="3"/>
+        <text x="392" y="60" class="b sm">UriComposer</text><text x="392" y="78" class="sm mut">+ HttpClient with headers</text>
+        <rect class="box" x="620" y="40" width="320" height="56" rx="3"/>
+        <text x="632" y="60" class="sm m">JsonSource&lt;T&gt;(uri, ResourceType.Http)</text><text x="632" y="78" class="sm mut">Bearer token on HttpClient headers</text><text x="920" y="60" text-anchor="end" class="xs acc b m">D</text>
+        <line class="ln" x1="340" y1="68" x2="380" y2="68" marker-end="url(#ah3)"/><line class="ln" x1="580" y1="68" x2="620" y2="68" marker-end="url(#ah3)"/>
+
+        <!-- lane 1: Database -->
+        <rect class="box" x="20" y="104" width="320" height="56" rx="3"/>
+        <text x="32" y="124" class="b sm">Database</text><text x="32" y="142" class="sm mut">server · port · database · user · secret · TLS</text>
+        <rect class="box-soft" x="380" y="104" width="200" height="56" rx="3"/>
+        <text x="392" y="124" class="b sm">ConnectionStringBuilder</text><text x="392" y="142" class="sm mut">one per database provider</text>
+        <rect class="box" x="620" y="104" width="320" height="56" rx="3"/>
+        <text x="632" y="124" class="sm m">connection string → connection manager</text><text x="632" y="142" class="sm warn">class and package names to confirm</text><text x="920" y="124" text-anchor="end" class="xs warn b m">U</text>
+        <line class="ln" x1="340" y1="132" x2="380" y2="132" marker-end="url(#ah3)"/><line class="ln" x1="580" y1="132" x2="620" y2="132" marker-end="url(#ah3)"/>
+
+        <!-- lane 2: File -->
+        <rect class="box" x="20" y="168" width="320" height="56" rx="3"/>
+        <text x="32" y="188" class="b sm">File</text><text x="32" y="206" class="sm mut">folder · file name · delimiter · header row</text>
+        <rect class="box-soft" x="380" y="168" width="200" height="56" rx="3"/>
+        <text x="392" y="188" class="b sm">PathResolver</text><text x="392" y="206" class="sm mut">relative or absolute path</text>
+        <rect class="box" x="620" y="168" width="320" height="56" rx="3"/>
+        <text x="632" y="188" class="sm m">CsvSource(path, ResourceType.File)</text><text x="632" y="206" class="sm mut">delimiter via Configuration.Delimiter</text><text x="920" y="188" text-anchor="end" class="xs acc b m">D · P</text>
+        <line class="ln" x1="340" y1="196" x2="380" y2="196" marker-end="url(#ah3)"/><line class="ln" x1="580" y1="196" x2="620" y2="196" marker-end="url(#ah3)"/>
+
+        <!-- lane 3: Azure Blob -->
+        <rect class="box" x="20" y="232" width="320" height="56" rx="3"/>
+        <text x="32" y="252" class="b sm">Azure Blob</text><text x="32" y="270" class="sm mut">connection string · container · blob name</text>
+        <rect class="box-soft" x="380" y="232" width="200" height="56" rx="3"/>
+        <text x="392" y="252" class="b sm">Pass-through</text><text x="392" y="270" class="sm mut">values set as they are</text>
+        <rect class="box" x="620" y="232" width="320" height="56" rx="3"/>
+        <text x="632" y="252" class="sm m">ResourceType.AzureBlob</text><text x="632" y="270" class="sm mut">AzureBlobStorage.ConnectionString + ContainerName</text><text x="920" y="252" text-anchor="end" class="xs acc b m">D</text>
+        <line class="ln" x1="340" y1="260" x2="380" y2="260" marker-end="url(#ah3)"/><line class="ln" x1="580" y1="260" x2="620" y2="260" marker-end="url(#ah3)"/>
+
+        <!-- lane 4: Messaging -->
+        <rect class="box" x="20" y="296" width="320" height="56" rx="3"/>
+        <text x="32" y="316" class="b sm">Kafka / Service Bus</text><text x="32" y="334" class="sm mut">host:port · security protocol · topic · group</text>
+        <rect class="box-soft" x="380" y="296" width="200" height="56" rx="3"/>
+        <text x="392" y="316" class="b sm">Per-connector composer</text><text x="392" y="334" class="sm mut">written once the API is known</text>
+        <rect class="box" x="620" y="296" width="320" height="56" rx="3"/>
+        <text x="632" y="316" class="sm m">ETLBox.Apache.Kafka</text><text x="632" y="334" class="sm m">ETLBox.Azure.ServiceBus</text><text x="920" y="316" text-anchor="end" class="xs warn b m">D · U</text>
+        <text x="920" y="334" text-anchor="end" class="xs warn">classes, settings: U</text>
+        <line class="ln" x1="340" y1="324" x2="380" y2="324" marker-end="url(#ah3)"/><line class="ln" x1="580" y1="324" x2="620" y2="324" marker-end="url(#ah3)"/>
+      </svg>
+      </div>
+      <figcaption>Figure 4. Left to right in every lane: typed fields become a composed value, which becomes the one thing ETLBox takes. Tags: D read in the docs, P proven in our first POC, U not confirmed.</figcaption>
+    </figure>
+    <div class="cols">
+      <div class="card"><h3>"Protocol" has three meanings here</h3><p><code>http</code> or <code>https</code> for REST, a TLS option inside a database connection string, and the security protocol for Kafka. If you meant FTP, SFTP or S3: the ETLBox page I read does not list them, so they would need a custom source.</p></div>
+      <div class="card"><h3>Docs are not pinned to 3.11.0</h3><p>I read the current public docs. Before writing any builder, dump the public API of each connector package at 3.11.0 by reflection, as we did in the first POC. That settles every U in this page.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Generating the DLL</h2>
+    <p>The first POC embedded its engine source in a Roslyn-compiled class library and ran the same 52 tests through the designer and the DLL, with identical results. The new design keeps that and changes what gets embedded: the graph itself plus a general PipelineBuilder, instead of a fixed five-node chain.</p>
+    <figure>
+      <div class="fig-scroll">
+      <svg viewBox="0 0 960 320" role="img" aria-label="The validated graph and the embedded runtime sources go into the DllGenerator, which compiles the generated DLL. A host app calls Run on the DLL, and connection profiles are passed in at call time rather than compiled in. A parity check runs the same tests through the designer and the DLL.">
+        <defs>
+          <marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        </defs>
+        <text x="20" y="22" class="cap">INPUTS</text>
+        <text x="280" y="22" class="cap">BUILD, IN THE DESIGNER</text>
+        <text x="540" y="22" class="cap">RUN, ANYWHERE</text>
+        <rect class="box" x="20" y="40" width="200" height="64" rx="3"/><text x="32" y="62" class="b">Validated graph</text><text x="32" y="80" class="sm mut">nodes, settings, ProfileIds</text><text x="32" y="94" class="sm mut">no secrets</text>
+        <rect class="box" x="20" y="130" width="200" height="64" rx="3"/><text x="32" y="152" class="b">Runtime sources</text><text x="32" y="170" class="sm mut">PipelineBuilder, node builders,</text><text x="32" y="184" class="sm mut">embedded as resources</text>
+        <rect class="box-soft" x="280" y="85" width="200" height="64" rx="3"/><text x="292" y="107" class="b">DllGenerator</text><text x="292" y="125" class="sm mut">Roslyn, net10.0,</text><text x="292" y="139" class="sm mut">SDK reference pack</text>
+        <rect class="box-soft" x="540" y="85" width="190" height="64" rx="3"/><text x="552" y="107" class="b">Generated DLL</text><text x="552" y="125" class="sm mut">graph + runtime,</text><text x="552" y="139" class="sm m mut">Run(profiles, args)</text>
+        <rect class="box" x="790" y="85" width="150" height="64" rx="3"/><text x="802" y="107" class="b">Host app</text><text x="802" y="125" class="sm mut">console, service,</text><text x="802" y="139" class="sm mut">scheduler</text>
+        <rect class="slot" x="540" y="215" width="400" height="64" rx="3"/><text x="552" y="237" class="b warn">Profiles at run time</text><text x="552" y="255" class="sm mut">addresses, ports, secrets from config, environment</text><text x="552" y="269" class="sm mut">or a secret store. Never compiled into the DLL.</text>
+        <rect class="box" x="20" y="215" width="460" height="64" rx="3"/><text x="32" y="237" class="b">Parity check</text><text x="32" y="255" class="sm mut">Same test matrix through the designer and the DLL,</text><text x="32" y="269" class="sm mut">compared row for row. First POC: 48 pass, 0 fail, 4 observed both ways.</text>
+        <path class="ln" d="M220 72 H250 V108 H280" marker-end="url(#ah4)"/>
+        <path class="ln" d="M220 162 H250 V126 H280" marker-end="url(#ah4)"/>
+        <line class="ln" x1="480" y1="117" x2="540" y2="117" marker-end="url(#ah4)"/><text x="510" y="111" text-anchor="middle" class="xs mut">compiles</text>
+        <line class="ln" x1="790" y1="117" x2="730" y2="117" marker-end="url(#ah4)"/><text x="760" y="111" text-anchor="middle" class="xs mut">calls Run</text>
+        <line class="ln-dash" x1="635" y1="215" x2="635" y2="149" marker-end="url(#ah4)"/><text x="643" y="186" class="xs warn">passed at call time</text>
+      </svg>
+      </div>
+      <figcaption>Figure 5. The generator accepts only a validated graph. Everything specific to an environment (addresses, tokens, passwords) arrives when the host calls Run.</figcaption>
+    </figure>
+    <p>There are two ways to produce the DLL. I recommend A.</p>
+    <figure>
+      <div class="fig-scroll">
+      <svg viewBox="0 0 960 210" role="img" aria-label="Two options. Option A: graph JSON is embedded with the designer's own runtime and compiled to a DLL, one code path. Option B: the graph goes through a code emitter per node type to generated C# and then to a DLL, which adds an emitter for every node.">
+        <defs>
+          <marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        </defs>
+        <text x="20" y="30" class="b">A · Embed the runtime</text>
+        <rect class="box" x="20" y="44" width="180" height="48" rx="3"/><text x="32" y="72" class="sm">Graph JSON</text>
+        <rect class="box-soft" x="250" y="44" width="260" height="48" rx="3"/><text x="262" y="64" class="sm b">Runtime, same code as the designer</text><text x="262" y="80" class="xs mut">PipelineBuilder + node builders</text>
+        <rect class="box" x="560" y="44" width="160" height="48" rx="3"/><text x="572" y="72" class="sm">DLL</text>
+        <line class="ln" x1="200" y1="68" x2="250" y2="68" marker-end="url(#ah5)"/><text x="225" y="62" text-anchor="middle" class="xs mut">embeds</text>
+        <line class="ln" x1="510" y1="68" x2="560" y2="68" marker-end="url(#ah5)"/><text x="535" y="62" text-anchor="middle" class="xs mut">compiles</text>
+        <text x="740" y="64" class="xs mut">One code path: a new node works</text><text x="740" y="78" class="xs mut">in the DLL with no extra code.</text>
+        <line class="rule" x1="20" y1="108" x2="940" y2="108"/>
+        <text x="20" y="130" class="b">B · Emit C# per node</text>
+        <rect class="box" x="20" y="144" width="130" height="48" rx="3"/><text x="32" y="172" class="sm">Graph</text>
+        <rect class="slot" x="200" y="144" width="200" height="48" rx="3"/><text x="212" y="164" class="sm b warn">Code emitter per node type</text><text x="212" y="180" class="xs mut">new work for every node</text>
+        <rect class="box" x="450" y="144" width="170" height="48" rx="3"/><text x="462" y="172" class="sm">Generated C#</text>
+        <rect class="box" x="670" y="144" width="100" height="48" rx="3"/><text x="682" y="172" class="sm">DLL</text>
+        <line class="ln" x1="150" y1="168" x2="200" y2="168" marker-end="url(#ah5)"/><text x="175" y="162" text-anchor="middle" class="xs mut">reads</text>
+        <line class="ln" x1="400" y1="168" x2="450" y2="168" marker-end="url(#ah5)"/><text x="425" y="162" text-anchor="middle" class="xs mut">writes</text>
+        <line class="ln" x1="620" y1="168" x2="670" y2="168" marker-end="url(#ah5)"/><text x="645" y="162" text-anchor="middle" class="xs mut">compiles</text>
+        <text x="790" y="164" class="xs mut">Readable output; two code</text><text x="790" y="178" class="xs mut">paths to keep equal.</text>
+      </svg>
+      </div>
+      <figcaption>Figure 6. A reuses the designer's own builder, so there is one code path to test. B gives readable C# but needs an emitter for every node type, and each emitter can drift from what the designer does.</figcaption>
+    </figure>
+    <div class="cols">
+      <div class="card"><h3>Packages and licence</h3><p>The host needs ETLBox, ETLBox.Csv, ETLBox.Json and any connector package the graph uses. Above 5,000 rows read per connector it also needs a licence file.</p></div>
+      <div class="card"><h3>Profiles</h3><p>The DLL carries ProfileIds only. <code>Run</code> takes the profile values as an argument, or reads them from configuration or environment variables.</p></div>
+      <div class="card"><h3>Generating versus running</h3><p>Generating needs the .NET SDK reference pack, which the first POC found out the hard way. Running the DLL needs the .NET runtime and the packages above.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Source catalog for the palette</h2>
+    <p>What each source node asks the user for, and what I could confirm about the ETLBox side.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Node</th><th>ETLBox component</th><th>User fills in</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr class="grp"><td colspan="4">Files</td></tr>
+          <tr><td>CSV</td><td><code>CsvSource</code>, package <code>ETLBox.Csv</code></td><td>File path, delimiter, header row</td><td><span class="ev d">D</span> <span class="ev p">P</span></td></tr>
+          <tr><td>JSON</td><td><code>JsonSource</code>, package <code>ETLBox.Json</code>. The docs say it reads the first array it finds.</td><td>File path</td><td><span class="ev d">D</span> <span class="ev p">P</span></td></tr>
+          <tr><td>Excel, Parquet, Text, XML</td><td>Packages <code>ETLBox.Excel</code>, <code>ETLBox.Parquet</code>, <code>ETLBox.Text</code>, and an XML package whose name the page spells <code>ETBox.Xml</code>. No class names on the page.</td><td>File path, plus sheet name for Excel</td><td><span class="ev u">U</span></td></tr>
+          <tr class="grp"><td colspan="4">Web and cloud</td></tr>
+          <tr><td>REST endpoint (JSON)</td><td><code>JsonSource</code> with <code>ResourceType.Http</code>; headers and auth set on its <code>HttpClient</code>. The docs describe GET reads and a POST destination, and no paging for reads.</td><td>Protocol, host, port, path, query, headers, bearer token</td><td><span class="ev d">D</span></td></tr>
+          <tr><td>Azure Blob</td><td>Any file source with <code>ResourceType.AzureBlob</code></td><td>Connection string, container, blob name</td><td><span class="ev d">D</span></td></tr>
+          <tr class="grp"><td colspan="4">Databases</td></tr>
+          <tr><td>SQL Server, Postgres, MySQL, MariaDB, Oracle, SQLite, Snowflake and others</td><td>The home page lists these as supported. It does not give class or package names.</td><td>Server, port, database, user, secret, TLS</td><td><span class="ev u">U</span></td></tr>
+          <tr class="grp"><td colspan="4">Messaging</td></tr>
+          <tr><td>Kafka, Azure Service Bus</td><td>Packages <code>ETLBox.Apache.Kafka</code>, <code>ETLBox.Azure.ServiceBus</code>. Docs name no classes or settings.</td><td>Bootstrap host:port, security protocol, topic, group; or namespace connection string and queue</td><td><span class="ev d">D</span> <span class="ev u">U</span></td></tr>
+          <tr class="grp"><td colspan="4">Later</td></tr>
+          <tr><td>GraphQL, OData, SOAP, gRPC, ODBC, OLEDB</td><td>Listed on the home page, nothing more.</td><td>Not in the first release</td><td><span class="ev d">D</span></td></tr>
+          <tr><td>Transforms and destinations</td><td>From the first POC: <code>RowTransformation</code>, <code>JsonDestination</code>, <code>MemoryDestination</code>, <code>VoidDestination</code>. The docs say each format has a destination.</td><td>Expression or column map; target path or URL</td><td><span class="ev p">P</span> <span class="ev u">U</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Decisions to make before coding</h2>
+    <div class="cols">
+      <div class="card"><h3>Schema-driven forms</h3><p>Each NodeDefinition lists its fields: type, required, secret, allowed values. The properties panel renders them. A new source is then one definition and one builder, with no XAML change.</p></div>
+      <div class="card"><h3>Profiles, not node settings</h3><p>Nodes store a ProfileId. Several nodes can share one profile, and the Profiles dialog is the only place addresses and secrets are edited.</p></div>
+      <div class="card"><h3>Secrets</h3><p>Protect stored passwords and tokens per Windows user, or store a reference to an environment variable. Mask them in the Issues tab and run log. Never write them into the saved graph.</p></div>
+      <div class="card"><h3>Test connection</h3><p>A button on each profile that opens the database, requests the URL or checks the file. A bad address then fails in the form, not halfway through a run.</p></div>
+      <div class="card"><h3>Port kinds</h3><p>Keep typed ports, as in the first POC, so a Rows output cannot be wired to a node that expects something else. The validator and the pending-wire colour use the same rule.</p></div>
+      <div class="card"><h3>General graphs</h3><p>The first POC ran one straight chain. A general ETL tool needs branches and joins, so the new PipelineBuilder must handle them. ETLBox has components for this; I have not checked them in 3.11.0.</p></div>
+      <div class="card"><h3>Licence</h3><p>The free edition read at most 5,000 rows per connector in the first POC. Every new connector node inherits that, so test data above that size needs a licence.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Build order</h2>
+    <ol class="steps">
+      <li><b>API dump.</b> Reflect over every connector package at 3.11.0 and record classes and properties. Replace each U.</li>
+      <li><b>The CSV slice.</b> Palette, canvas, NodeRegistry and a schema-driven properties panel, with CsvSource, Filter, ToJson and Output running end to end in the designer.</li>
+      <li><b>DLL generation.</b> The toolbar button, the generator, and a small separate WPF app that references the DLL. Every source added afterwards is tested in the designer and in that app.</li>
+      <li><b>Profiles and REST.</b> ProfileStore, secret handling, Test connection, REST source.</li>
+      <li><b>Databases.</b> One provider first, then the rest through the same ConnectionStringBuilder shape.</li>
+      <li><b>Azure Blob and messaging.</b></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Decided</h2>
+    <ul class="q">
+      <li>The Filter works on any column, split or plain.</li>
+      <li>The designer reads the whole file for the values list, because you will have the licence.</li>
+      <li>Every behaviour is a setting, with defaults.</li>
+      <li>A rule can be a typed C# expression.</li>
+      <li>The host app can override only the settings you mark as parameters.</li>
+    </ul>
+    <p>Nothing is open in the design now. The next step is the API dump, then the prompts for the first slice.</p>
+  </section>
+
+  <footer>Sources: ETLBox <a href="https://www.etlbox.net/">home page</a>, <a href="https://www.etlbox.net/docs/streaming-connectors/overview/">streaming connectors</a>, <a href="https://www.etlbox.net/recipes/web-cloud/json-web-service">REST recipe</a>, <a href="https://www.etlbox.net/docs/messaging/overview/">messaging overview</a>, read 2026-10-27. These pages may describe a newer version than 3.11.0.</footer>
+</main>
+
+</body></html>
