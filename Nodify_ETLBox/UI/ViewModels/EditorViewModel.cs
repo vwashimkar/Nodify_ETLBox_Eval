@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using EtlDesigner.Engine;
+using EtlDesigner.Engine.Csv;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -127,6 +128,8 @@ public class EditorViewModel : ObservableObject
 
     public RelayCommand DisconnectConnectorCommand { get; }
 
+    public event EventHandler? ValidationStateChanged;
+
     /// <summary>
     /// Adds a new node at the specified position.
     /// </summary>
@@ -135,6 +138,7 @@ public class EditorViewModel : ObservableObject
         var node = nodeType switch
         {
             NodeType.CsvSource => NodeFactory.CreateCsvSource(location),
+            NodeType.CsvFile => NodeFactory.CreateCsvFile(location),
             NodeType.FilterByCountry => NodeFactory.CreateFilterByCountry(location),
             NodeType.ToJson => NodeFactory.CreateToJson(location),
             NodeType.ParseJson => NodeFactory.CreateParseJson(location),
@@ -322,18 +326,34 @@ public class EditorViewModel : ObservableObject
             }
         }
 
-        if (TryBuildLinearChain(out _, out var chainIssues) == false)
+        if (HasAnyLegacyNode())
         {
-            foreach (var issue in chainIssues)
+            if (TryBuildLinearChain(out _, out var chainIssues) == false)
             {
-                Issues.Add(issue);
+                foreach (var issue in chainIssues)
+                {
+                    Issues.Add(issue);
+                }
             }
         }
+
+        ValidateCsvFileNodes();
 
         if (Issues.Count == 0)
         {
             Issues.Add("No issues found.");
         }
+
+        ValidationStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private bool HasAnyLegacyNode()
+    {
+        return Nodes.Any(n => n.NodeType is NodeType.CsvSource
+            or NodeType.FilterByCountry
+            or NodeType.ToJson
+            or NodeType.ParseJson
+            or NodeType.ResultJson);
     }
 
     private bool TryBuildLinearChain(out List<NodeViewModel> chain, out List<string> issues)
@@ -550,6 +570,8 @@ public class EditorViewModel : ObservableObject
     {
         settings = null;
 
+        ValidateCsvFileNodes();
+
         if (TryBuildLinearChain(out var chain, out var chainIssues) == false)
         {
             foreach (var issue in chainIssues)
@@ -557,6 +579,7 @@ public class EditorViewModel : ObservableObject
                 Issues.Add(issue);
             }
 
+            ValidationStateChanged?.Invoke(this, EventArgs.Empty);
             return false;
         }
 
@@ -616,6 +639,7 @@ public class EditorViewModel : ObservableObject
             Country: string.IsNullOrWhiteSpace(country) ? null : country,
             ParseFields: fields);
 
+        ValidationStateChanged?.Invoke(this, EventArgs.Empty);
         return true;
     }
 
@@ -658,6 +682,77 @@ public class EditorViewModel : ObservableObject
         }
 
         return appBasePath;
+    }
+
+    private void ValidateCsvFileNodes()
+    {
+        var csvFileNodes = Nodes.Where(n => n.NodeType == NodeType.CsvFile).ToList();
+
+        foreach (var node in csvFileNodes)
+        {
+            foreach (var setting in node.Settings)
+            {
+                if (setting.Key != "Separator" && setting.Key != "EncodingName" && setting.Key != "PreviewRows" && setting.Key != "SkipLines" && setting.Key != "FilePath")
+                {
+                    continue;
+                }
+
+                setting.WarningMessage = null;
+            }
+        }
+
+        foreach (var node in csvFileNodes)
+        {
+            var filePath = GetSettingValue(node, "FilePath");
+            var separatorRaw = GetSettingValue(node, "Separator");
+            var hasHeaderRaw = GetSettingValue(node, "HasHeader");
+            var skipLinesRaw = GetSettingValue(node, "SkipLines");
+            var encodingRaw = GetSettingValue(node, "EncodingName");
+            var previewRowsRaw = GetSettingValue(node, "PreviewRows");
+
+            var separator = NormalizeSeparator(separatorRaw);
+            var hasHeader = bool.TryParse(hasHeaderRaw, out var parsedHasHeader) ? parsedHasHeader : true;
+            var skipLines = int.TryParse(skipLinesRaw, out var parsedSkipLines) ? parsedSkipLines : -1;
+            var previewRows = int.TryParse(previewRowsRaw, out var parsedPreviewRows) ? parsedPreviewRows : 0;
+
+            var settings = new CsvFileSettings(filePath, separator, hasHeader, skipLines, encodingRaw, previewRows);
+            var messages = CsvFileValidator.Validate(settings);
+
+            foreach (var message in messages)
+            {
+                var key = DetermineCsvSettingKey(message);
+                var setting = node.Settings.FirstOrDefault(s => s.Key == key);
+                if (setting != null)
+                {
+                    setting.WarningMessage = message;
+                }
+
+                Issues.Add($"{node.Title}: {message}");
+            }
+
+            node.ConfigurationStatus = messages.Count == 0 && !string.IsNullOrWhiteSpace(filePath)
+                ? "Configured"
+                : "Not configured";
+        }
+    }
+
+    private static string NormalizeSeparator(string value)
+    {
+        if (string.Equals(value, "Comma", StringComparison.OrdinalIgnoreCase)) return ",";
+        if (string.Equals(value, "Semicolon", StringComparison.OrdinalIgnoreCase)) return ";";
+        if (string.Equals(value, "Tab", StringComparison.OrdinalIgnoreCase)) return "tab";
+        if (string.Equals(value, "Pipe", StringComparison.OrdinalIgnoreCase)) return "|";
+        return value;
+    }
+
+    private static string DetermineCsvSettingKey(string message)
+    {
+        if (message.Contains("path", StringComparison.OrdinalIgnoreCase) || message.Contains("file", StringComparison.OrdinalIgnoreCase)) return "FilePath";
+        if (message.Contains("separator", StringComparison.OrdinalIgnoreCase)) return "Separator";
+        if (message.Contains("skip lines", StringComparison.OrdinalIgnoreCase)) return "SkipLines";
+        if (message.Contains("preview rows", StringComparison.OrdinalIgnoreCase)) return "PreviewRows";
+        if (message.Contains("encoding", StringComparison.OrdinalIgnoreCase)) return "EncodingName";
+        return "FilePath";
     }
 
     private struct ConnectionValidationResult

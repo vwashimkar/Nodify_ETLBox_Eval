@@ -2,7 +2,7 @@
 
 Proof of concept: a visual ETL designer in WPF (net10.0-windows). A CSV is filtered by country, turned into JSON, parsed back to `first_name`, `last_name`, `email`, and shown in two panes. The graph is built with Nodify and executed with ETLBox. Only these two libraries (plus ETLBox.Csv, ETLBox.Json and the .NET BCL) are being evaluated.
 
-Last revised: 2026-10-24. Status: Stage 1 (spike and test suite) and Stage 2 (graph run) accepted (section 8). Stage 3 (country dropdown, node states, test-runner columns) implemented; the test-runner part is verified from `SpikeResults.csv`, the UI checks are reported as passing by the user (section 9). Stage 4 (DLL generation) accepted (section 10).
+Last revised: 2026-11-02 (trial license expired; section 7 and the result note in section 2). Status: Stage 1 (spike and test suite) and Stage 2 (graph run) accepted (section 8). Stage 3 (country dropdown, node states, test-runner columns) implemented; the test-runner part is verified from `SpikeResults.csv`, the UI checks are reported as passing by the user (section 9). Stage 4 (DLL generation) accepted (section 10).
 
 ## How to read this document
 
@@ -11,6 +11,7 @@ Every claim carries an evidence tag. A claim without a tag does not belong here.
 | Tag | Meaning |
 |---|---|
 | **[S]** | Result in `SpikeResults.csv` (52 tests, trial license present). The latest file was produced after Stage 3; where it differs from an earlier run, both are stated |
+| **[S2]** | Result in the `SpikeResults.csv` produced on 2026-11-02, after the trial key expired (52 tests, license file present but expired). Keep the file under a dated name, for example `SpikeResults_2026-11-02_expired-key.csv` |
 | **[M]** | Test manifest or README in `SampleData/TestData/` (inputs, ideal results, the spec) |
 | **[A]** | `docs/etlbox-api-surface.md`: public API found by reflection on the shipped assemblies. It lists member names found by a keyword scan; behaviour is NOT tested by it |
 | **[R]** | Reported in earlier session notes or screenshots, not re-checked for this revision |
@@ -28,6 +29,8 @@ Findings are split into library behaviour (sections 3 and 4), defects in our own
 ## 2. Result summary [S]
 
 52 tests, trial license present: **48 PASS, 0 FAIL, 4 OBSERVED.**
+
+Note, 2026-11-02 [S2]: the same suite run with the trial key expired gave **43 PASS, 5 FAIL, 4 OBSERVED**. The five failures are T048 to T052 and every one has the error `The registered trial key expired. The expiration date was: 2026-11-01. Please request a new license key.` The 4 OBSERVED tests are the same (T030, T040, T041, T047) with the same outcomes as before. This is a licence effect, not a regression; the 48 / 0 / 4 above stays the result with a valid licence.
 
 - `strict` tests compare counts, row ids (SHA-1 of the comma-joined ids) and values against expectations computed with Python's `csv` module, not with the pipeline [M].
 - `error_expected` tests pass when the run stops with a message. They do not check that the message names the true cause (see T038 in section 5).
@@ -125,7 +128,9 @@ All members below were found by reflection [A] on `ETLBox.dll`, `ETLBox.Csv.dll`
 | T052 | 8,000 | 2,999 |
 
   T048, T049 and T052 output fewer than 5,000 rows but still failed, so a limit on **output** rows is ruled out. The failures are consistent with a limit on rows **read**. `LicenseService.Check(int progressCount, string featureName)` points the same way [A]. The unlicensed run above failed on the 5,001st row read, because our read counter had reached 5,001 when the error was raised, so rows 1 to 5,000 were processed. ETLBox's own message says the limit is per connector; which connector reaches it first is not established [U]. Not yet tested: source files of exactly 5,000 and 5,001 rows.
-- Registration options: `LicenseService.CurrentKey` [A], and, per the vendor, the `etlbox` environment variable or an `etlbox.lic` file next to `ETLBox.dll` [R]. The trial license file was used. Our `.csproj` copies it to the output when it exists. The file is git-ignored, personal and must never be committed or quoted. It expires 2026-11-01.
+- Registration options: `LicenseService.CurrentKey` [A], and, per the vendor, the `etlbox` environment variable or an `etlbox.lic` file next to `ETLBox.dll` [R]. The trial license file was used. Our `.csproj` copies it to the output when it exists. The file is git-ignored, personal and must never be committed or quoted. It expired on 2026-11-01. See the 2026-11-02 bullet below.
+- **Expired trial key, 2026-11-02 [S2].** With `etlbox.lic` still next to `ETLBox.dll` (`license_file_present` is `true` on every row) the suite gave 43 PASS / 5 FAIL / 4 OBSERVED. T048 to T052 failed with a different message from the unlicensed one: `The registered trial key expired. The expiration date was: 2026-11-01. Please request a new license key.` instead of `No valid license key was found`. All 43 tests on small files (the largest read 60 rows) still passed. The failing runs read 5,001 rows before the error (`rows_read` 5001, `reconciles` false), for example T048 matched 1,203 rows, the same read and match counts as the unlicensed DLL run above. So an expired key looks like the free edition for volume: reads up to 5,000 rows work and the 5,001st raises an error, with a message that names the expiry. That is an observation from one run. Whether an expired key is treated as no key, or is refused by a separate check, is not established [U].
+- Two points follow. A license file being present does not show that the license is valid. The table above gives `rows_read` as 12,000 and 8,000 for the first unlicensed run, while this run shows 5,001; the first run's raw file was not kept, so the difference (a different runner version, or a different count point) cannot be explained [U].
 - A generated DLL that uses ETLBox needs the same license at runtime (Stage 4 consideration).
 
 ## 8. Stage 2 status (graph run)
@@ -176,7 +181,7 @@ The agent implemented all three parts but its session ended on a service error b
 2. **Design limit.** Generating a DLL needs the .NET SDK reference pack on the machine. Not tested on a machine without the SDK [U].
 3. **License.** The DLL needs the ETLBox packages and a license at runtime; see the external runs below and section 7.
 4. **Locked output.** Generating into a folder whose DLL was in use (held by the demo project's build) failed with access denied. It is now reported as an error [R].
-5. **A run not reproduced.** The agent's DLL-mode run gave 43 PASS / 5 FAIL / 4 OBSERVED (T048 to T052 with the license error). The same command run by the user from the app's output folder gave 48 / 0 / 4. The cause is not established; probably a working folder without the license [U].
+5. **A run not reproduced.** The agent's DLL-mode run gave 43 PASS / 5 FAIL / 4 OBSERVED (T048 to T052 with the license error). The same command run by the user from the app's output folder gave 48 / 0 / 4. The cause is not established; probably a working folder without the license [U]. On 2026-11-02 the app itself gave exactly 43 / 5 / 4 when the key had expired (section 7), so a missing or invalid license in that run is the likely cause. Still not proven, because that run's license state was not recorded [U].
 6. **Roslyn 4.14.0 supports C# 13 as its stable language level, with C# 14 in preview (per the agent) [R].** The embedded Engine files must stay within C# 13 syntax.
 
 **External runs through the generated DLL, in a separate console project (2026-10-24) [R]**
@@ -200,7 +205,9 @@ The agent implemented all three parts but its session ended on a service error b
 7. The error text includes the raw record (full row data). Decide whether that is acceptable for real data.
 8. Compare the runner's counts with ETLBox's own `ProgressCount` or an independent count, so a row the reader never delivers becomes visible (5.7) [U].
 9. Check whether reading the country list counts toward the free-edition limit when no license is present, since it reads the file an extra time [U].
-10. Try DLL generation on a machine without the .NET SDK; the reference pack is required (section 10) [U].
+10. Request a new ETLBox trial or licence key and re-run the suite: it should return to 48 / 0 / 4. Record the run's licence state in the result file (valid, expired, missing) so a 43 / 5 / 4 is explained at once. Record the new key's expiry date in the repo notes, not the key.
+11. Test files of exactly 5,000 and 5,001 rows with no valid key, and with an expired key, to see whether both behave the same (section 7, 2026-11-02 bullet) [U].
+12. Try DLL generation on a machine without the .NET SDK; the reference pack is required (section 10) [U].
 
 ## 12. Recommendation (provisional)
 

@@ -1,0 +1,33 @@
+<Window x:Class="Nodify_ETLBox.UI.DataStudioWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CSV Preview (placeholder)"
+        Width="900"
+        Height="600"
+        MinWidth="700"
+        MinHeight="450"
+        ResizeMode="CanResize"
+        Background="{DynamicResource surface-brush}"
+        Foreground="{DynamicResource text-brush}"
+        FontFamily="{DynamicResource font-text}"
+        FontSize="{DynamicResource font-body}">
+    <Grid Margin="{DynamicResource Thickness16}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="{DynamicResource font-title}" Margin="0,0,0,8" />
+
+        <Border Grid.Row="1" BorderBrush="{DynamicResource border-brush}" BorderThickness="1" CornerRadius="{DynamicResource corner-radius}" Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness12}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                <TextBlock Text="{Binding SettingsSummary}" FontFamily="{DynamicResource font-data}" TextWrapping="Wrap" />
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="Close" Width="100" Command="{Binding CloseCommand}" CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+        </StackPanel>
+    </Grid>
+</Window>

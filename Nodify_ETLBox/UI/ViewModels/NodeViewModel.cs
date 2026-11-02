@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using EtlDesigner.Engine.Csv;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -7,6 +8,7 @@ namespace EtlDesigner.UI.ViewModels;
 public enum NodeType
 {
     CsvSource,
+    CsvFile,
     FilterByCountry,
     ToJson,
     ParseJson,
@@ -24,6 +26,8 @@ public enum NodeState
 
 public class NodeViewModel : ObservableObject
 {
+    private readonly Func<CsvFileSettings, bool>? _loadPreviewAction;
+
     private Point _location;
     private Point _anchor;
     private NodeState _state;
@@ -32,12 +36,14 @@ public class NodeViewModel : ObservableObject
     private string? _errorDetail;
     private bool _isSelected;
     private System.Windows.Size _size;
+    private string _configurationStatus;
 
-    public NodeViewModel(Guid id, string title, NodeType nodeType)
+    public NodeViewModel(Guid id, string title, NodeType nodeType, Func<CsvFileSettings, bool>? loadPreviewAction = null)
     {
         Id = id;
         Title = title ?? throw new ArgumentNullException(nameof(title));
         NodeType = nodeType;
+        _loadPreviewAction = loadPreviewAction;
         _location = new Point();
         _anchor = new Point();
         _size = new System.Windows.Size();
@@ -46,10 +52,13 @@ public class NodeViewModel : ObservableObject
         _errorMessage = null;
         _errorDetail = null;
         _isSelected = false;
+        _configurationStatus = "Configured";
 
         Inputs = new ObservableCollection<ConnectorViewModel>();
         Outputs = new ObservableCollection<ConnectorViewModel>();
         Settings = new ObservableCollection<SettingViewModel>();
+
+        LoadPreviewCommand = new RelayCommand(_ => LoadPreview(), _ => CanLoadPreview());
     }
 
     public Guid Id { get; }
@@ -106,9 +115,63 @@ public class NodeViewModel : ObservableObject
         set => SetProperty(ref _isSelected, value);
     }
 
+    public string ConfigurationStatus
+    {
+        get => _configurationStatus;
+        set
+        {
+            if (SetProperty(ref _configurationStatus, string.IsNullOrWhiteSpace(value) ? "Not configured" : value))
+            {
+                LoadPreviewCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public RelayCommand LoadPreviewCommand { get; }
+
     public ObservableCollection<ConnectorViewModel> Inputs { get; }
 
     public ObservableCollection<ConnectorViewModel> Outputs { get; }
 
     public ObservableCollection<SettingViewModel> Settings { get; }
+
+    private bool CanLoadPreview()
+    {
+        if (NodeType != NodeType.CsvFile)
+        {
+            return false;
+        }
+
+        var hasPath = !string.IsNullOrWhiteSpace(Settings.FirstOrDefault(s => s.Key == "FilePath")?.Value);
+        return hasPath && string.Equals(ConfigurationStatus, "Configured", StringComparison.Ordinal);
+    }
+
+    private void LoadPreview()
+    {
+        if (_loadPreviewAction == null)
+        {
+            return;
+        }
+
+        var filePath = Settings.FirstOrDefault(s => s.Key == "FilePath")?.Value ?? string.Empty;
+        var separator = NormalizeSeparator(Settings.FirstOrDefault(s => s.Key == "Separator")?.Value ?? ",");
+        var hasHeaderRaw = Settings.FirstOrDefault(s => s.Key == "HasHeader")?.Value ?? bool.TrueString;
+        var encodingName = Settings.FirstOrDefault(s => s.Key == "EncodingName")?.Value ?? "utf-8";
+
+        var hasHeader = bool.TryParse(hasHeaderRaw, out var parsedHasHeader) ? parsedHasHeader : true;
+        var skipLines = int.TryParse(Settings.FirstOrDefault(s => s.Key == "SkipLines")?.Value, out var parsedSkipLines) ? parsedSkipLines : 0;
+        var previewRows = int.TryParse(Settings.FirstOrDefault(s => s.Key == "PreviewRows")?.Value, out var parsedPreviewRows) ? parsedPreviewRows : 5;
+
+        var settings = new CsvFileSettings(filePath, separator, hasHeader, skipLines, encodingName, previewRows);
+        _loadPreviewAction(settings);
+    }
+
+    private static string NormalizeSeparator(string value)
+    {
+        if (string.Equals(value, "Comma", StringComparison.OrdinalIgnoreCase)) return ",";
+        if (string.Equals(value, "Semicolon", StringComparison.OrdinalIgnoreCase)) return ";";
+        if (string.Equals(value, "Tab", StringComparison.OrdinalIgnoreCase)) return "tab";
+        if (string.Equals(value, "Pipe", StringComparison.OrdinalIgnoreCase)) return "|";
+        return value;
+    }
 }

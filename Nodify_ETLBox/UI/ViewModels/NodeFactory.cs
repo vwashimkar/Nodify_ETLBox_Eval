@@ -1,4 +1,6 @@
+using System.IO;
 using System.Windows;
+using EtlDesigner.Engine.Csv;
 using EtlDesigner.UI.ViewModels;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -8,6 +10,9 @@ namespace EtlDesigner.UI.ViewModels;
 /// </summary>
 public static class NodeFactory
 {
+    private const string SuggestedFromFileNote = "Suggested from the file. Change if wrong.";
+
+    public static Func<CsvFileSettings, bool>? CsvPreviewHandler { get; set; }
     /// <summary>
     /// Creates a CsvSource node.
     /// Output: "Rows" (PortKind.Rows)
@@ -56,6 +61,85 @@ public static class NodeFactory
         node.Settings.Add(new SettingViewModel("LocationColumn", "Location Column", SettingKind.Text, required: true, "location"));
         node.Settings.Add(new SettingViewModel("Separator", "Separator", SettingKind.Text, required: true, "|"));
         node.Settings.Add(new SettingViewModel("Country", "Country", SettingKind.ComboBox, required: true, ""));
+
+        return node;
+    }
+
+    /// <summary>
+    /// Creates a CsvFile node.
+    /// Output: "Rows" (PortKind.Rows)
+    /// Settings: FilePath, Separator, HasHeader, SkipLines, EncodingName, PreviewRows.
+    /// </summary>
+    public static NodeViewModel CreateCsvFile(Point location)
+    {
+        var node = new NodeViewModel(Guid.NewGuid(), "CsvFile", NodeType.CsvFile, settings =>
+        {
+            CsvPreviewHandler?.Invoke(settings);
+            return true;
+        })
+        {
+            Location = location,
+            ConfigurationStatus = "Not configured"
+        };
+
+        var rowsOutput = new ConnectorViewModel("Rows", PortKind.Rows, isInput: false, node);
+        node.Outputs.Add(rowsOutput);
+
+        var filePath = new SettingViewModel("FilePath", "File path", SettingKind.FilePath, required: true);
+        var separator = new SettingViewModel("Separator", "Separator", SettingKind.ComboBox, required: true, "Comma");
+        separator.ComboBoxItems.Add("Comma");
+        separator.ComboBoxItems.Add("Semicolon");
+        separator.ComboBoxItems.Add("Tab");
+        separator.ComboBoxItems.Add("Pipe");
+
+        var hasHeader = new SettingViewModel("HasHeader", "Header row", SettingKind.CheckBox, required: false, bool.TrueString);
+        var skipLines = new SettingViewModel("SkipLines", "Skip lines", SettingKind.Number, required: true, "0");
+        var encoding = new SettingViewModel("EncodingName", "Encoding", SettingKind.ComboBox, required: true, "utf-8");
+        encoding.ComboBoxItems.Add("utf-8");
+        encoding.ComboBoxItems.Add("windows-1252");
+        encoding.ComboBoxItems.Add("utf-16");
+        var previewRows = new SettingViewModel("PreviewRows", "Preview rows", SettingKind.Number, required: true, "5");
+
+        var hasGuessedFromFirstFile = false;
+        filePath.ValueChanged += (_, _) =>
+        {
+            if (hasGuessedFromFirstFile)
+            {
+                return;
+            }
+
+            var selected = filePath.Value;
+            if (string.IsNullOrWhiteSpace(selected) || !File.Exists(selected))
+            {
+                return;
+            }
+
+            var guess = CsvDialectGuesser.Guess(selected);
+            separator.Value = guess.Separator switch
+            {
+                ";" => "Semicolon",
+                "tab" => "Tab",
+                "|" => "Pipe",
+                _ => "Comma"
+            };
+
+            hasHeader.BoolValue = guess.HasHeader;
+            separator.InfoMessage = SuggestedFromFileNote;
+            hasHeader.InfoMessage = SuggestedFromFileNote;
+            hasGuessedFromFirstFile = true;
+        };
+
+        node.Settings.Add(filePath);
+        node.Settings.Add(separator);
+        node.Settings.Add(hasHeader);
+        node.Settings.Add(skipLines);
+        node.Settings.Add(encoding);
+        node.Settings.Add(previewRows);
+
+        foreach (var setting in node.Settings)
+        {
+            setting.ValueChanged += (_, _) => node.LoadPreviewCommand.RaiseCanExecuteChanged();
+        }
 
         return node;
     }

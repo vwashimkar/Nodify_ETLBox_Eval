@@ -4,21 +4,34 @@
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:vm="clr-namespace:EtlDesigner.UI.ViewModels"
         xmlns:conv="clr-namespace:EtlDesigner.UI.Converters"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="Data Flow ETL Designer"
         Height="700"
-        Width="1200">
+        Width="1200"
+        Background="{DynamicResource surface-brush}"
+        Foreground="{DynamicResource text-brush}"
+        FontFamily="{DynamicResource font-text}"
+        FontSize="{DynamicResource font-body}">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <conv:NodeStateToColorConverter x:Key="StateToBrush" />
         <conv:PendingConnectionStrokeConverter x:Key="PendingStroke" />
-        <SolidColorBrush x:Key="GraphConnectionBrush" Color="#1E88E5" />
-        <SolidColorBrush x:Key="NodeInput.BorderBrush" Color="#1E88E5" />
-        <SolidColorBrush x:Key="NodeOutput.BorderBrush" Color="#1E88E5" />
+        <SolidColorBrush x:Key="GraphConnectionBrush" Color="{DynamicResource accent}" />
+        <SolidColorBrush x:Key="NodeInput.BorderBrush" Color="{DynamicResource accent}" />
+        <SolidColorBrush x:Key="NodeOutput.BorderBrush" Color="{DynamicResource accent}" />
 
         <!-- ===== Settings editors, chosen by SettingViewModel.Kind ===== -->
         <DataTemplate x:Key="TextSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
             <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="NumberSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="CheckBoxSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <CheckBox IsChecked="{Binding BoolValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
         </DataTemplate>
 
         <DataTemplate x:Key="FilePathSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
@@ -33,29 +46,22 @@
         </DataTemplate>
 
         <DataTemplate x:Key="ComboSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
-            <StackPanel>
-                <ComboBox IsEditable="True"
-                          ItemsSource="{Binding ComboBoxItems}"
-                          Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Text="{Binding WarningMessage}"
-                           Foreground="DarkOrange"
-                           FontSize="10"
-                           TextWrapping="Wrap"
-                           Margin="0,2,0,0" />
-            </StackPanel>
+            <ComboBox IsEditable="True"
+                      ItemsSource="{Binding ComboBoxItems}"
+                      Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
         </DataTemplate>
 
         <!-- One row in the settings panel: label, red * when required and empty, editor -->
         <DataTemplate x:Key="SettingRowTemplate" DataType="{x:Type vm:SettingViewModel}">
-            <StackPanel Margin="0,0,0,10">
+            <StackPanel Margin="0,0,0,8">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
                     <TextBlock Text=" *"
-                               Foreground="Red"
+                               Foreground="{DynamicResource error-brush}"
                                FontWeight="Bold"
                                Visibility="{Binding IsMissing, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
-                <ContentControl Content="{Binding}" Margin="0,2,0,0">
+                <ContentControl Content="{Binding}" Margin="0,4,0,0">
                     <ContentControl.Style>
                         <Style TargetType="ContentControl">
                             <Setter Property="ContentTemplate" Value="{StaticResource TextSettingTemplate}" />
@@ -66,10 +72,54 @@
                                 <DataTrigger Binding="{Binding Kind}" Value="ComboBox">
                                     <Setter Property="ContentTemplate" Value="{StaticResource ComboSettingTemplate}" />
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="CheckBox">
+                                    <Setter Property="ContentTemplate" Value="{StaticResource CheckBoxSettingTemplate}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="Number">
+                                    <Setter Property="ContentTemplate" Value="{StaticResource NumberSettingTemplate}" />
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </ContentControl.Style>
                 </ContentControl>
+                <TextBlock Text="{Binding InfoMessage}"
+                           Foreground="{DynamicResource text-muted-brush}"
+                           FontSize="{DynamicResource font-caption}"
+                           TextWrapping="Wrap"
+                           Margin="0,4,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding InfoMessage}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding InfoMessage}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Text="{Binding WarningMessage}"
+                           Foreground="{DynamicResource warning-brush}"
+                           FontSize="{DynamicResource font-caption}"
+                           TextWrapping="Wrap"
+                           Margin="0,4,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding WarningMessage}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding WarningMessage}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
             </StackPanel>
         </DataTemplate>
     </Window.Resources>
@@ -114,7 +164,11 @@
             <!-- ===== Left: palette (drag onto the editor, or click to add at a default spot) ===== -->
             <StackPanel Grid.Row="0" Grid.Column="0" Margin="6">
                 <TextBlock Text="Node types" FontWeight="Bold" Margin="0,0,0,8" />
-                <Button Content="CsvSource" Tag="CsvSource" Margin="0,2" Padding="4"
+                <Button Content="CsvSource (old)" Tag="CsvSource" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="CsvFile" Tag="CsvFile" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
@@ -140,6 +194,7 @@
             <nodify:NodifyEditor x:Name="EditorControl"
                                  Grid.Row="0"
                                  Grid.Column="1"
+                                 Background="{DynamicResource canvas-brush}"
                                  AllowDrop="True"
                                  Drop="EditorControl_Drop"
                                  ItemsSource="{Binding Editor.Nodes}"
@@ -189,6 +244,8 @@
                         <nodify:Node Header="{Binding Title}"
                                      Input="{Binding Inputs}"
                                      Output="{Binding Outputs}"
+                                     Background="{DynamicResource surface-alt-brush}"
+                                     Foreground="{DynamicResource text-brush}"
                                      FooterBrush="{Binding State, Converter={StaticResource StateToBrush}}">
 
                             <nodify:Node.InputConnectorTemplate>
@@ -197,6 +254,7 @@
                                                       IsConnected="{Binding IsConnected}"
                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}"
                                                       Background="{StaticResource GraphConnectionBrush}"
+                                                      Foreground="{DynamicResource text-brush}"
                                                       BorderBrush="{StaticResource GraphConnectionBrush}"
                                                       ToolTip="{Binding Kind}" />
                                 </DataTemplate>
@@ -208,6 +266,7 @@
                                                         IsConnected="{Binding IsConnected}"
                                                         Anchor="{Binding Anchor, Mode=OneWayToSource}"
                                                         Background="{StaticResource GraphConnectionBrush}"
+                                                        Foreground="{DynamicResource text-brush}"
                                                         BorderBrush="{StaticResource GraphConnectionBrush}"
                                                         ToolTip="{Binding Kind}" />
                                 </DataTemplate>
@@ -216,14 +275,18 @@
                             <nodify:Node.Footer>
                                 <StackPanel Margin="4,2">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding State}" FontSize="10" Foreground="Black" />
-                                        <TextBlock Text=" | rows: " FontSize="10" Foreground="Black" />
-                                        <TextBlock Text="{Binding RowCount}" FontSize="10" Foreground="Black" />
+                                        <TextBlock Text="{Binding State}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
+                                        <TextBlock Text=" | rows: " FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
+                                        <TextBlock Text="{Binding RowCount}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                     </StackPanel>
+                                    <TextBlock Text="{Binding ConfigurationStatus}"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-muted-brush}"
+                                               Margin="0,2,0,0" />
                                     <TextBlock Text="{Binding ErrorMessage}"
                                                ToolTip="{Binding ErrorDetail}"
-                                               FontSize="9"
-                                               Foreground="DarkSlateGray"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-muted-brush}"
                                                TextTrimming="CharacterEllipsis"
                                                TextWrapping="NoWrap"
                                                MaxWidth="170"
@@ -236,11 +299,11 @@
             </nodify:NodifyEditor>
 
             <!-- ===== Right: settings of the single selected node (no code-behind) ===== -->
-            <Border Grid.Row="0" Grid.Column="2" Padding="8" BorderBrush="Gray" BorderThickness="1,0,0,0">
+            <Border Grid.Row="0" Grid.Column="2" Padding="8" BorderBrush="{DynamicResource border-brush}" BorderThickness="1,0,0,0" Background="{DynamicResource surface-alt-brush}">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Settings" FontWeight="Bold" Margin="0,0,0,8" />
                     <Grid>
-                        <TextBlock Text="Select a node" Foreground="Gray">
+                        <TextBlock Text="Select a node" Foreground="{DynamicResource text-muted-brush}">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -253,8 +316,26 @@
                             </TextBlock.Style>
                         </TextBlock>
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding Editor.SelectedNode.Settings}"
-                                          ItemTemplate="{StaticResource SettingRowTemplate}" />
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding Editor.SelectedNode.Settings}"
+                                              ItemTemplate="{StaticResource SettingRowTemplate}" />
+                                <Button Content="Load preview"
+                                        Width="120"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,8,0,0"
+                                        Command="{Binding Editor.SelectedNode.LoadPreviewCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="CsvFile">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
                         </ScrollViewer>
                     </Grid>
                 </DockPanel>
@@ -269,8 +350,8 @@
                     <TextBox Text="{Binding FilteredJsonOutput, Mode=OneWay}"
                              Margin="4"
                              IsReadOnly="True"
-                             FontFamily="Consolas"
-                             FontSize="12"
+                             FontFamily="{DynamicResource font-data}"
+                             FontSize="{DynamicResource font-body}"
                              TextWrapping="NoWrap"
                              VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" />
@@ -279,8 +360,8 @@
                     <TextBox Text="{Binding ParsedJsonOutput, Mode=OneWay}"
                              Margin="4"
                              IsReadOnly="True"
-                             FontFamily="Consolas"
-                             FontSize="12"
+                             FontFamily="{DynamicResource font-data}"
+                             FontSize="{DynamicResource font-body}"
                              TextWrapping="NoWrap"
                              VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" />

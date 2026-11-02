@@ -2,9 +2,10 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="../UI/Themes/Tokens.Light.xaml" />
         <ResourceDictionary Source="Brushes.xaml" />
     </ResourceDictionary.MergedDictionaries>
-    
+
     <Color x:Key="PanelBackgroundColor">#E9EEFE</Color>
     <Color x:Key="ForegroundColor">#111111</Color>
 

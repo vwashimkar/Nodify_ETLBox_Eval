@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Reflection;
+using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using EtlDesigner.Engine;
 using EtlDesigner.Engine.Generation;
 using EtlDesigner.Spike;
@@ -17,6 +19,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        RegisterGlobalExceptionHandlers();
 
         // Check CLI arguments
         if (e.Args.Contains("--generate-dll"))
@@ -39,6 +42,12 @@ public partial class App : Application
             return;
         }
 
+        if (e.Args.Contains("--probe-csv"))
+        {
+            RunCsvProbeAndExit();
+            return;
+        }
+
         // Manually compose ViewModels
         var mainViewModel = new MainViewModel();
 
@@ -47,6 +56,64 @@ public partial class App : Application
         {
             MainWindow.DataContext = mainViewModel;
         }
+    }
+
+    private void RegisterGlobalExceptionHandlers()
+    {
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnCurrentDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnTaskSchedulerUnobservedTaskException;
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        WriteUnhandledExceptionLog("DispatcherUnhandledException", e.Exception);
+        ShowUnhandledExceptionMessageBox("Unhandled UI exception", e.Exception);
+        e.Handled = true;
+    }
+
+    private void OnCurrentDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    {
+        var ex = e.ExceptionObject as Exception
+                 ?? new Exception($"Non-exception unhandled error: {e.ExceptionObject}");
+        WriteUnhandledExceptionLog("AppDomain.UnhandledException", ex);
+        ShowUnhandledExceptionMessageBox("Unhandled application exception", ex);
+    }
+
+    private void OnTaskSchedulerUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        WriteUnhandledExceptionLog("TaskScheduler.UnobservedTaskException", e.Exception);
+        ShowUnhandledExceptionMessageBox("Unobserved task exception", e.Exception);
+        e.SetObserved();
+    }
+
+    private static void WriteUnhandledExceptionLog(string source, Exception ex)
+    {
+        var logPath = Path.Combine(AppContext.BaseDirectory, "unhandled-exception.log");
+        var text = new StringBuilder()
+            .AppendLine($"[{DateTime.UtcNow:O}] {source}")
+            .AppendLine($"Type: {ex.GetType().FullName}")
+            .AppendLine($"Message: {ex.Message}")
+            .AppendLine("StackTrace:")
+            .AppendLine(ex.ToString())
+            .AppendLine(new string('-', 80))
+            .ToString();
+
+        File.AppendAllText(logPath, text);
+    }
+
+    private static void ShowUnhandledExceptionMessageBox(string title, Exception ex)
+    {
+        var text = $"Type: {ex.GetType().FullName}\nMessage: {ex.Message}\n\n{ex}";
+
+        if (Current?.Dispatcher.CheckAccess() == true)
+        {
+            MessageBox.Show(text, title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        Current?.Dispatcher.Invoke(() =>
+            MessageBox.Show(text, title, MessageBoxButton.OK, MessageBoxImage.Error));
     }
 
     private void RunTestsAndExit(string? dllPath)
@@ -150,6 +217,30 @@ public partial class App : Application
         }
 
         writer.Flush();
+    }
+
+    private void RunCsvProbeAndExit()
+    {
+        Task.Run(async () =>
+        {
+            try
+            {
+                var sampleDataDir = Path.Combine(AppContext.BaseDirectory, "SampleData");
+                var outputPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "docs", "csv-probe-results.md"));
+
+                var rows = await CsvProbe.RunAsync(sampleDataDir);
+                CsvProbe.WriteMarkdown(outputPath, rows);
+
+                Console.WriteLine($"CSV probe results written to: {outputPath}");
+                Environment.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"FAILED: {ex.Message}");
+                Console.Error.WriteLine(ex.ToString());
+                Environment.Exit(1);
+            }
+        }).Wait();
     }
 
     private static Func<string, string?, string, PipelineRunResult> BuildGeneratedDllExecutor(string dllPath)

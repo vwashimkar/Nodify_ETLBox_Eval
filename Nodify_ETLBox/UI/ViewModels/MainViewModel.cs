@@ -3,8 +3,10 @@ using System.Text;
 using System.Windows;
 using Microsoft.Win32;
 using EtlDesigner.Engine;
+using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Generation;
 using EtlDesigner.UI.Mvvm;
+using EtlDesigner.UI.Services;
 
 namespace EtlDesigner.UI.ViewModels;
 
@@ -25,9 +27,11 @@ public class MainViewModel : ObservableObject
     private PipelineSettings? _lastSuccessfulRunSettings;
     private bool _isRunInProgress;
     private bool _isGenerating;
+    private readonly IDialogService _dialogService;
 
-    public MainViewModel()
+    public MainViewModel(IDialogService? dialogService = null)
     {
+        _dialogService = dialogService ?? new DialogService();
         Editor = new EditorViewModel();
         _filteredJsonOutput = "";
         _parsedJsonOutput = "";
@@ -35,7 +39,10 @@ public class MainViewModel : ObservableObject
         RunCommand = new AsyncRelayCommand(async _ => await RunAsync(), _ => !_isGenerating);
         GenerateDllCommand = new AsyncRelayCommand(async _ => await GenerateDllAsync(), _ => CanGenerateDll());
 
+        NodeFactory.CsvPreviewHandler = ShowCsvPreview;
+
         HookCountryRefreshListeners();
+        HookCsvFileValidationListeners();
         _ = RefreshCountriesAsync();
         UpdateCommandStates();
     }
@@ -149,6 +156,61 @@ public class MainViewModel : ObservableObject
         };
 
         HookCountryRefreshListenersForCurrentNodes();
+    }
+
+    private void HookCsvFileValidationListeners()
+    {
+        Editor.ValidationStateChanged += (_, _) => UpdateCommandStates();
+
+        Editor.Nodes.CollectionChanged += (_, _) =>
+        {
+            foreach (var node in Editor.Nodes)
+            {
+                if (node.NodeType != NodeType.CsvFile)
+                {
+                    continue;
+                }
+
+                foreach (var setting in node.Settings)
+                {
+                    setting.ValueChanged -= OnCsvFileSettingValueChanged;
+                    setting.ValueChanged += OnCsvFileSettingValueChanged;
+                }
+            }
+        };
+
+        foreach (var node in Editor.Nodes)
+        {
+            if (node.NodeType != NodeType.CsvFile)
+            {
+                continue;
+            }
+
+            foreach (var setting in node.Settings)
+            {
+                setting.ValueChanged += OnCsvFileSettingValueChanged;
+            }
+        }
+    }
+
+    private void OnCsvFileSettingValueChanged(object? sender, EventArgs e)
+    {
+        Editor.Validate();
+    }
+
+    private bool ShowCsvPreview(CsvFileSettings settings)
+    {
+        try
+        {
+            _dialogService.ShowCsvPreview(settings);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to open CSV preview.\n\n{ex}", "Load preview error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Editor.Issues.Add($"CsvFile: {ex}");
+            return false;
+        }
     }
 
     private void HookCountryRefreshListenersForCurrentNodes()

@@ -152,7 +152,7 @@ public static class PipelineCore
             string filteredJsonRaw;
             try
             {
-                filteredJsonRaw = File.ReadAllText(tempFilteredJson);
+                    filteredJsonRaw = File.ReadAllText(tempFilteredJson);
             }
             catch (FileNotFoundException)
             {
