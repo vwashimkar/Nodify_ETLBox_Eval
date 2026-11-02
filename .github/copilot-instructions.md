@@ -39,3 +39,33 @@ Plain MVVM with hand-written ObservableObject (INotifyPropertyChanged + SetPrope
 - Microsoft.CodeAnalysis.CSharp (Roslyn) is allowed ONLY for Stage 4 (DLL generation). Do not add or use it before that stage is requested.
 
 - Microsoft.CodeAnalysis.CSharp (Roslyn) is allowed for Stage 4 only, and only inside Engine/Generation. Settings values must be embedded using Roslyn's literal escaping, never string concatenation. Never read, copy or embed etlbox.lic.
+
+# Additions for .github/copilot-instructions.md
+
+Paste this block at the end of the existing file. Keep the existing rules.
+
+```
+## CSV slice rules (from docs/CSV_WORKFLOW_SPEC.md)
+
+Read docs/CSV_WORKFLOW_SPEC.md and docs/lessons-learned.md before any work on the CSV slice.
+
+Architecture
+- Engine/ has no reference to WPF. All ETLBox calls live in Engine/.
+- Preview and run read CSV through the same ETLBox code path. Never write a separate hand-made CSV reader for results. A small text-only helper may suggest a separator or header, and its output is only a suggestion.
+- The composite-cell parser is a pure function in Engine/Parsing/ with unit tests. It must not assume a group size, contiguous columns or six components. The mapping of components to columns ("slots") is data.
+- No logic in code-behind. Dialogs open through IDialogService and have their own view model.
+- Node settings are described by a schema and forms are generated from it. Reuse the existing SettingViewModel; extend it rather than replacing it.
+- Every new Engine file used by a pipeline is added to the DLL generator's embedded list, and the DLL test run is repeated.
+- Do not change the five legacy nodes or Engine/PipelineCore.cs unless the prompt says so. The legacy test run must keep giving 48 pass, 0 fail, 4 observed with a licence.
+
+Style
+- Hand-written styles from design tokens in one resource dictionary. No literal colours, font sizes or spacing in views.
+- Check every dialog in both themes. 8-pixel spacing grid. Segoe UI Variable for text, Cascadia Mono or Consolas for data. No emoji in the UI.
+- Long work runs off the UI thread with a spinner and a Cancel button after half a second.
+- Error messages say what happened and what to do next. They never contain secrets or the licence key.
+
+Process
+- One stage per prompt. Report what you changed and what you could not verify. Do not claim a UI result you cannot see; say what you expect.
+- Read-only investigation first when a prompt says so, and report before editing.
+- Never edit EVALUATION.md, README.md, anything in docs/, etlbox.lic, or Engine/Generation/ unless the prompt names the file.
+- Facts about ETLBox that are not proven in this repo are marked unverified in code comments and tests until a probe confirms them.

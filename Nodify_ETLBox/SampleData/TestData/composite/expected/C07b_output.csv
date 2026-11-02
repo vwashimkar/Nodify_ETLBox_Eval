@@ -1,0 +1,19 @@
+Col1,Col2,Col3,sample_id,component,value_a,value_b,value_c
+1,B1,Person 1,S700,compid1,1.11,1.12,1.13
+1,B1,Person 1,S700,compid2,1.21,1.22,1.23
+1,B1,Person 1,S700,compid3,1.31,1.32,1.33
+1,B1,Person 1,S700,compid4,1.41,1.42,1.43
+1,B1,Person 1,S700,compid5,1.51,1.52,1.53
+1,B1,Person 1,S700,compid6,1.61,1.62,1.63
+2,B1,Person 2,S701,compid1,2.11,2.12,2.13
+2,B1,Person 2,S701,compid2,2.21,2.22,2.23
+2,B1,Person 2,S701,compid3,2.31,2.32,2.33
+2,B1,Person 2,S701,compid4,2.41,2.42,2.43
+2,B1,Person 2,S701,compid5,2.51,2.52,2.53
+2,B1,Person 2,S701,compid6,2.61,2.62,2.63
+3,B2,Person 3,S702,compid1,3.11,3.12,3.13
+3,B2,Person 3,S702,compid2,3.21,3.22,3.23
+3,B2,Person 3,S702,compid3,3.31,3.32,3.33
+3,B2,Person 3,S702,compid4,3.41,3.42,3.43
+3,B2,Person 3,S702,compid5,3.51,3.52,3.53
+3,B2,Person 3,S702,compid6,3.61,3.62,3.63

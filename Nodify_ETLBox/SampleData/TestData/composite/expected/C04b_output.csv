@@ -1,0 +1,13 @@
+sample_id,component,value_a,value_b,value_c
+S400,compid1,1.11,1.12,1.13
+S400,compid2,1.21,1.22,1.23
+S400,compid3,1.31,1.32,1.33
+S400,compid4,1.41,1.42,1.43
+S400,compid5,1.51,1.52,1.53
+S400,compid6,1.61,1.62,1.63
+S403,compid1,4.11,4.12,4.13
+S403,compid1,4.21,4.22,4.23
+S403,compid2,4.31,4.32,4.33
+S403,compid3,4.41,4.42,4.43
+S403,compid4,4.51,4.52,4.53
+S403,compid5,4.61,4.62,4.63

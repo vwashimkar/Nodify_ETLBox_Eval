@@ -37,10 +37,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="SampleData\" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <EmbeddedResource Include="Engine\PipelineCore.cs" />
 	  <EmbeddedResource Include="Engine\PipelineSettings.cs" />
 	  <EmbeddedResource Include="Engine\PipelineExecutionStats.cs" />
