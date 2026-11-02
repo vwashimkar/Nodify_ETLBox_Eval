@@ -1,8 +1,8 @@
-# CSV workflow specification (draft 0.2)
+# CSV workflow specification (draft 0.3)
 
 Project: `Nodify_ETLBox_Eval`. Focus: one CSV path done well. Bigger ETL plans (REST and database sources, branching graphs, C# expressions) are paused; see `Out of scope` at the end.
 
-Changes from 0.1: delimiter levels and value columns are configurable, preview rows are a setting (default 5), the first hop builds only the .NET object destination, styles are hand-written, a Carry columns setting was added, and the test data now exists in `composite/`.
+Changes from 0.2: the mapping of components to columns is now an editable set of slots, not a rule; fewer than six components is normal; carry columns are on by default when the file has a header; the JSON checkpoint keeps the shape the user configures; the file is loaded first and configured afterwards. The test data in `composite/` was rebuilt for these changes.
 
 Evidence tags: **[P]** proven in the first POC, **[A]** present in the ETLBox 3.11.1 API dump (`docs/etlbox-api-surface.md`), **[D]** read in ETLBox's public docs, **[U]** unverified, check before relying on it.
 
@@ -12,33 +12,36 @@ Evidence tags: **[P]** proven in the first POC, **[A]** present in the ETLBox 3.
 
 | Topic | Decision |
 |---|---|
-| Delimiters | `:` between the sample id and the component list, `\|` between components. The number of delimiter levels is configurable: the user adds as many as needed, each with its own character and mode. |
-| Components and columns | Six components in the example, three value columns each, paired by position. |
-| Where the values are | Chosen by the user, never hard-coded. The user marks the value columns in the grid (click headers, Ctrl-click, or a range), sets the group size, and groups are formed from the marked columns in file order. The marked columns are stored by name. |
-| Output | One row per component (long form) by default, wide form as an option. **Waiting for your confirmation** using `composite/CONFIRM_THIS.md`. |
+| Who uses it | A lab technician working with instrument exports. The tool must let them load a file, look at it, and then configure it. Nothing about a file's layout is assumed. |
+| Delimiters | `:` between the sample id and the component list, `\|` between components, as in the example. The number of levels is configurable: add as many as needed, each with its own character and mode. |
+| Components and columns | **The pairing is an example, not a rule.** Each component position (a *slot*) has its own list of columns, chosen by the user in the grid. Slots can differ in size and can skip columns. An *Auto-fill* helper proposes groups of a chosen size, and every slot can then be edited. Columns are stored by name. |
+| How many components | Up to a maximum the instrument produces (6 for these), never required. A record with 1 to 6 components is normal. A record with more components than slots is the exception: reject by default, or pair what fits and flag it. |
+| Repeated component names in one cell | Allowed. Flagging or rejecting them are options. |
+| Carry columns | When the file has column names, all columns that are not value columns or the source cell are copied onto every output row by default; the user can untick any. Without a header the generated names (`Col1`, …) can be carried by choice. |
+| Output shape | One row per component (long) by default, wide as an option. |
+| JSON | The transformed JSON persists in the shape the user configures: flat (one object per output row) or nested (one object per input record with a components list). The JSON checkpoint can sit after CsvFile (raw rows) or after ParseValue (transformed rows). |
+| Files | May or may not have a header. The technician loads the file first and sets separator, header and lines to skip afterwards, with the preview reloading live. |
 | Preview rows | A number box, default 5. |
 | Destinations in the first hop | .NET object only. |
 | Styling | Hand-written styles from design tokens. Revisit after the first slice. |
 
-Worked example. The input cell is
+Worked example (an example only; the mapping is configurable). The input cell is
 
 ```
 S100:compid1|compid2|compid3| compid4|compid5|compid6
 ```
 
-and 18 value columns follow it in the file (three per component, in component order). The long-form output is six rows:
+and the user has mapped slot 1 to columns `r01 r02 r03`, slot 2 to `r04 r05 r06`, and so on to slot 6 (`r16 r17 r18`). The long-form output is six rows:
 
 ```
 sample_id  component  value_a  value_b  value_c
-S100       compid1    <col 1>  <col 2>  <col 3>
-S100       compid2    <col 4>  <col 5>  <col 6>
+S100       compid1    <r01>    <r02>    <r03>
+S100       compid2    <r04>    <r05>    <r06>
 ...        ...        ...      ...      ...
-S100       compid6    <col 16> <col 17> <col 18>
+S100       compid6    <r16>    <r17>    <r18>
 ```
 
-Note the space before `compid4`. Trimming is a setting (default on).
-
-Open point: **Carry columns.** Columns such as `id`, `batch` and `name` can be copied onto every output row. It is off by default; confirm whether you want it on.
+Note the space before `compid4`. Trimming is a setting (default on). A record with only `compid1|compid2` produces two rows and ignores slots 3 to 6.
 ---
 
 ## 2. Scrutiny: what the request does not yet cover
@@ -49,8 +52,8 @@ Open point: **Carry columns.** Columns such as `id`, `batch` and `name` can be c
 | 2 | Sample is not the file | A few rows can hide rows with 1 or 40 components, empty cells, stray quotes. | After a test on the sample, offer **Scan whole file**: counts per row of components, empty cells, rows that fail, shown as a small distribution table. |
 | 3 | Ignored columns stored by position | If the supplier adds a column, positions shift and the wrong columns are ignored. | Store by header name. Mode: *Ignore these* or *Keep only these*. A policy for new unknown columns: ignore (default) or stop the run. Without a header row, columns are named `Col1`, `Col2`, and the dialog says so. |
 | 4 | File details are missing | Header row yes/no, encoding, quote character, BOM, blank lines. | Settings with defaults. Only the delimiter is proven [P]; `Encoding` and `PrepareHeaderForMatch` are in the API dump [A] but untested [U], so test each before exposing it. |
-| 5 | Serialize then deserialize adds a hop | It costs disk and a second read, and loses nothing only because all values are text. | Keep it, as you asked, but call the node **JSON checkpoint**: it has a path, shows file size and row count, and is marked *stale* when anything upstream changes. |
-| 6 | Parse logic as a single cell setting | Real cells have empty items, trailing `\|`, duplicates, different counts. | Explicit policies (section 5): trim, drop empty items, duplicate ids, count mismatch. Each has a default and a visible counter in the test result. |
+| 5 | Serialize then deserialize adds a hop | It costs disk and a second read, and loses nothing only because all values are text. | Keep it, as you asked, but call the node **JSON checkpoint**: it has a path, shows file size and row count, and is marked *stale* when anything upstream changes. It can sit after CsvFile (raw rows) or after ParseValue (transformed rows, in the shape the user configures). |
+| 6 | Parse logic as a single cell setting | Real cells have empty items, trailing `\|`, duplicates, different counts. | Explicit policies (section 5): trim, drop empty items, repeated names, more components than slots. Each has a default and a visible counter in the test result. |
 | 7 | No "what happened to my row" view | A row that fails is invisible in a long output. | Test result and run summary list rejected rows with the reason, the record number and the file line where the record starts (they differ when a quoted cell contains a line break). Clicking a result row highlights its source cell. |
 | 8 | Test and Execute not separated | Test must never write to a database or call a REST service. | **Test** = sample only, never writes to external destinations, shows the result in a dialog. **Execute** = whole file, writes. Execute asks for confirmation when the destination overwrites. |
 | 9 | Destinations only named | "Configurable" needs a defined shape. | Destination adapters (section 6) with schema-driven settings, each with *Test destination*. The first hop builds only the .NET object destination; the others follow through the same mechanism. |
@@ -60,7 +63,10 @@ Open point: **Carry columns.** Columns such as `id`, `batch` and `name` can be c
 | 13 | Undo and redo | Expected in any visual tool. | Required for node moves, connections and settings changes. |
 | 14 | "Seamless" is not testable | Needs concrete rules. | Section 7: states, enabled/disabled rules, keyboard, empty and error messages. |
 | 15 | Generate DLL must keep working | The first POC's DLL generator embeds five engine files; new nodes need new files in it. | A rule in section 8: every new engine file is added to the generator's embedded list, and the DLL parity test runs again. |
-| 16 | Free-edition limit | 5,000 rows read per connector without a licence [P]. | You will have a licence. Show the licence state in the status bar so a failed large run is not a mystery. |
+| 16 | Free-edition limit | 5,000 rows read per connector without a licence [P]. | The trial licence expired on 2026-11-01 [P]; a new key is needed for C10 and for the large-file probes. Everything else in the test data is under 5,000 rows. Show the licence state in the status bar so a failed large run is not a mystery. |
+| 17 | The mapping treated as a rule | Instruments differ, and a fixed stride breaks on the next file. | Slots with explicit columns. Auto-fill is only a helper. |
+| 18 | Files with or without headers, possibly with lines before the data | The technician must be able to load first and decide afterwards. | Load preview as soon as a readable file is chosen, with guessed settings. Separator, header, lines to skip and encoding are controls in the dialog and reload the preview live. Skipping lines in ETLBox is [U]. |
+| 19 | JSON shape | The transformed JSON must persist the way the user configured it. | Flat or nested shape, property names from the Output schema (section 4). |
 
 ---
 
@@ -72,16 +78,16 @@ Nodes on the canvas, left to right. Each node has a **Configure…** button that
 CsvFile  ->  JsonCheckpoint  ->  ParseValue  ->  Destination
 ```
 
-1. **CsvFile node.** Settings: file path (Browse…), separator (presets: comma, semicolon, tab, pipe, custom), header row, encoding. Validation runs as you type: the file exists, can be opened, and its first line splits into at least one column. Status goes *Not configured* to *Configured*.
-2. **Load preview** (button on the node, enabled only when Configured). Opens the **Data Studio** dialog, modal, with the first N rows. N is a number box beside the button (default 5).
+1. **CsvFile node.** Choose the file (Browse…). As soon as the file exists and can be opened, the node is *Configured* with guessed settings: separator suggested from the first lines, header row guessed, UTF-8. The technician then looks at the file and adjusts: separator (presets plus custom), header row yes or no, lines to skip before the header, encoding.
+2. **Load preview** (button on the node, enabled once a readable file is chosen). Opens the **Data Studio** dialog, modal, with the first N rows. N is a number box beside the button (default 5). The separator, header, skip-lines and encoding controls are also in the dialog and reload the preview live.
 3. **In the dialog, Columns tab.** One checkbox per column. Bulk actions: all, none, invert, filter by name. Mode: ignore these / keep only these. A toggle hides ignored columns in the grid.
 4. **Test dataset.** Switches to the *Result* tab and shows the dataset as it leaves the node: kept columns, the first N rows, row and column counts.
 5. **Save.** The selection is stored by column name on the node.
-6. **JsonCheckpoint node.** *Serialize* writes the whole file (kept columns only) as indented JSON. *Deserialize* reads it back for the next node. The dialog shows path, rows, file size and a *stale* marker.
+6. **JsonCheckpoint node.** Can sit after CsvFile (raw rows, kept columns only) or after ParseValue (the transformed rows). The user configures the shape: flat (one object per row) or nested (one object per input record with a components list), with property names from the Output schema. *Serialize* writes the whole file; *Deserialize* reads it back for the next node. The dialog shows path, rows, file size and a *stale* marker.
 7. **ParseValue node.** Dialog layout:
    - top: pick the source column;
    - centre: the sample grid. Click a cell and its full value appears in the bottom pane, with delimiter characters highlighted;
-   - right: **Delimiters** (an ordered list of levels, with Add level and Remove), **Components** (the list the selected row produces), **Value columns** (marked in the grid; shown as a list of names), **Group size** and mismatch policy, **Carry columns**, **Output shape** (long or wide) and **Output schema**;
+   - right: **Delimiters** (an ordered list of levels, with Add level and Remove), **Components** (the list the selected row produces), **Slots** (one row per component position, each holding the columns you marked in the grid; Auto-fill proposes groups and every slot can be edited), **Excess components** policy, **Carry columns**, **Output shape** (long or wide) and **Output schema**;
    - **Test parsing** runs on the sample and opens the Result tab with counts and rejects.
 8. **Destination node.** In the first hop the only type is .NET object: set the type name, namespace and collection kind, then press **Test destination**, which shows the first rows it would produce.
 9. **Execute.** Toolbar button. Runs the whole file with a progress bar and a Cancel button. At the end, a summary: rows read, parsed, rejected, written, elapsed time, and a link to the rejects file.
@@ -102,6 +108,7 @@ CsvFile  ->  JsonCheckpoint  ->  ParseValue  ->  Destination
 | Quote character | `"` | [U] |
 | New-column policy | ignore | When a column appears that was not in the saved selection. |
 | Preview rows | 5 | Number box, 1 to 1,000. |
+| Skip lines before header | 0 | [U] Some files have lines before the header. |
 
 ### JsonCheckpoint
 
@@ -110,6 +117,7 @@ CsvFile  ->  JsonCheckpoint  ->  ParseValue  ->  Destination
 | Path | `<project>/work/<node>.json` |
 | Indented | yes |
 | Overwrite | yes |
+| Shape | flat | `flat` (one object per output row) or `nested` (one object per input record with a components list). |
 
 ### ParseValue
 
@@ -119,12 +127,11 @@ CsvFile  ->  JsonCheckpoint  ->  ParseValue  ->  Destination
 | Delimiter levels | two rows | Add or remove levels. Level 1 `:` splits once (key, rest). Level 2 `\|` splits all (components). Level 3 and beyond split each component into sub-parts, which become extra output columns. |
 | Trim items | yes | |
 | Drop empty items | yes | Handles a trailing `\|`. |
-| Duplicate component ids in one row | keep and flag | Or reject the row. |
-| Value columns | marked by the user | Marked in the grid and stored by name, never by position. Groups follow file order. |
-| Group size | 3 | Value columns per component. |
-| Number of groups | automatic | Marked columns divided by group size. |
-| Carry columns | none | Columns copied onto every output row (for example `id`). |
-| Count mismatch (components vs groups) | reject the row, with reason | Or pair what fits and flag the row. |
+| Repeated component names in one row | allow | Or flag the row, or reject it. |
+| Slots | six, empty | One slot per component position. Each holds the columns for that position, chosen in the grid and stored by name. Slots may differ in size and skip columns. A record needs only as many slots as it has components. The number of slots is the instrument's maximum (6 here) and can be changed. |
+| Auto-fill | off | Helper: from a start column, groups of a chosen size fill the slots in order. The result can then be edited slot by slot. |
+| Carry columns | all other columns when the file has a header | Copied onto every output row under their own names. Without a header, the generated names (`Col1`, …) can be carried by choice. The user can untick any. |
+| More components than slots | reject the row, with reason | Or pair what fits and flag the row. Fewer components than slots is normal and needs no setting. |
 | Output shape | long | Or wide. |
 | Output schema | key `sample_id`, `component`, then `value_a`…`value_c` | Names and types editable; text by default. |
 
@@ -138,14 +145,15 @@ cell text
   -> level 2 ("|" all)               -> items
   -> trim, drop empty                -> components C1..Cn
   -> level 3 ("/" each, optional)    -> sub-parts per component (extra columns)
-marked value columns, file order, chunked by group size G -> group 1..m
-component Ck pairs with group k      -> one output row per component (long)
+slots S1..Sm: each a list of named columns chosen by the user
+component Ck uses slot Sk            -> one output row per component (long)
 ```
 
 Rules the parser must follow, each with a test:
 
-- Components and groups are paired by position.
-- If `n` is not the number of available groups, apply the mismatch policy.
+- Component k uses slot k. The mapping is whatever the user set. Nothing assumes a stride, contiguous columns or a group size of 3.
+- Fewer components than slots is normal; unused slots are ignored.
+- More components than slots applies the excess policy (reject, or pair what fits and flag).
 - A cell with no level-1 delimiter is rejected with the reason "no key delimiter". An empty key is rejected with "empty key".
 - A missing sub-part (a component without the level-3 delimiter) gives an empty value, not a reject.
 - An empty cell is rejected with the reason "empty value".
@@ -230,29 +238,38 @@ Tabs across the top of the dialog for the nodes that need them: *Data*, *Result*
 8. No secret is written to the project file, a log, or an error message. `etlbox.lic` stays out of git.
 9. Nodify: the `SelectedItems` re-entrancy trap and the pending-connection pattern from the first POC are written down in `docs/lessons-learned.md` and must be read before touching the editor.
 10. The existing Roslyn use stays inside `Engine/Generation/`.
+11. The slot mapping is data, not code. The parser must not assume a group size, contiguous columns or six components.
 
 ---
 
 ## 9. Test data and acceptance
 
-Built and delivered as `composite/` (made-up data; copy to `SampleData/TestData/composite/`). Its `README.md` explains the manifest. All 12 tests were checked with a separate script; the expected files agree with the inputs.
+Built and delivered as `composite/` (made-up data; copy to `SampleData/TestData/composite/`). Its `README.md` explains the manifest columns. All 20 tests were checked with a separate script, so the expected files agree with the inputs.
 
-| Test | File | What it checks | Rows in / out / rejected / flagged |
+| Test | File | What it checks | In / out / rejected / flagged |
 |---|---|---|---|
-| C01 | `c01_basic.csv` | Long-form output, 18 value columns, extra columns not carried | 4 / 24 / 0 / 0 |
+| C01 | `c01_basic.csv` | Long-form output with an auto-filled mapping, nothing carried | 4 / 24 / 0 / 0 |
 | C02 | `c02_whitespace.csv` | Trim, trailing `\|`, empty item between pipes, padded key | 4 / 24 / 0 / 0 |
-| C03 | `c03_count_mismatch.csv` | Policy reject: 4 and 8 components against 6 groups | 4 / 12 / 2 / 0 |
-| C03b | same file | Policy pair-what-fits | 4 / 22 / 0 / 2 |
-| C04 | `c04_bad_cells.csv` | No key delimiter, empty value, empty key; duplicate ids flagged and kept | 5 / 12 / 3 / 1 |
-| C05 | `c05_quoting.csv` | Quoted comma in a name and in a value; a record spanning two lines; the reject of record 4 is on file line 6 | 4 / 18 / 1 / 0 |
-| C06 | `c06_semicolon.csv` | Separator `;`, decimal commas in values | 3 / 18 / 0 / 0 |
-| C07 | `c07_no_header.csv` | No header row: `Col1`…; source `Col4`; values `Col5..Col22` | 3 / 18 / 0 / 0 |
+| C03 | `c03_variable_counts.csv` | 6, 4, 8 and 1 components: fewer is normal, 8 exceeds the slots and is rejected | 4 / 11 / 1 / 0 |
+| C03b | same file | Excess policy pair-what-fits | 4 / 17 / 0 / 1 |
+| C04 | `c04_bad_cells.csv` | No key delimiter, empty value, empty key; repeated names allowed | 5 / 12 / 3 / 0 |
+| C04b | same file | Duplicate policy flag | 5 / 12 / 3 / 1 |
+| C05 | `c05_quoting.csv` | Quoted commas; a record spanning two lines; the reject of record 4 is on file line 6 | 4 / 18 / 1 / 0 |
+| C06 | `c06_semicolon.csv` | Separator `;`, decimal commas | 3 / 18 / 0 / 0 |
+| C07 | `c07_no_header.csv` | No header: `Col1`…, source `Col4`, values `Col5..Col22` | 3 / 18 / 0 / 0 |
+| C07b | same file | Carry columns by generated names | 3 / 18 / 0 / 0 |
 | C08 | `c08_many_extra_columns.csv` | 60 columns, 19 used | 3 / 18 / 0 / 0 |
-| C08b | `c08b_columns_added.csv` | Supplier inserts two columns; value columns stored by name, same output as C08 | 3 / 18 / 0 / 0 |
-| C09 | `c09_extra_levels.csv` | A third delimiter level; missing sub-part gives empty revision | 3 / 18 / 0 / 0 |
-| C10 | `c10_large.csv` | 20,000 records, 20 rejected; checked by count and SHA-1; needs the licence | 20,000 / 119,880 / 20 / 0 |
+| C08b | `c08b_columns_added.csv` | Supplier inserts two columns; mapping stored by name; same output as C08 | 3 / 18 / 0 / 0 |
+| C09 | `c09_extra_levels.csv` | A third delimiter level; missing sub-part gives an empty revision | 3 / 18 / 0 / 0 |
+| C10 | `c10_large.csv` | 20,000 records: 20 rejected, 20 with 3 components; count and SHA-1; needs the licence | 20,000 / 119,820 / 20 / 0 |
+| C11 | `c01_basic.csv` | Carry `id,batch,name` | 4 / 24 / 0 / 0 |
+| C11b | same file | Default carry: every column that is not a value column or the source cell | 4 / 24 / 0 / 0 |
+| C12 | `c12_irregular_slots.csv` | Slots of 2, 4, 1, 3, 3 and 4 columns, one skipping columns, 1 to 6 components per record | 6 / 21 / 0 / 0 |
+| C14 | `c14_preamble.csv` | Three lines before the header skipped [U] | 4 / 24 / 0 / 0 |
+| C15 | `c01_basic.csv` | Transformed JSON, flat, carrying `id,name` | 4 / 24 / 0 / 0 |
+| C16 | same file | Transformed JSON, nested | 4 / 24 / 0 / 0 |
 
-Not covered by files, to be tested by hand: preview row count setting, the scan-whole-file step, encoding (Windows-1252) and the quote character.
+JSON tests compare parsed JSON, not text. Not covered by files, to be tested by hand: the preview row count setting, the header guess, the scan-whole-file step, encoding (Windows-1252) and the quote character.
 
 Done means: the test run reports no unexplained difference from `expected_results.csv`, in the app and through the generated DLL, as in the first POC.
 
@@ -266,7 +283,7 @@ Done means: the test run reports no unexplained difference from `expected_result
 | 1 | Settings schema, `IDialogService`, CsvFile node with validation and Load preview button | A wrong path or separator shows a clear message; a valid one enables the button |
 | 2 | Data Studio: grid with a rows-to-show setting, cell pane, ignore/keep columns, Test dataset | You can ignore 3 columns and see the result |
 | 3 | JsonCheckpoint node | Serialize then deserialize gives back the same rows |
-| 4 | ParseValue: engine with unit tests first (C01 to C09), then the dialog | The worked example in section 1 gives the 6 expected rows and C01 to C09 pass |
+| 4 | ParseValue: engine with unit tests first (C01 to C12, C15, C16), then the dialog | The worked example in section 1 gives the 6 expected rows and those tests pass |
 | 5 | Destination: .NET object only (others deferred) | Test destination and Execute work, and the type can be used from a separate WPF app |
 | 6 | Execute with progress, cancel and summary; Generate DLL for the new nodes | DLL results equal app results |
 | 7 | Save/open project, undo/redo, keyboard, empty states | A saved project reopens identically |

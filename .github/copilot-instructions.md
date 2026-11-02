@@ -40,11 +40,8 @@ Plain MVVM with hand-written ObservableObject (INotifyPropertyChanged + SetPrope
 
 - Microsoft.CodeAnalysis.CSharp (Roslyn) is allowed for Stage 4 only, and only inside Engine/Generation. Settings values must be embedded using Roslyn's literal escaping, never string concatenation. Never read, copy or embed etlbox.lic.
 
-# Additions for .github/copilot-instructions.md
 
-Paste this block at the end of the existing file. Keep the existing rules.
 
-```
 ## CSV slice rules (from docs/CSV_WORKFLOW_SPEC.md)
 
 Read docs/CSV_WORKFLOW_SPEC.md and docs/lessons-learned.md before any work on the CSV slice.
@@ -56,7 +53,7 @@ Architecture
 - No logic in code-behind. Dialogs open through IDialogService and have their own view model.
 - Node settings are described by a schema and forms are generated from it. Reuse the existing SettingViewModel; extend it rather than replacing it.
 - Every new Engine file used by a pipeline is added to the DLL generator's embedded list, and the DLL test run is repeated.
-- Do not change the five legacy nodes or Engine/PipelineCore.cs unless the prompt says so. The legacy test run must keep giving 48 pass, 0 fail, 4 observed with a licence.
+- Do not change the five legacy nodes or Engine/PipelineCore.cs unless the prompt says so. The legacy test run must keep giving the baseline result: 48 pass, 0 fail, 4 observed with a valid licence, or 43 / 5 / 4 while the trial licence is expired (the five failures are T048 to T052).
 
 Style
 - Hand-written styles from design tokens in one resource dictionary. No literal colours, font sizes or spacing in views.
