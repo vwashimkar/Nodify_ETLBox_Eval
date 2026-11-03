@@ -67,7 +67,8 @@ public class DataStudioViewModel : ObservableObject
         _initialSettings = settings ?? throw new ArgumentNullException(nameof(settings));
         _workingSelection = node.ColumnSelection.Clone();
 
-        _separator = settings.Separator;
+        // Show the preset name (Comma, Tab, ...) rather than the raw character.
+        _separator = ToNodeSeparatorValue(settings.Separator ?? ",");
         _hasHeader = settings.HasHeader;
         _skipLines = settings.SkipLines;
         _encodingName = settings.EncodingName;
@@ -79,7 +80,8 @@ public class DataStudioViewModel : ObservableObject
 
         FileName = Path.GetFileName(settings.Path);
 
-        SeparatorPresets = new ObservableCollection<string>(new[] { "Comma", "Semicolon", "Tab", "Pipe", ",", ";", "tab", "\\t", "|" });
+        SeparatorPresets = new ObservableCollection<string>(new[] { "Comma", "Semicolon", "Tab", "Pipe" });
+        EncodingPresets = new ObservableCollection<string>(new[] { "utf-8", "windows-1252", "utf-16", "iso-8859-1", "us-ascii" });
         Columns = new ObservableCollection<DataStudioColumnItem>();
         FilteredColumns = new ObservableCollection<DataStudioColumnItem>();
 
@@ -98,6 +100,8 @@ public class DataStudioViewModel : ObservableObject
     public string FileName { get; }
 
     public ObservableCollection<string> SeparatorPresets { get; }
+
+    public ObservableCollection<string> EncodingPresets { get; }
 
     public ObservableCollection<DataStudioColumnItem> Columns { get; }
 
@@ -283,8 +287,8 @@ public class DataStudioViewModel : ObservableObject
         get
         {
             var more = HasMoreRows ? " of more in the file" : string.Empty;
-            var missing = MissingSelectedNamesCount > 0 ? $" · {MissingSelectedNamesCount} saved names missing" : string.Empty;
-            return $"Showing {LoadedRowCount} rows{more} · Columns {DisplayedColumnCount}/{TotalColumnCount} · {ElapsedMs} ms · {FileName}{missing}";
+            var missing = MissingSelectedNamesCount > 0 ? $" Â· {MissingSelectedNamesCount} saved names missing" : string.Empty;
+            return $"Showing {LoadedRowCount} rows{more} Â· Columns {DisplayedColumnCount}/{TotalColumnCount} Â· {ElapsedMs} ms Â· {FileName}{missing}";
         }
     }
 

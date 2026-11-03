@@ -570,6 +570,9 @@ public class EditorViewModel : ObservableObject
     {
         settings = null;
 
+        // Every validation run rebuilds the list; the background country refresh calls this
+        // too, and without the clear it appended the same lines again on each call.
+        Issues.Clear();
         ValidateCsvFileNodes();
 
         if (TryBuildLinearChain(out var chain, out var chainIssues) == false)

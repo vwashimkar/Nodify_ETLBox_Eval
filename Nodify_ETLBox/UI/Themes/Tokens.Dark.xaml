@@ -26,6 +26,22 @@
     <SolidColorBrush x:Key="error-brush" Color="{DynamicResource error}" />
     <SolidColorBrush x:Key="canvas-brush" Color="{DynamicResource canvas}" />
 
+    <!-- Node card. Header and body text pairs are at least 4.5:1 contrast. -->
+    <SolidColorBrush x:Key="NodeHeaderBackground" Color="#FF1A4F80" />
+    <SolidColorBrush x:Key="NodeHeaderForeground" Color="#FFF1F1F1" />
+    <SolidColorBrush x:Key="NodeBodyBackground" Color="#FF2A2E36" />
+    <SolidColorBrush x:Key="NodeBodyForeground" Color="#FFF1F1F1" />
+
+    <!-- Node footer by run state; footer text uses text-brush and text-muted-brush. -->
+    <SolidColorBrush x:Key="NodeStateIdleBackground" Color="#FF353A44" />
+    <SolidColorBrush x:Key="NodeStateRunningBackground" Color="#FF1F3A5C" />
+    <SolidColorBrush x:Key="NodeStateSucceededBackground" Color="#FF1E4620" />
+    <SolidColorBrush x:Key="NodeStateFailedBackground" Color="#FF5C1F1F" />
+    <SolidColorBrush x:Key="NodeStateNotRunBackground" Color="#FF4A4020" />
+
+    <!-- Dims a dialog while a long task runs. -->
+    <SolidColorBrush x:Key="overlay-brush" Color="#66000000" />
+
     <sys:Double x:Key="spacing-4">4</sys:Double>
     <sys:Double x:Key="spacing-8">8</sys:Double>
     <sys:Double x:Key="spacing-12">12</sys:Double>

@@ -78,13 +78,9 @@ ETLBox facts
 
 ## Current state (update this section after each stage)
 
-- Done: CsvFile node, validation, dialect guesser, dialog service, `CsvPreviewReader`, `CsvErrorText`, `DataStudioViewModel`, `CsvColumnSelection`, the real `DataStudioWindow` (opens and shows the grid; theming incomplete).
-- Open fixes (from manual checks):
-  1. Data Studio threw "TwoWay or OneWayToSource binding cannot work on the read-only property 'SelectedCellValue'" on the first open. Use `Mode=OneWay`.
-  2. Node header text is unreadable in the Light theme (dark on dark). Add `NodeHeaderBackground` and `NodeHeaderForeground` tokens, 4.5:1 contrast in both themes.
-  3. In the Dark theme the node body is light grey with light text.
-  4. The Issues tab keeps old lines; clear and rebuild it on every validation run.
-  5. Data Studio dialog theming: "Header row" label, tab content, grid, status bar; Encoding should be an editable ComboBox; Separator should show preset names.
+- Done: CsvFile node, validation, dialect guesser, dialog service, `CsvPreviewReader`, `CsvErrorText`, `DataStudioViewModel`, `CsvColumnSelection`, the real `DataStudioWindow`.
+- Done 2026-11-03 (`reports/fixes-report.md`): read-only bindings in Data Studio set to `Mode=OneWay` (also the Columns tab `Run` bindings, which crashed the tab); node card colours from tokens (`NodeHeader*`, `NodeBody*`, `NodeState*Background`) in both themes; Issues list cleared on every validation run; Data Studio themed with window-local styles (tabs, grid, status bar, editable ComboBoxes), Encoding is an editable ComboBox, Separator shows preset names. Not yet checked by eye.
+- Open: the unit test `ReadAsync_CallerCancellationToken_ReturnsWithoutHanging` hangs (so `dotnet test` never ends; the other 40 pass). Likely cause [U]: `CsvPreviewReader.ReadAsync` calls `ExecuteAsync` with an already cancelled token. Fix waits for the user's go-ahead. Until then run tests with `--filter "FullyQualifiedName!~ReadAsync_CallerCancellationToken_ReturnsWithoutHanging"`.
 - Next stages (see section 10 of the spec): 3 JsonCheckpoint node, 4 ParseValue (engine and unit tests first, test files C01 to C12, C15, C16), 5 .NET object destination, 6 Execute with progress and DLL generation for the new nodes, 7 save/open project.
 - Parked: mixed instrument files (a text block followed by a CSV part), see section 12 of the spec. Not scheduled.
 - Known untested: `PrepareHeaderForMatch`, duplicate header names, reading above 5,000 rows (needs a valid licence).

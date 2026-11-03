@@ -15,7 +15,6 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-        <conv:NodeStateToColorConverter x:Key="StateToBrush" />
         <conv:PendingConnectionStrokeConverter x:Key="PendingStroke" />
         <SolidColorBrush x:Key="GraphConnectionBrush" Color="{DynamicResource accent}" />
         <SolidColorBrush x:Key="NodeInput.BorderBrush" Color="{DynamicResource accent}" />
@@ -244,9 +243,39 @@
                         <nodify:Node Header="{Binding Title}"
                                      Input="{Binding Inputs}"
                                      Output="{Binding Outputs}"
-                                     Background="{DynamicResource surface-alt-brush}"
-                                     Foreground="{DynamicResource text-brush}"
-                                     FooterBrush="{Binding State, Converter={StaticResource StateToBrush}}">
+                                     Background="{DynamicResource NodeBodyBackground}"
+                                     ContentBrush="{DynamicResource NodeBodyBackground}"
+                                     HeaderBrush="{DynamicResource NodeHeaderBackground}"
+                                     Foreground="{DynamicResource NodeBodyForeground}">
+
+                            <!-- Footer colour by state, from theme tokens so it follows a theme switch -->
+                            <nodify:Node.Style>
+                                <Style TargetType="{x:Type nodify:Node}">
+                                    <Setter Property="FooterBrush" Value="{DynamicResource NodeStateIdleBackground}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding State}" Value="Running">
+                                            <Setter Property="FooterBrush" Value="{DynamicResource NodeStateRunningBackground}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Succeeded">
+                                            <Setter Property="FooterBrush" Value="{DynamicResource NodeStateSucceededBackground}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Failed">
+                                            <Setter Property="FooterBrush" Value="{DynamicResource NodeStateFailedBackground}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="NotRun">
+                                            <Setter Property="FooterBrush" Value="{DynamicResource NodeStateNotRunBackground}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </nodify:Node.Style>
+
+                            <nodify:Node.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource NodeHeaderForeground}" />
+                                </DataTemplate>
+                            </nodify:Node.HeaderTemplate>
 
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type vm:ConnectorViewModel}">
