@@ -270,7 +270,7 @@ public class DataStudioViewModel : ObservableObject
 
     public int TotalColumnCount => Math.Max(0, (_allRowsTable?.Columns.Count ?? 1) - 1);
 
-    public int DisplayedColumnCount => Math.Max(0, (DataRowsView?.Table.Columns.Count ?? 1) - 1);
+    public int DisplayedColumnCount => Math.Max(0, (DataRowsView?.Table?.Columns.Count ?? 1) - 1);
 
     public bool HasMoreRows { get; private set; }
 
@@ -293,7 +293,7 @@ public class DataStudioViewModel : ObservableObject
     }
 
     public string ResultSummary
-        => $"Columns: {Math.Max(0, (ResultRowsView?.Table.Columns.Count ?? 1) - 1)} of {TotalColumnCount}";
+        => $"Columns: {Math.Max(0, (ResultRowsView?.Table?.Columns.Count ?? 1) - 1)} of {TotalColumnCount}";
 
     public DataGridCellInfo CurrentCell
     {
@@ -356,7 +356,8 @@ public class DataStudioViewModel : ObservableObject
         _loadCts?.Dispose();
         _loadCts = CancellationTokenSource.CreateLinkedTokenSource(token);
 
-        var requestToken = _loadCts.Token;
+        var thisLoad = _loadCts;
+        var requestToken = thisLoad.Token;
         IsLoading = true;
         ShowCancelLoad = false;
 
@@ -373,15 +374,13 @@ public class DataStudioViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
-            IsLoading = false;
-            ShowCancelLoad = false;
+            EndCancelledLoad(thisLoad);
             return;
         }
 
-        if (requestToken.IsCancellationRequested)
+        if (preview.Cancelled || requestToken.IsCancellationRequested)
         {
-            IsLoading = false;
-            ShowCancelLoad = false;
+            EndCancelledLoad(thisLoad);
             return;
         }
 
@@ -500,7 +499,10 @@ public class DataStudioViewModel : ObservableObject
 
         foreach (var column in columns)
         {
-            table.Columns.Add(column, source.Columns[column].DataType);
+            // Column names always come from source itself, so a miss is a programming error.
+            var sourceColumn = source.Columns[column]
+                ?? throw new InvalidOperationException($"Column '{column}' is not in the preview table.");
+            table.Columns.Add(column, sourceColumn.DataType);
         }
 
         foreach (DataRow row in source.Rows)
@@ -636,6 +638,21 @@ public class DataStudioViewModel : ObservableObject
     private void CancelLoad()
     {
         _loadCts?.Cancel();
+    }
+
+    /// <summary>
+    /// A cancelled reload keeps the data already shown. It stops the spinner only when it is
+    /// still the newest reload; otherwise a newer reload is running and owns the spinner.
+    /// </summary>
+    private void EndCancelledLoad(CancellationTokenSource load)
+    {
+        if (!ReferenceEquals(load, _loadCts))
+        {
+            return;
+        }
+
+        IsLoading = false;
+        ShowCancelLoad = false;
     }
 
     private void SaveAndClose(Window? window)

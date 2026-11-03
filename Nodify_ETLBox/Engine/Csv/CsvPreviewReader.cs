@@ -13,15 +13,24 @@ public sealed record CsvPreview(
     IReadOnlyList<IReadOnlyList<string>> Rows,
     bool HasMoreRows,
     string? Error,
-    long ElapsedMs);
+    long ElapsedMs,
+    bool Cancelled = false);
 
 public sealed class CsvPreviewReader
 {
+    /// <summary>Called with the running row count after each row is collected. Used by tests.</summary>
+    internal Action<int>? RowCollected { get; set; }
+
     public async Task<CsvPreview> ReadAsync(CsvFileSettings settings, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
         var stopwatch = Stopwatch.StartNew();
+
+        if (token.IsCancellationRequested)
+        {
+            return CreateCancelled(stopwatch.ElapsedMilliseconds);
+        }
 
         try
         {
@@ -61,7 +70,12 @@ public sealed class CsvPreviewReader
             var errors = new MemoryDestination<ETLBoxError>();
             var internalCancel = false;
 
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            // The caller's token is never handed to ETLBox. A cancel that lands while the
+            // network is starting made ExecuteAsync wait forever (reproduced 2026-11-03,
+            // CsvPreviewCancellationTests). ETLBox only sees our own token, cancelled from
+            // inside the row step, which is the path proven in spec section 0. The caller's
+            // cancel is checked before the start and on every row.
+            using var stopCts = new CancellationTokenSource();
 
             var source = new CsvSource<ExpandoObject>(settings.Path)
             {
@@ -91,11 +105,12 @@ public sealed class CsvPreviewReader
                     }
 
                     collectedRows.Add(copy);
+                    RowCollected?.Invoke(collectedRows.Count);
 
-                    if (collectedRows.Count >= rowsToRead)
+                    if (collectedRows.Count >= rowsToRead || token.IsCancellationRequested)
                     {
                         internalCancel = true;
-                        linkedCts.Cancel();
+                        stopCts.Cancel();
                     }
                 }
 
@@ -112,11 +127,16 @@ public sealed class CsvPreviewReader
 
             try
             {
-                await network.ExecuteAsync(linkedCts.Token);
+                await network.ExecuteAsync(stopCts.Token);
             }
-            catch (OperationCanceledException) when (internalCancel || token.IsCancellationRequested)
+            catch (OperationCanceledException) when (internalCancel)
             {
-                // Expected cancellation path for preview row limit or caller cancellation.
+                // Expected: we stopped the read after enough rows or after a caller cancel.
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                return CreateCancelled(stopwatch.ElapsedMilliseconds);
             }
 
             if (errors.Data.Count > 0)
@@ -160,6 +180,9 @@ public sealed class CsvPreviewReader
 
     private static CsvPreview CreateError(string error, long elapsedMs)
         => new(Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>(), false, error, elapsedMs);
+
+    private static CsvPreview CreateCancelled(long elapsedMs)
+        => new(Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>(), false, null, elapsedMs, Cancelled: true);
 
     private static string ResolveDelimiter(string separator, out string? error)
     {

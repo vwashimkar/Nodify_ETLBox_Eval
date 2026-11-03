@@ -12,7 +12,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(CompositePath("c01_basic.csv"), ",", true, 0, "utf-8", 5);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         Assert.Equal(32, preview.Columns.Count);
@@ -31,7 +31,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(CompositePath("c01_basic.csv"), ",", true, 0, "utf-8", 2);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         Assert.Equal(2, preview.Rows.Count);
@@ -44,7 +44,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(CompositePath("c06_semicolon.csv"), ";", true, 0, "utf-8", 5);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         Assert.Equal(3, preview.Rows.Count);
@@ -58,7 +58,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(CompositePath("c05_quoting.csv"), ",", true, 0, "utf-8", 10);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         Assert.Equal(4, preview.Rows.Count);
@@ -74,7 +74,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(CompositePath("c07_no_header.csv"), ",", false, 0, "utf-8", 10);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         Assert.Equal(28, preview.Columns.Count);
@@ -88,7 +88,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(CompositePath("c14_preamble.csv"), ",", true, 3, "utf-8", 5);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         Assert.Equal(32, preview.Columns.Count);
@@ -104,7 +104,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(TestDataPath("06_encoding_windows1252.csv"), ",", true, 0, "windows-1252", 20);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         var flattened = preview.Rows.SelectMany(r => r).ToList();
@@ -117,7 +117,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(CompositePath("c10_large.csv"), ",", true, 0, "utf-8", 5);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.Null(preview.Error);
         Assert.Equal(5, preview.Rows.Count);
@@ -134,7 +134,7 @@ public class CsvPreviewReaderTests
         var reader = new CsvPreviewReader();
         var settings = CreateSettings(Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.csv"), ",", true, 0, "utf-8", 5);
 
-        var preview = await reader.ReadAsync(settings, CancellationToken.None);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.NotNull(preview.Error);
     }
@@ -150,7 +150,7 @@ public class CsvPreviewReaderTests
             var reader = new CsvPreviewReader();
             var settings = CreateSettings(path, ",", true, 0, "utf-8", 5);
 
-            var preview = await reader.ReadAsync(settings, CancellationToken.None);
+            var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
             Assert.NotNull(preview.Error);
         }
@@ -179,7 +179,7 @@ public class CsvPreviewReaderTests
             var reader = new CsvPreviewReader();
             var settings = CreateSettings(path, ",", true, 0, "utf-8", 50);
 
-            var preview = await reader.ReadAsync(settings, CancellationToken.None);
+            var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
             Assert.NotNull(preview.Error);
             Assert.Contains("row", preview.Error!, StringComparison.OrdinalIgnoreCase);
@@ -203,11 +203,12 @@ public class CsvPreviewReaderTests
         cts.Cancel();
 
         var sw = Stopwatch.StartNew();
-        var preview = await reader.ReadAsync(settings, cts.Token);
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, cts.Token));
         sw.Stop();
 
         Assert.True(sw.ElapsedMilliseconds < 2000, $"Expected cancellation return under 2s but took {sw.ElapsedMilliseconds}ms.");
-        Assert.NotNull(preview);
+        Assert.True(preview.Cancelled);
+        Assert.Null(preview.Error);
     }
 
     private static CsvFileSettings CreateSettings(string path, string separator, bool hasHeader, int skipLines, string encodingName, int previewRows)

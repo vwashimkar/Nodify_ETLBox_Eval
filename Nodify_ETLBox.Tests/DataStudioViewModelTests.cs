@@ -12,7 +12,7 @@ public class DataStudioViewModelTests
         var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
         var vm = new DataStudioViewModel(node, BuildSettings(node));
 
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         Assert.Null(vm.PreviewError);
         Assert.Equal(4, vm.LoadedRowCount);
@@ -23,7 +23,7 @@ public class DataStudioViewModelTests
     {
         var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
         var vm = new DataStudioViewModel(node, BuildSettings(node));
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         var initialRows = vm.LoadedRowCount;
         var initialColumns = vm.TotalColumnCount;
@@ -35,7 +35,7 @@ public class DataStudioViewModelTests
 
         Assert.NotNull(vm.ResultRowsView);
         Assert.Equal(initialRows, vm.ResultRowsView!.Count);
-        Assert.Equal(initialColumns - 3, vm.ResultRowsView.Table.Columns.Count - 1);
+        Assert.Equal(initialColumns - 3, vm.ResultRowsView.Table!.Columns.Count - 1);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class DataStudioViewModelTests
     {
         var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
         var vm = new DataStudioViewModel(node, BuildSettings(node));
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         vm.IsIgnoreMode = false;
         vm.SelectNoColumnsCommand.Execute(null);
@@ -55,7 +55,7 @@ public class DataStudioViewModelTests
 
         vm.TestDatasetCommand.Execute(null);
 
-        var resultColumns = vm.ResultRowsView!.Table.Columns.Cast<System.Data.DataColumn>().Select(c => c.ColumnName).ToList();
+        var resultColumns = vm.ResultRowsView!.Table!.Columns.Cast<System.Data.DataColumn>().Select(c => c.ColumnName).ToList();
         Assert.Equal(new[] { "#", "id", "name" }, resultColumns);
     }
 
@@ -64,7 +64,7 @@ public class DataStudioViewModelTests
     {
         var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
         var vm = new DataStudioViewModel(node, BuildSettings(node));
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         var original = vm.Columns.Select(c => c.IsSelected).ToArray();
 
@@ -79,10 +79,10 @@ public class DataStudioViewModelTests
     {
         var node = CreateCsvNode(CompositePath("c06_semicolon.csv"), "Comma", true, "0", "utf-8", "5");
         var vm = new DataStudioViewModel(node, BuildSettings(node));
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         vm.Separator = ";";
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         Assert.Null(vm.PreviewError);
         Assert.Equal(32, vm.TotalColumnCount);
@@ -95,7 +95,7 @@ public class DataStudioViewModelTests
     {
         var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
         var vm = new DataStudioViewModel(node, BuildSettings(node));
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         vm.HasHeader = hasHeader;
         vm.SaveCommand.Execute(null);
@@ -116,7 +116,7 @@ public class DataStudioViewModelTests
         var beforeNames = node.ColumnSelection.Names.ToList();
 
         var vm = new DataStudioViewModel(node, BuildSettings(node));
-        await vm.ReloadNowAsync();
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
 
         vm.Separator = ";";
         vm.HasHeader = false;
@@ -132,6 +132,95 @@ public class DataStudioViewModelTests
         Assert.Equal(beforeHeader, node.Settings.First(s => s.Key == "HasHeader").BoolValue);
         Assert.Equal(beforeMode, node.ColumnSelection.Mode);
         Assert.Equal(beforeNames, node.ColumnSelection.Names);
+    }
+
+    [Fact]
+    public async Task CancelledReload_KeepsPreviousData_AndStopsSpinner()
+    {
+        var reader = new CsvPreviewReader();
+        var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
+        var vm = new DataStudioViewModel(node, BuildSettings(node), reader);
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+        var statusBefore = vm.StatusText;
+
+        // Hold the next read at its first row, cancel it there, then let it go.
+        using var reached = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        reader.RowCollected = count =>
+        {
+            if (count == 1)
+            {
+                reached.Set();
+                release.Wait(TestTimeout.Default);
+            }
+        };
+
+        using var cts = new CancellationTokenSource();
+        var reload = vm.ReloadNowAsync(cts.Token);
+        Assert.True(reached.Wait(TestTimeout.Default), "The reload never reached its first row.");
+        Assert.True(vm.IsLoading);
+
+        cts.Cancel();
+        release.Set();
+        await TestTimeout.Run(() => reload);
+
+        Assert.False(vm.IsLoading);
+        Assert.False(vm.ShowCancelLoad);
+        Assert.Null(vm.PreviewError);
+        Assert.Equal(4, vm.LoadedRowCount);
+        Assert.Equal(statusBefore, vm.StatusText);
+    }
+
+    [Fact]
+    public async Task OlderCancelledReload_DoesNotStopSpinnerOfNewerReload()
+    {
+        var reader = new CsvPreviewReader();
+        var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
+        var vm = new DataStudioViewModel(node, BuildSettings(node), reader);
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+
+        // Hold each of the next two reads at its first row.
+        using var firstReached = new ManualResetEventSlim();
+        using var secondReached = new ManualResetEventSlim();
+        using var releaseFirst = new ManualResetEventSlim();
+        using var releaseSecond = new ManualResetEventSlim();
+        var readNumber = 0;
+        reader.RowCollected = count =>
+        {
+            if (count != 1)
+            {
+                return;
+            }
+
+            if (Interlocked.Increment(ref readNumber) == 1)
+            {
+                firstReached.Set();
+                releaseFirst.Wait(TestTimeout.Default);
+            }
+            else
+            {
+                secondReached.Set();
+                releaseSecond.Wait(TestTimeout.Default);
+            }
+        };
+
+        var first = vm.ReloadNowAsync();
+        Assert.True(firstReached.Wait(TestTimeout.Default), "The first reload never reached its first row.");
+
+        var second = vm.ReloadNowAsync();   // cancels the first
+        Assert.True(secondReached.Wait(TestTimeout.Default), "The second reload never reached its first row.");
+
+        releaseFirst.Set();
+        await TestTimeout.Run(() => first);
+
+        Assert.True(vm.IsLoading, "The cancelled older reload stopped the spinner of the running newer one.");
+
+        releaseSecond.Set();
+        await TestTimeout.Run(() => second);
+
+        Assert.False(vm.IsLoading);
+        Assert.Null(vm.PreviewError);
+        Assert.Equal(4, vm.LoadedRowCount);
     }
 
     private static NodeViewModel CreateCsvNode(string filePath, string separator, bool hasHeader, string skipLines, string encodingName, string previewRows)

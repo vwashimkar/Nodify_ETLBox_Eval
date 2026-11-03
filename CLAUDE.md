@@ -27,7 +27,7 @@ The user is not a professional developer. Explain what you changed in plain word
 Close any running copy of the app before building. A running copy locks the DLLs.
 
 - Build: `dotnet build Nodify_ETLBox_Eval.slnx`
-- Unit tests: `dotnet test Nodify_ETLBox_Eval.slnx` (currently 41 tests, all pass)
+- Unit tests: `dotnet test Nodify_ETLBox_Eval.slnx` (currently 50 tests, all pass; add `--blame-hang-timeout 60s` so a hang cannot freeze the run)
 - Legacy test run: `dotnet run --project Nodify_ETLBox/Nodify_ETLBox.csproj -- --run-tests`
   - The baseline is **43 PASS / 5 FAIL / 4 OBSERVED** while the ETLBox trial licence is expired (the five failures are T048 to T052, with the message "The registered trial key expired"). With a valid licence the baseline is 48 / 0 / 4. Any other result means you changed something legacy: stop and report.
 - CSV probe: `dotnet run --project Nodify_ETLBox/Nodify_ETLBox.csproj -- --probe-csv`
@@ -79,8 +79,8 @@ ETLBox facts
 ## Current state (update this section after each stage)
 
 - Done: CsvFile node, validation, dialect guesser, dialog service, `CsvPreviewReader`, `CsvErrorText`, `DataStudioViewModel`, `CsvColumnSelection`, the real `DataStudioWindow`.
-- Done 2026-11-03 (`reports/fixes-report.md`): read-only bindings in Data Studio set to `Mode=OneWay` (also the Columns tab `Run` bindings, which crashed the tab); node card colours from tokens (`NodeHeader*`, `NodeBody*`, `NodeState*Background`) in both themes; Issues list cleared on every validation run; Data Studio themed with window-local styles (tabs, grid, status bar, editable ComboBoxes), Encoding is an editable ComboBox, Separator shows preset names. Not yet checked by eye.
-- Open: the unit test `ReadAsync_CallerCancellationToken_ReturnsWithoutHanging` hangs (so `dotnet test` never ends; the other 40 pass). Likely cause [U]: `CsvPreviewReader.ReadAsync` calls `ExecuteAsync` with an already cancelled token. Fix waits for the user's go-ahead. Until then run tests with `--filter "FullyQualifiedName!~ReadAsync_CallerCancellationToken_ReturnsWithoutHanging"`.
+- Done 2026-11-03: the five open fixes from manual checks (`reports/fixes-report.md`): read-only bindings `Mode=OneWay`, node colours from tokens in both themes, Issues list rebuilt on each validation, Data Studio theming, editable Encoding list, Separator preset names. Not yet checked by eye.
+- Done 2026-11-03 (`reports/taskA-report.md`): the preview hang is fixed. A caller's cancel that landed while ETLBox started the network made `ExecuteAsync` wait for ever; the caller's token is no longer passed to ETLBox. `CsvPreview.Cancelled` reports a cancel (no rows, no error). A cancelled reload in Data Studio keeps the previous data, and only the newest reload stops the spinner. Every test that awaits ETLBox goes through `TestTimeout.Run` (10 s). `.editorconfig` sets UTF-8. `InternalsVisibleTo` for the tests is in the project file; no Engine file has assembly attributes.
 - Next stages (see section 10 of the spec): 3 JsonCheckpoint node, 4 ParseValue (engine and unit tests first, test files C01 to C12, C15, C16), 5 .NET object destination, 6 Execute with progress and DLL generation for the new nodes, 7 save/open project.
 - Parked: mixed instrument files (a text block followed by a CSV part), see section 12 of the spec. Not scheduled.
-- Known untested: `PrepareHeaderForMatch`, duplicate header names, reading above 5,000 rows (needs a valid licence).
+- Known untested: `PrepareHeaderForMatch`, duplicate header names (including a header named `#`, which the Data Studio table also uses), reading above 5,000 rows (needs a valid licence). Preview cancel is noticed only when the next row arrives, so a cancel can be slow on a slow share or a very long skipped preamble [U].
