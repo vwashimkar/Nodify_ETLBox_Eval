@@ -21,7 +21,8 @@ Source: `docs/csv-probe-results.md`, produced by `--probe-csv` (ETLBox 3.11.1, `
 | Quote character | A single quote works, and an embedded delimiter inside the quotes stays in one cell. | `Configuration.Quote` | [P] |
 | Delimiter and quoting | `;` works. `"Rao, Asha"` and `"2,5"` stay intact. | `Configuration.Delimiter` | [P] |
 | Skip lines | There is no `SkipLines` property, but a delegate does it. With `ShouldSkipRecord` set to skip while `args.Row.Parser.Row <= N`, `c14_preamble.csv` (3 lines before the header) gave the correct header and first data row, with the header on and with it off. Row numbers seen by the delegate are 1-based. Not tested: a preamble that contains a quote character, and quoted multi-line records before the header. | `Configuration.ShouldSkipRecord` | [P] plain case; [U] the two cases named |
-| Stop after N rows | On `c10_large.csv` (20,000 records), cancelling after 5 rows read exactly 5 in 1 to 29 ms, with a cancellation token and with `Cancel()`. After 1,000 rows it read exactly 1,000 in 46 to 58 ms. The file could be opened exclusively right after each run, and 10 cancel-and-reopen cycles in a row all worked. A preview of N rows stays fast on a big file. | token or `Cancel()` | [P] |
+| Stop after N rows | On `c10_large.csv` (20,000 records), cancelling after 5 rows read exactly 5 in 1 to 29 ms, with a cancellation token and with `Cancel()`. After 1,000 rows it read exactly 1,000 in 46 to 58 ms. The file could be opened exclusively right after each run, and 10 cancel-and-reopen cycles in a row all worked. A preview of N rows stays fast on a big file. | cancel from inside the row step through a token the reader owns | [P] |
+| Cancel from outside | **Never pass the caller's token to ETLBox.** A caller's cancel that lands while ETLBox is still starting the network makes `ExecuteAsync` wait forever (reproduced 2026-11-03: 3 of 3 runs hung for more than 10 s). The probe of 2026-11-02 only cancelled after rows were flowing, so it did not show this. The reader checks the caller's token before starting and on every row and stops ETLBox through its own token. The caller's cancel is noticed only when the next row arrives. | own token, cancelled in the row step | [P] fix; [U] slow-cancel case |
 | Cancel result | A cancel that we cause ends the run with `OperationCanceledException`. The preview and the Cancel button must treat it as a normal end, not as an error. | catch it | [P] |
 | Progress | `OnProgress` is called for every row, not at intervals. It cost about 10 ms per 1,000 rows (48 ms against 38 ms). Its last value was 1,001 for 1,000 rows delivered, so do not use it as the delivered row count. The UI must throttle its own updates (for example every 100 ms). | `OnProgress` | [P] |
 | Line numbers | ETLBox does not expose a line or record number per good row (`Parser.Row` and `RawRow` read 0). **Decision:** we count records ourselves with a counter in the pipeline (1-based, from the first data record; header and skipped lines not counted). A record that spans two lines counts once (`c05_quoting.csv`: 4 records, 6 lines, the counter gave 4). Rejects therefore report a **record number**, not a line number. | `RowTransformation` counter | [P] |
@@ -319,6 +320,26 @@ Done means: the test run reports no unexplained difference from `expected_result
 5. Wireframes for each dialog (section 7 has the first one) as images or text in `docs/`.
 6. One stage per prompt, each with its done criteria and a "do not touch" list, as in the first POC.
 7. A review loop: you paste Copilot's diff and test output back, and the result is checked against the evidence before the next stage.
+
+## 12. Noted requirement (not scheduled): mixed instrument files, text part plus CSV part
+
+Noted 2026-11-02. Not part of Stages 2 to 7 until the user says so.
+
+**What the user described.** Instrument export files (titration software is the example) are not plain CSV. A file can start with free text, for example a header block of about 20 lines with method name, date, instrument and sample details, and the CSV table starts after that (for instance after line 20). The ETL needs a first node that reads the whole file and lets the user mark which part is which. The text part goes to one output and the CSV part goes to a CSV file reader node as its input. The two parts then travel down their own paths.
+
+**What this means for the design (questions, not decisions).**
+
+| Topic | Question | Note |
+|---|---|---|
+| Marking the parts | How does the user mark them: by line range, by a start marker text, or by clicking in a preview of the raw text? | The click-in-preview way matches the Data Studio idea. A marker (a line that starts with a given text) survives files whose header length changes. A fixed line number does not. |
+| Several tables | Can one file hold more than one table or more than one text block? | Unknown until we see a real file. |
+| Text output | What does the text part become: key/value pairs (`Method: ...`), a single text, or lines? | A key/value result could be carried onto every row of the CSV part (for example the sample name). |
+| CSV reader | Does the CSV part use the existing CsvFile settings (separator, header, encoding)? | Yes, it should feed the same reader, so there is still one parser. Skip lines (`ShouldSkipRecord`, section 0) already covers a fixed-length preamble, but not a marker-based start, a text block after the table, or a table that ends before the end of the file. |
+| Reading a part of a file | Can ETLBox read from a stream or a string, or only from a file path? | [U] Not probed. If it only takes a path, the CSV part would be written to a temporary file first. This must be probed before design. |
+
+**What is not known.** I could not find a public example export file for these instruments, so nothing above is based on a real file. Tiamo is Metrohm's titration software and Mettler Toledo's is LabX; they have different export formats. The real format has to come from a real file.
+
+**What is needed to go further.** One or more real export files, with sample names or other private values replaced. With them, the first step would be a short probe (like the CSV probe) of the layout, then the questions in the table.
 
 ## Out of scope for now
 

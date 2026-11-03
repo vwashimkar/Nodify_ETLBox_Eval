@@ -8,6 +8,7 @@ Read this before touching the editor, the CSV engine, DLL generation, or when a 
 - A "connection reset" or a "flagged prompt" message does not mean the work failed or succeeded. Check `git status` and `git diff` before assuming either. Two prompts were flagged for no real reason; splitting the prompt and starting a new chat fixed it.
 - Copilot cannot click through a WPF window. When it says a drag or a dialog works, that is a guess. Ask it for what it expects, then check by hand.
 - A result that cannot be reproduced is not a result. Copilot's DLL-mode run reported 43 pass / 5 fail / 4 observed; running the same command gave 48 / 0 / 4. On 2026-11-02 the app itself gave exactly 43 / 5 / 4 when the trial key had expired, so a missing or invalid licence in Copilot's run is the likely cause. Not proven.
+- Agent reports can contradict the raw output: Claude Code's first report said 41 of 41 tests passed while the same test hung 20 of 20 runs when run alone. Check numbers against the raw output and repeat anything timing-dependent.
 - Save every file before building. Two "build errors" were unsaved edits.
 
 ## 2. Nodify 7.3.0
@@ -30,6 +31,8 @@ Read this before touching the editor, the CSV engine, DLL generation, or when a 
 - An unterminated quote makes the whole run fail with a clear error, and no earlier valid rows come back. [P, test T041]
 - **One parser.** The first POC checked headers by hand (case-insensitive) but looked rows up exactly, so a file with `Location` instead of `location` returned zero rows with no error. [P, test T047] Preview and run must use the same ETLBox reading code.
 - `reconciles=true` in the test output only means no row vanished after ETLBox read it. It was true for wrong results too. Do not read it as "correct".
+- **Never hand a caller's `CancellationToken` to ETLBox.** A cancel that lands while ETLBox is still starting the network makes `Network.ExecuteAsync(token)` wait forever. Reproduced 2026-11-03: a token cancelled before the call, or 1 ms after the start, hung the call for more than 10 s; the original test hung 20 of 20 runs when run alone, yet the full suite passed once by luck. The cause inside ETLBox was not found. A cancel after rows are flowing (the only case probed on 2026-11-02) ends normally. [P] Fix used in `CsvPreviewReader`: check the caller's token before starting and on every row, and cancel a token that the reader owns from inside the row step; ETLBox only ever sees that token. Use the same pattern for the full run. Known limit: the caller's cancel is noticed only when the next row arrives [U].
+- A test that passes once proves nothing about a race. Give every test that awaits ETLBox a timeout and repeat the cancel cases (50 times each) so a hang fails the test instead of freezing the run. [P]
 - In the 3.11.1 API dump, `CsvSource` has `Encoding`, `PrepareHeaderForMatch`, `Cancel`, `ExecuteAsync(CancellationToken)`, `LinkErrorTo`, `ProgressCount` and `OnProgress`. [A] None of them has been exercised. [U]
 
 ## 4. Generating a DLL with Roslyn
