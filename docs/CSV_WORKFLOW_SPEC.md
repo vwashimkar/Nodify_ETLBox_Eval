@@ -180,6 +180,29 @@ Rules the parser must follow, each with a test:
 - An empty cell is rejected with the reason "empty value".
 - The parser is a plain function with no WPF or ETLBox types, so it is tested in isolation.
 
+### 5a. Rules settled while building the engine (Task B, 2026-11-03)
+
+The engine (`Engine/Parsing/`) passes every manifest row C01 to C14 except C10 (skipped: it needs a valid ETLBox licence and a full-file reader). C15 and C16 are JSON tests for a later stage. Tags: **[M]** derived from the expected files, **[C]** chosen by the engine author because no expected file covers it, **[U]** chosen and not yet confirmed by the user.
+
+| Rule | Source |
+|---|---|
+| Reasons: `no key delimiter`, `empty key`, `empty value` | section 5 [M] |
+| `component count N exceeds M column groups` (M is the number of slots) | `C03_rejects.csv` [M] |
+| The same text plus ` (paired what fits)` when flagged | `C03b_flagged.csv` [M] |
+| `duplicate component ids` as the flag text | `C04b_flagged.csv` [M] |
+| `duplicate component ids` also as the reject text when the duplicate policy is Reject | [C] no expected file |
+| `no components` for a cell with a key and nothing after it (`S1:`) | [C] [U] |
+| Order of checks: empty cell, no key delimiter, empty key, no components, excess, duplicates | [C] no test record fails two checks |
+| Duplicates are checked on the component name (left of the Each delimiter), after pair-what-fits | [C], C04b agrees |
+| A record flagged for excess and for duplicates gives two flagged lines and counts once in the flagged total | [C] [U] |
+| The name of the column that receives a level-3 (Each) sub-part is part of the level setting (C09 uses `revision`) | [M] |
+| With more than one Each level, each splits what the previous one left | [C] [U], only one level is tested |
+| `auto(r01..r18;3)` means the names r01 to r18, not a range of file positions (C08b has `zz_new` between r09 and r10) | [M] |
+| Slot column values are copied as they are; trim applies to the key, the components and the sub-parts | [M] |
+| A slot, source or carry column that is not in the file stops the run with a message that says what to edit | [C] |
+| Record numbers are counted by the caller (1-based, header and skipped lines not counted, a two-line record counts once) | section 0 [P] |
+| **Wide output shape: not built.** `OutputShape.Wide` exists and throws `NotSupportedException`. Proposal when it is needed: one row per input record; carried columns, `sample_id`, then for each slot k the columns `component_k` and the slot's value columns suffixed `_k`. The column set follows the slots, so it is fixed at design time and fits a generated .NET class. Columns named after component ids are not proposed because they depend on the data. | [U] decision pending |
+
 ---
 
 ## 6. Destinations (configurable by design)
