@@ -28,6 +28,7 @@ public class MainViewModel : ObservableObject
     private bool _isRunInProgress;
     private bool _isGenerating;
     private readonly IDialogService _dialogService;
+    private readonly HashSet<(Guid NodeId, CsvFileSettings Settings)> _columnReadsTried = new();
 
     public MainViewModel(IDialogService? dialogService = null)
     {
@@ -162,6 +163,7 @@ public class MainViewModel : ObservableObject
     private void HookCsvFileValidationListeners()
     {
         Editor.ValidationStateChanged += (_, _) => UpdateCommandStates();
+        Editor.ValidationStateChanged += (_, _) => _ = RefreshParseValueUpstreamColumnsAsync();
 
         Editor.Nodes.CollectionChanged += (_, _) =>
         {
@@ -191,6 +193,39 @@ public class MainViewModel : ObservableObject
             {
                 setting.ValueChanged += OnCsvFileSettingValueChanged;
             }
+        }
+    }
+
+    /// <summary>
+    /// A ParseValue node needs the column names of its CsvFile node. When they are not known yet,
+    /// read them once per node and settings (off the validation path), then validate again.
+    /// </summary>
+    private async Task RefreshParseValueUpstreamColumnsAsync()
+    {
+        try
+        {
+            foreach (var node in Editor.Nodes.Where(n => n.NodeType == NodeType.ParseValue).ToList())
+            {
+                var upstream = ParseValueUpstreamResolver.Resolve(node, Editor.Connections);
+                if (upstream.CsvNode is null || upstream.Settings is null || upstream.CsvNode.KnownColumns is not null)
+                {
+                    continue;
+                }
+
+                if (!_columnReadsTried.Add((upstream.CsvNode.Id, upstream.Settings)))
+                {
+                    continue;
+                }
+
+                if (await ParseValueUpstreamResolver.RefreshColumnsAsync(upstream.CsvNode, new CsvPreviewReader(), CancellationToken.None))
+                {
+                    Editor.Validate();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Editor.Issues.Add($"ParseValue: could not read the columns of the CsvFile node. Press Load preview on it. Details: {ex.Message}");
         }
     }
 
