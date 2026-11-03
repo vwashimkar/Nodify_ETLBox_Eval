@@ -4,5 +4,8 @@ public enum PortKind
 {
     Rows,
     Json,
-    Records
+    Records,
+
+    /// <summary>Rows produced by ParseValue (one per component). Not accepted by the legacy nodes.</summary>
+    ParsedRows
 }

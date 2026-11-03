@@ -40,6 +40,7 @@ public class MainViewModel : ObservableObject
         GenerateDllCommand = new AsyncRelayCommand(async _ => await GenerateDllAsync(), _ => CanGenerateDll());
 
         NodeFactory.CsvPreviewHandler = ShowCsvPreview;
+        NodeFactory.ParseValueConfigureHandler = ShowParseValue;
 
         HookCountryRefreshListeners();
         HookCsvFileValidationListeners();
@@ -209,6 +210,22 @@ public class MainViewModel : ObservableObject
         {
             MessageBox.Show($"Failed to open CSV preview.\n\n{ex}", "Load preview error", MessageBoxButton.OK, MessageBoxImage.Error);
             Editor.Issues.Add($"CsvFile: {ex}");
+            return false;
+        }
+    }
+
+    private bool ShowParseValue(NodeViewModel node)
+    {
+        try
+        {
+            _dialogService.ShowParseValue(node);
+            Editor.Validate();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to open the ParseValue dialog.\n\n{ex}", "ParseValue error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Editor.Issues.Add($"ParseValue: {ex.Message}");
             return false;
         }
     }

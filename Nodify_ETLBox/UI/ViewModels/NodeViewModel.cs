@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Parsing;
+using EtlDesigner.Engine.Pipeline;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -12,7 +14,8 @@ public enum NodeType
     FilterByCountry,
     ToJson,
     ParseJson,
-    ResultJson
+    ResultJson,
+    ParseValue
 }
 
 public enum NodeState
@@ -37,6 +40,7 @@ public class NodeViewModel : ObservableObject
     private bool _isSelected;
     private System.Windows.Size _size;
     private string _configurationStatus;
+    private ParseValueSettings? _parseValueSettings;
 
     public NodeViewModel(Guid id, string title, NodeType nodeType, Func<CsvFileSettings, bool>? loadPreviewAction = null)
     {
@@ -137,6 +141,49 @@ public class NodeViewModel : ObservableObject
 
     public CsvColumnSelection ColumnSelection { get; } = new();
 
+    /// <summary>
+    /// CsvFile only: the column names of the file as last read with the current settings, or
+    /// null when not known (never read, or a setting changed since).
+    /// </summary>
+    public IReadOnlyList<string>? KnownColumns { get; set; }
+
+    /// <summary>ParseValue only: the node's settings. Null for other node types.</summary>
+    public ParseValueSettings? ParseValueSettings
+    {
+        get => _parseValueSettings;
+        set
+        {
+            if (SetProperty(ref _parseValueSettings, value))
+            {
+                OnPropertyChanged(nameof(ParseValueSettingsText));
+                ParseValueSettingsChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    /// <summary>The ParseValue settings as JSON, for the read-only placeholder dialog.</summary>
+    public string ParseValueSettingsText
+        => _parseValueSettings is null ? string.Empty : SettingsJson.Serialize(_parseValueSettings);
+
+    public event EventHandler? ParseValueSettingsChanged;
+
+    /// <summary>Opens the node's dialog (ParseValue). Null for nodes without one.</summary>
+    public RelayCommand? ConfigureCommand { get; init; }
+
+    /// <summary>CsvFile only: the reader settings from the node's setting rows.</summary>
+    public CsvFileSettings GetCsvFileSettings()
+    {
+        var filePath = Settings.FirstOrDefault(s => s.Key == "FilePath")?.Value ?? string.Empty;
+        var separator = NormalizeSeparator(Settings.FirstOrDefault(s => s.Key == "Separator")?.Value ?? ",");
+        var hasHeader = Settings.FirstOrDefault(s => s.Key == "HasHeader")?.BoolValue ?? true;
+        var encodingName = Settings.FirstOrDefault(s => s.Key == "EncodingName")?.Value ?? "utf-8";
+
+        var skipLines = int.TryParse(Settings.FirstOrDefault(s => s.Key == "SkipLines")?.Value, out var parsedSkipLines) ? parsedSkipLines : 0;
+        var previewRows = int.TryParse(Settings.FirstOrDefault(s => s.Key == "PreviewRows")?.Value, out var parsedPreviewRows) ? parsedPreviewRows : 5;
+
+        return new CsvFileSettings(filePath, separator, hasHeader, skipLines, encodingName, previewRows);
+    }
+
     private bool CanLoadPreview()
     {
         if (NodeType != NodeType.CsvFile)
@@ -155,15 +202,7 @@ public class NodeViewModel : ObservableObject
             return;
         }
 
-        var filePath = Settings.FirstOrDefault(s => s.Key == "FilePath")?.Value ?? string.Empty;
-        var separator = NormalizeSeparator(Settings.FirstOrDefault(s => s.Key == "Separator")?.Value ?? ",");
-        var hasHeader = Settings.FirstOrDefault(s => s.Key == "HasHeader")?.BoolValue ?? true;
-        var encodingName = Settings.FirstOrDefault(s => s.Key == "EncodingName")?.Value ?? "utf-8";
-
-        var skipLines = int.TryParse(Settings.FirstOrDefault(s => s.Key == "SkipLines")?.Value, out var parsedSkipLines) ? parsedSkipLines : 0;
-        var previewRows = int.TryParse(Settings.FirstOrDefault(s => s.Key == "PreviewRows")?.Value, out var parsedPreviewRows) ? parsedPreviewRows : 5;
-
-        var settings = new CsvFileSettings(filePath, separator, hasHeader, skipLines, encodingName, previewRows);
+        var settings = GetCsvFileSettings();
         _loadPreviewAction(settings);
     }
 

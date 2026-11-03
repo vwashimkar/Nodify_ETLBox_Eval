@@ -143,6 +143,7 @@ public class EditorViewModel : ObservableObject
             NodeType.ToJson => NodeFactory.CreateToJson(location),
             NodeType.ParseJson => NodeFactory.CreateParseJson(location),
             NodeType.ResultJson => NodeFactory.CreateResultJson(location),
+            NodeType.ParseValue => NodeFactory.CreateParseValue(location),
             _ => throw new ArgumentException($"Unknown node type: {nodeType}")
         };
 

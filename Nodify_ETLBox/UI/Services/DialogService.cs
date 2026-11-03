@@ -21,4 +21,21 @@ public class DialogService : IDialogService
 
         window.ShowDialog();
     }
+
+    public void ShowParseValue(NodeViewModel node)
+    {
+        var owner = Application.Current.MainWindow;
+
+        // Placeholder: the window shows the node's settings as read-only text. The real dialog
+        // will bind to ParseStudioViewModel.
+        var window = new ParseValueWindow
+        {
+            Owner = owner,
+            DataContext = node,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+
+        window.ShowDialog();
+    }
 }

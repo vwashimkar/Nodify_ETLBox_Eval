@@ -1,6 +1,8 @@
 using System.IO;
 using System.Windows;
 using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Parsing;
+using EtlDesigner.UI.Mvvm;
 using EtlDesigner.UI.ViewModels;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -13,6 +15,9 @@ public static class NodeFactory
     private const string SuggestedFromFileNote = "Suggested from the file. Change if wrong.";
 
     public static Func<NodeViewModel, CsvFileSettings, bool>? CsvPreviewHandler { get; set; }
+
+    /// <summary>Opens the ParseValue dialog for a node. Set by MainViewModel.</summary>
+    public static Func<NodeViewModel, bool>? ParseValueConfigureHandler { get; set; }
     /// <summary>
     /// Creates a CsvSource node.
     /// Output: "Rows" (PortKind.Rows)
@@ -145,10 +150,83 @@ public static class NodeFactory
         foreach (var setting in node.Settings)
         {
             setting.ValueChanged += (_, _) => node.LoadPreviewCommand.RaiseCanExecuteChanged();
+
+            // Any setting change may change the columns (header, separator, file).
+            setting.ValueChanged += (_, _) => node.KnownColumns = null;
         }
 
         return node;
     }
+
+    /// <summary>
+    /// Creates a ParseValue node.
+    /// Input: "Rows" (PortKind.Rows), from a CsvFile node only.
+    /// Output: "Parsed" (PortKind.ParsedRows).
+    /// Settings: a ParseValueSettings on the node, edited in its dialog. The settings panel shows
+    /// a read-only summary.
+    /// </summary>
+    public static NodeViewModel CreateParseValue(Point location)
+    {
+        NodeViewModel? node = null;
+
+        node = new NodeViewModel(Guid.NewGuid(), "ParseValue", NodeType.ParseValue)
+        {
+            Location = location,
+            ConfigurationStatus = "Not configured",
+            ConfigureCommand = new RelayCommand(_ =>
+            {
+                if (node is not null)
+                {
+                    ParseValueConfigureHandler?.Invoke(node);
+                }
+            })
+        };
+
+        node.Inputs.Add(new ConnectorViewModel("Rows", PortKind.Rows, isInput: true, node));
+        node.Outputs.Add(new ConnectorViewModel("Parsed", PortKind.ParsedRows, isInput: false, node));
+
+        var source = new SettingViewModel("SourceColumn", "Source column", SettingKind.Summary, required: false);
+        var levels = new SettingViewModel("DelimiterLevels", "Delimiter levels", SettingKind.Summary, required: false);
+        var slots = new SettingViewModel("Slots", "Slots", SettingKind.Summary, required: false);
+        var carry = new SettingViewModel("CarryColumns", "Carry columns", SettingKind.Summary, required: false);
+        node.Settings.Add(source);
+        node.Settings.Add(levels);
+        node.Settings.Add(slots);
+        node.Settings.Add(carry);
+
+        node.ParseValueSettingsChanged += (_, _) =>
+        {
+            var settings = node.ParseValueSettings;
+            if (settings is null)
+            {
+                return;
+            }
+
+            source.Value = string.IsNullOrWhiteSpace(settings.SourceColumn) ? "(not chosen)" : settings.SourceColumn;
+            levels.Value = settings.DelimiterLevels.Count.ToString();
+            slots.Value = settings.Slots.Count.ToString();
+            carry.Value = settings.CarryColumns.AllOtherColumns ? "All other columns"
+                : settings.CarryColumns.Names.Count == 0 ? "None"
+                : string.Join(", ", settings.CarryColumns.Names);
+        };
+
+        node.ParseValueSettings = DefaultParseValueSettings();
+
+        return node;
+    }
+
+    /// <summary>
+    /// Defaults from spec section 4: two levels (":" once, "|" all), trim and drop empty on,
+    /// six empty slots, reject excess, allow duplicates, long shape. Carry is All because the spec
+    /// carries all other columns when the file has a header; the node does not know yet whether
+    /// it has one [U].
+    /// </summary>
+    public static ParseValueSettings DefaultParseValueSettings() => new()
+    {
+        SourceColumn = string.Empty,
+        Slots = Enumerable.Range(1, 6).Select(i => new Slot($"S{i}", Array.Empty<string>())).ToList(),
+        CarryColumns = CarryColumns.All
+    };
 
     /// <summary>
     /// Creates a ToJson node.

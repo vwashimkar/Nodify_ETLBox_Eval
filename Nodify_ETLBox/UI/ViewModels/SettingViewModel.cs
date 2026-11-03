@@ -11,7 +11,10 @@ public enum SettingKind
     ComboBox,
     Fields,
     CheckBox,
-    Number
+    Number,
+
+    /// <summary>Read-only text shown in the settings panel (a summary of settings edited in a dialog).</summary>
+    Summary
 }
 
 public class SettingViewModel : ObservableObject

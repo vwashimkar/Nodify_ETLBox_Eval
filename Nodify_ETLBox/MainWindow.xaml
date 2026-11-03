@@ -25,6 +25,9 @@
             <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
         </DataTemplate>
 
+        <DataTemplate x:Key="SummarySettingTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <TextBlock Text="{Binding Value, Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource text-brush}" />
+        </DataTemplate>
         <DataTemplate x:Key="NumberSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
             <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
         </DataTemplate>
@@ -76,6 +79,9 @@
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Kind}" Value="Number">
                                     <Setter Property="ContentTemplate" Value="{StaticResource NumberSettingTemplate}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="Summary">
+                                    <Setter Property="ContentTemplate" Value="{StaticResource SummarySettingTemplate}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -184,6 +190,10 @@
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
                 <Button Content="ResultJson" Tag="ResultJson" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="ParseValue" Tag="ParseValue" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
@@ -358,6 +368,22 @@
                                             <Setter Property="Visibility" Value="Collapsed" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="CsvFile">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Content="Configure..."
+                                        Width="120"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,8,0,0"
+                                        Command="{Binding Editor.SelectedNode.ConfigureCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="ParseValue">
                                                     <Setter Property="Visibility" Value="Visible" />
                                                 </DataTrigger>
                                             </Style.Triggers>
