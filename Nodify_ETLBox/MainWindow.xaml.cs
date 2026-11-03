@@ -26,32 +26,23 @@ public partial class MainWindow : Window
 
     private void ThemeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Swap Nodify theme dictionaries
+        // Swap theme dictionaries
         var dictionaries = Application.Current.Resources.MergedDictionaries;
-        var currentTheme = ThemeSelector.SelectedIndex == 1 ? "Dark" : "Light";
+        var selectedThemeName = (ThemeSelector.SelectedItem as ComboBoxItem)?.Content?.ToString();
+        var currentTheme = string.Equals(selectedThemeName, "Dark", StringComparison.OrdinalIgnoreCase)
+            ? "Dark"
+            : "Light";
 
-        // Remove old Nodify theme
+        // Remove old theme dictionary
         var oldTheme = dictionaries.FirstOrDefault(d => d.Source?.OriginalString?.Contains("Themes/") == true && d.Source.OriginalString.Contains(".xaml"));
         if (oldTheme != null)
         {
             dictionaries.Remove(oldTheme);
         }
 
-        // Add new Nodify theme
+        // Add new theme dictionary
         var themeUri = new Uri($"Themes/{currentTheme}.xaml", UriKind.Relative);
         dictionaries.Add(new ResourceDictionary { Source = themeUri });
-
-        // Also switch window chrome theme via RequestedTheme or window background
-        if (currentTheme == "Dark")
-        {
-            Background = System.Windows.Media.Brushes.Gainsboro;
-            Foreground = System.Windows.Media.Brushes.Black;
-        }
-        else
-        {
-            Background = System.Windows.Media.Brushes.White;
-            Foreground = System.Windows.Media.Brushes.Black;
-        }
     }
 
     // Converts a point inside the editor control (screen units) to graph coordinates.

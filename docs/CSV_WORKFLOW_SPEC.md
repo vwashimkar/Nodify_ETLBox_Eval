@@ -1,12 +1,33 @@
-# CSV workflow specification (draft 0.3)
+# CSV workflow specification (draft 0.4)
 
 Project: `Nodify_ETLBox_Eval`. Focus: one CSV path done well. Bigger ETL plans (REST and database sources, branching graphs, C# expressions) are paused; see `Out of scope` at the end.
+
+Changes from 0.3: ETLBox facts settled by the probe run of 2026-11-02 (new section 0); skip lines, encoding, quote character, no-header names, cancel and progress are now known; rejects report a record number only (no line number).
 
 Changes from 0.2: the mapping of components to columns is now an editable set of slots, not a rule; fewer than six components is normal; carry columns are on by default when the file has a header; the JSON checkpoint keeps the shape the user configures; the file is loaded first and configured afterwards. The test data in `composite/` was rebuilt for these changes.
 
 Evidence tags: **[P]** proven in the first POC, **[A]** present in the ETLBox 3.11.1 API dump (`docs/etlbox-api-surface.md`), **[D]** read in ETLBox's public docs, **[U]** unverified, check before relying on it.
 
 ---
+
+## 0. ETLBox facts settled by probes (2026-11-02)
+
+Source: `docs/csv-probe-results.md`, produced by `--probe-csv` (ETLBox 3.11.1, `CsvSource<ExpandoObject>`). The trial key was expired during the run; every probe stayed under 5,000 rows read, so none was affected.
+
+| Topic | Fact | Setting to use | Tag |
+|---|---|---|---|
+| No header | With the header off, columns are named `Field1`, `Field2`, … (1-based). `c07_no_header.csv` gave `Field1`…`Field28`. We rename them to `Col1`, `Col2`, … ourselves. | `Configuration.HasHeaderRecord = false` | [P] |
+| Encoding | With the default, the Windows-1252 file's "México" row is not found. With the Windows-1252 encoding it reads `México\|Puebla`. | `CsvSource.Encoding` | [P] |
+| Quote character | A single quote works, and an embedded delimiter inside the quotes stays in one cell. | `Configuration.Quote` | [P] |
+| Delimiter and quoting | `;` works. `"Rao, Asha"` and `"2,5"` stay intact. | `Configuration.Delimiter` | [P] |
+| Skip lines | There is no `SkipLines` property, but a delegate does it. With `ShouldSkipRecord` set to skip while `args.Row.Parser.Row <= N`, `c14_preamble.csv` (3 lines before the header) gave the correct header and first data row, with the header on and with it off. Row numbers seen by the delegate are 1-based. Not tested: a preamble that contains a quote character, and quoted multi-line records before the header. | `Configuration.ShouldSkipRecord` | [P] plain case; [U] the two cases named |
+| Stop after N rows | On `c10_large.csv` (20,000 records), cancelling after 5 rows read exactly 5 in 1 to 29 ms, with a cancellation token and with `Cancel()`. After 1,000 rows it read exactly 1,000 in 46 to 58 ms. The file could be opened exclusively right after each run, and 10 cancel-and-reopen cycles in a row all worked. A preview of N rows stays fast on a big file. | cancel from inside the row step through a token the reader owns | [P] |
+| Cancel from outside | **Never pass the caller's token to ETLBox.** A caller's cancel that lands while ETLBox is still starting the network makes `ExecuteAsync` wait forever (reproduced 2026-11-03: 3 of 3 runs hung for more than 10 s). The probe of 2026-11-02 only cancelled after rows were flowing, so it did not show this. The reader checks the caller's token before starting and on every row and stops ETLBox through its own token. The caller's cancel is noticed only when the next row arrives. | own token, cancelled in the row step | [P] fix; [U] slow-cancel case |
+| Cancel result | A cancel that we cause ends the run with `OperationCanceledException`. The preview and the Cancel button must treat it as a normal end, not as an error. | catch it | [P] |
+| Progress | `OnProgress` is called for every row, not at intervals. It cost about 10 ms per 1,000 rows (48 ms against 38 ms). Its last value was 1,001 for 1,000 rows delivered, so do not use it as the delivered row count. The UI must throttle its own updates (for example every 100 ms). | `OnProgress` | [P] |
+| Line numbers | ETLBox does not expose a line or record number per good row (`Parser.Row` and `RawRow` read 0). **Decision:** we count records ourselves with a counter in the pipeline (1-based, from the first data record; header and skipped lines not counted). A record that spans two lines counts once (`c05_quoting.csv`: 4 records, 6 lines, the counter gave 4). Rejects therefore report a **record number**, not a line number. | `RowTransformation` counter | [P] |
+| Bad file data | A structural error (unclosed quote, test file 12b) is delivered through `LinkErrorTo` as an `ETLBoxError` with `ErrorText`, `ReportTime`, `ExceptionType` (`ETLBoxException`) and `Source`. `RecordAsJson` is not available and `Context` is empty. No exception was thrown in that run. The row number is only inside the text (`Row: 7 - Start Position: 483 -- RawRecord: ...`) and counts the header as row 1, so for a file with a header and no skipped lines the record number is Row minus 1. Parsing that text is fragile: keep the pattern in one place and test it. How the number shifts with skipped lines, and whether the good rows before the error are delivered, are not established. | `LinkErrorTo` | [P] content; [U] the two open points |
+| Still not tested | A full read of a file above 5,000 rows (needs a valid key); `PrepareHeaderForMatch`; duplicate header names. | | [U] |
 
 ## 1. Decisions so far
 
@@ -51,21 +72,21 @@ Note the space before `compid4`. Trimming is a setting (default on). A record wi
 | 1 | Preview and run may use different parsers | In the first POC the hand-written header check and ETLBox's row lookup disagreed (test T047). A preview that parses differently from the run shows the user something untrue. | One parser. Preview reads through ETLBox's `CsvSource` and stops after the number of rows the user sets, default 5 (`Cancel` is in the API dump [A]); it never uses a separate hand-written reader. |
 | 2 | Sample is not the file | A few rows can hide rows with 1 or 40 components, empty cells, stray quotes. | After a test on the sample, offer **Scan whole file**: counts per row of components, empty cells, rows that fail, shown as a small distribution table. |
 | 3 | Ignored columns stored by position | If the supplier adds a column, positions shift and the wrong columns are ignored. | Store by header name. Mode: *Ignore these* or *Keep only these*. A policy for new unknown columns: ignore (default) or stop the run. Without a header row, columns are named `Col1`, `Col2`, and the dialog says so. |
-| 4 | File details are missing | Header row yes/no, encoding, quote character, BOM, blank lines. | Settings with defaults. Only the delimiter is proven [P]; `Encoding` and `PrepareHeaderForMatch` are in the API dump [A] but untested [U], so test each before exposing it. |
+| 4 | File details are missing | Header row yes/no, encoding, quote character, BOM, blank lines. | Settings with defaults. Delimiter, encoding, quote character and no-header names are proven (section 0) [P]. `PrepareHeaderForMatch` is in the API dump [A] and untested [U]. BOM and blank lines were covered by the first POC tests T028 and T042 [P]. |
 | 5 | Serialize then deserialize adds a hop | It costs disk and a second read, and loses nothing only because all values are text. | Keep it, as you asked, but call the node **JSON checkpoint**: it has a path, shows file size and row count, and is marked *stale* when anything upstream changes. It can sit after CsvFile (raw rows) or after ParseValue (transformed rows, in the shape the user configures). |
 | 6 | Parse logic as a single cell setting | Real cells have empty items, trailing `\|`, duplicates, different counts. | Explicit policies (section 5): trim, drop empty items, repeated names, more components than slots. Each has a default and a visible counter in the test result. |
-| 7 | No "what happened to my row" view | A row that fails is invisible in a long output. | Test result and run summary list rejected rows with the reason, the record number and the file line where the record starts (they differ when a quoted cell contains a line break). Clicking a result row highlights its source cell. |
+| 7 | No "what happened to my row" view | A row that fails is invisible in a long output. | Test result and run summary list rejected rows with the reason and the record number (counted by us, section 0). Clicking a result row highlights its source cell. |
 | 8 | Test and Execute not separated | Test must never write to a database or call a REST service. | **Test** = sample only, never writes to external destinations, shows the result in a dialog. **Execute** = whole file, writes. Execute asks for confirmation when the destination overwrites. |
 | 9 | Destinations only named | "Configurable" needs a defined shape. | Destination adapters (section 6) with schema-driven settings, each with *Test destination*. The first hop builds only the .NET object destination; the others follow through the same mechanism. |
 | 10 | No schema step before the destination | Names and types of output columns are decided somewhere. | An **Output schema** table in the ParseValue dialog: column name, type (text default), nullable. The .NET object (and later Excel and database columns) come from it. |
-| 11 | Run behaviour | Progress, cancel, errors, summary. | `ExecuteAsync` with a `CancellationToken` [A]; progress via `OnProgress`/`ProgressCount` [A, untested]. A summary dialog at the end. |
+| 11 | Run behaviour | Progress, cancel, errors, summary. | `ExecuteAsync` with a `CancellationToken` and `Cancel()` both work and end with `OperationCanceledException`; progress via `OnProgress` is per row, so throttle the UI (section 0) [P]. A summary dialog at the end. |
 | 12 | Project persistence | Users lose work without Save/Open. | Save and open the graph as a versioned JSON project file. Secrets are never written to it. |
 | 13 | Undo and redo | Expected in any visual tool. | Required for node moves, connections and settings changes. |
 | 14 | "Seamless" is not testable | Needs concrete rules. | Section 7: states, enabled/disabled rules, keyboard, empty and error messages. |
 | 15 | Generate DLL must keep working | The first POC's DLL generator embeds five engine files; new nodes need new files in it. | A rule in section 8: every new engine file is added to the generator's embedded list, and the DLL parity test runs again. |
 | 16 | Free-edition limit | 5,000 rows read per connector without a licence [P]. | The trial licence expired on 2026-11-01 [P]; a new key is needed for C10 and for the large-file probes. Everything else in the test data is under 5,000 rows. Show the licence state in the status bar so a failed large run is not a mystery. |
 | 17 | The mapping treated as a rule | Instruments differ, and a fixed stride breaks on the next file. | Slots with explicit columns. Auto-fill is only a helper. |
-| 18 | Files with or without headers, possibly with lines before the data | The technician must be able to load first and decide afterwards. | Load preview as soon as a readable file is chosen, with guessed settings. Separator, header, lines to skip and encoding are controls in the dialog and reload the preview live. Skipping lines in ETLBox is [U]. |
+| 18 | Files with or without headers, possibly with lines before the data | The technician must be able to load first and decide afterwards. | Load preview as soon as a readable file is chosen, with guessed settings. Separator, header, lines to skip and encoding are controls in the dialog and reload the preview live. Skipping lines works through `ShouldSkipRecord` (section 0) [P]. |
 | 19 | JSON shape | The transformed JSON must persist the way the user configured it. | Flat or nested shape, property names from the Output schema (section 4). |
 
 ---
@@ -104,11 +125,11 @@ CsvFile  ->  JsonCheckpoint  ->  ParseValue  ->  Destination
 | File path | none | Relative paths are resolved against the project file's folder. |
 | Separator | `,` | Presets plus custom. `\t` typed as text means tab [P]. |
 | Header row | yes | Without it, columns are `Col1`, `Col2`, … |
-| Encoding | UTF-8 | [U] test with a Windows-1252 file (T030 in the first POC). |
-| Quote character | `"` | [U] |
+| Encoding | UTF-8 | `CsvSource.Encoding`; Windows-1252 proven (section 0) [P]. |
+| Quote character | `"` | `Configuration.Quote`; a single quote proven (section 0) [P]. |
 | New-column policy | ignore | When a column appears that was not in the saved selection. |
 | Preview rows | 5 | Number box, 1 to 1,000. |
-| Skip lines before header | 0 | [U] Some files have lines before the header. |
+| Skip lines before header | 0 | Some files have lines before the header. Implemented with `ShouldSkipRecord` (section 0) [P]. A quote character inside the skipped lines is untested [U]. |
 
 ### JsonCheckpoint
 
@@ -158,6 +179,29 @@ Rules the parser must follow, each with a test:
 - A missing sub-part (a component without the level-3 delimiter) gives an empty value, not a reject.
 - An empty cell is rejected with the reason "empty value".
 - The parser is a plain function with no WPF or ETLBox types, so it is tested in isolation.
+
+### 5a. Rules settled while building the engine (Task B, 2026-11-03)
+
+The engine (`Engine/Parsing/`) passes every manifest row C01 to C14 except C10 (skipped: it needs a valid ETLBox licence and a full-file reader). C15 and C16 are JSON tests for a later stage. Tags: **[M]** derived from the expected files, **[C]** chosen by the engine author because no expected file covers it, **[U]** chosen and not yet confirmed by the user.
+
+| Rule | Source |
+|---|---|
+| Reasons: `no key delimiter`, `empty key`, `empty value` | section 5 [M] |
+| `component count N exceeds M column groups` (M is the number of slots) | `C03_rejects.csv` [M] |
+| The same text plus ` (paired what fits)` when flagged | `C03b_flagged.csv` [M] |
+| `duplicate component ids` as the flag text | `C04b_flagged.csv` [M] |
+| `duplicate component ids` also as the reject text when the duplicate policy is Reject | [C] no expected file |
+| `no components` for a cell with a key and nothing after it (`S1:`) | [C] [U] |
+| Order of checks: empty cell, no key delimiter, empty key, no components, excess, duplicates | [C] no test record fails two checks |
+| Duplicates are checked on the component name (left of the Each delimiter), after pair-what-fits | [C], C04b agrees |
+| A record flagged for excess and for duplicates gives two flagged lines and counts once in the flagged total | [C] [U] |
+| The name of the column that receives a level-3 (Each) sub-part is part of the level setting (C09 uses `revision`) | [M] |
+| With more than one Each level, each splits what the previous one left | [C] [U], only one level is tested |
+| `auto(r01..r18;3)` means the names r01 to r18, not a range of file positions (C08b has `zz_new` between r09 and r10) | [M] |
+| Slot column values are copied as they are; trim applies to the key, the components and the sub-parts | [M] |
+| A slot, source or carry column that is not in the file stops the run with a message that says what to edit | [C] |
+| Record numbers are counted by the caller (1-based, header and skipped lines not counted, a two-line record counts once) | section 0 [P] |
+| **Wide output shape: not built.** `OutputShape.Wide` exists and throws `NotSupportedException`. Proposal when it is needed: one row per input record; carried columns, `sample_id`, then for each slot k the columns `component_k` and the slot's value columns suffixed `_k`. The column set follows the slots, so it is fixed at design time and fits a generated .NET class. Columns named after component ids are not proposed because they depend on the data. | [U] decision pending |
 
 ---
 
@@ -254,7 +298,7 @@ Built and delivered as `composite/` (made-up data; copy to `SampleData/TestData/
 | C03b | same file | Excess policy pair-what-fits | 4 / 17 / 0 / 1 |
 | C04 | `c04_bad_cells.csv` | No key delimiter, empty value, empty key; repeated names allowed | 5 / 12 / 3 / 0 |
 | C04b | same file | Duplicate policy flag | 5 / 12 / 3 / 1 |
-| C05 | `c05_quoting.csv` | Quoted commas; a record spanning two lines; the reject of record 4 is on file line 6 | 4 / 18 / 1 / 0 |
+| C05 | `c05_quoting.csv` | Quoted commas; a record spanning two lines; record 4 is rejected | 4 / 18 / 1 / 0 |
 | C06 | `c06_semicolon.csv` | Separator `;`, decimal commas | 3 / 18 / 0 / 0 |
 | C07 | `c07_no_header.csv` | No header: `Col1`…, source `Col4`, values `Col5..Col22` | 3 / 18 / 0 / 0 |
 | C07b | same file | Carry columns by generated names | 3 / 18 / 0 / 0 |
@@ -265,7 +309,7 @@ Built and delivered as `composite/` (made-up data; copy to `SampleData/TestData/
 | C11 | `c01_basic.csv` | Carry `id,batch,name` | 4 / 24 / 0 / 0 |
 | C11b | same file | Default carry: every column that is not a value column or the source cell | 4 / 24 / 0 / 0 |
 | C12 | `c12_irregular_slots.csv` | Slots of 2, 4, 1, 3, 3 and 4 columns, one skipping columns, 1 to 6 components per record | 6 / 21 / 0 / 0 |
-| C14 | `c14_preamble.csv` | Three lines before the header skipped [U] | 4 / 24 / 0 / 0 |
+| C14 | `c14_preamble.csv` | Three lines before the header skipped (`ShouldSkipRecord`, section 0) [P] | 4 / 24 / 0 / 0 |
 | C15 | `c01_basic.csv` | Transformed JSON, flat, carrying `id,name` | 4 / 24 / 0 / 0 |
 | C16 | same file | Transformed JSON, nested | 4 / 24 / 0 / 0 |
 
@@ -299,6 +343,26 @@ Done means: the test run reports no unexplained difference from `expected_result
 5. Wireframes for each dialog (section 7 has the first one) as images or text in `docs/`.
 6. One stage per prompt, each with its done criteria and a "do not touch" list, as in the first POC.
 7. A review loop: you paste Copilot's diff and test output back, and the result is checked against the evidence before the next stage.
+
+## 12. Noted requirement (not scheduled): mixed instrument files, text part plus CSV part
+
+Noted 2026-11-02. Not part of Stages 2 to 7 until the user says so.
+
+**What the user described.** Instrument export files (titration software is the example) are not plain CSV. A file can start with free text, for example a header block of about 20 lines with method name, date, instrument and sample details, and the CSV table starts after that (for instance after line 20). The ETL needs a first node that reads the whole file and lets the user mark which part is which. The text part goes to one output and the CSV part goes to a CSV file reader node as its input. The two parts then travel down their own paths.
+
+**What this means for the design (questions, not decisions).**
+
+| Topic | Question | Note |
+|---|---|---|
+| Marking the parts | How does the user mark them: by line range, by a start marker text, or by clicking in a preview of the raw text? | The click-in-preview way matches the Data Studio idea. A marker (a line that starts with a given text) survives files whose header length changes. A fixed line number does not. |
+| Several tables | Can one file hold more than one table or more than one text block? | Unknown until we see a real file. |
+| Text output | What does the text part become: key/value pairs (`Method: ...`), a single text, or lines? | A key/value result could be carried onto every row of the CSV part (for example the sample name). |
+| CSV reader | Does the CSV part use the existing CsvFile settings (separator, header, encoding)? | Yes, it should feed the same reader, so there is still one parser. Skip lines (`ShouldSkipRecord`, section 0) already covers a fixed-length preamble, but not a marker-based start, a text block after the table, or a table that ends before the end of the file. |
+| Reading a part of a file | Can ETLBox read from a stream or a string, or only from a file path? | [U] Not probed. If it only takes a path, the CSV part would be written to a temporary file first. This must be probed before design. |
+
+**What is not known.** I could not find a public example export file for these instruments, so nothing above is based on a real file. Tiamo is Metrohm's titration software and Mettler Toledo's is LabX; they have different export formats. The real format has to come from a real file.
+
+**What is needed to go further.** One or more real export files, with sample names or other private values replaced. With them, the first step would be a short probe (like the CSV probe) of the layout, then the questions in the table.
 
 ## Out of scope for now
 

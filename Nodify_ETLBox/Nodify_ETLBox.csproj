@@ -45,6 +45,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <InternalsVisibleTo Include="Nodify_ETLBox.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <None Update="SampleData\employee_list.csv">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>

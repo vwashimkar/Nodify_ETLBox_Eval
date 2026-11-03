@@ -1,4 +1,8 @@
+using System.IO;
 using System.Windows;
+using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Parsing;
+using EtlDesigner.UI.Mvvm;
 using EtlDesigner.UI.ViewModels;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -8,6 +12,12 @@ namespace EtlDesigner.UI.ViewModels;
 /// </summary>
 public static class NodeFactory
 {
+    private const string SuggestedFromFileNote = "Suggested from the file. Change if wrong.";
+
+    public static Func<NodeViewModel, CsvFileSettings, bool>? CsvPreviewHandler { get; set; }
+
+    /// <summary>Opens the ParseValue dialog for a node. Set by MainViewModel.</summary>
+    public static Func<NodeViewModel, bool>? ParseValueConfigureHandler { get; set; }
     /// <summary>
     /// Creates a CsvSource node.
     /// Output: "Rows" (PortKind.Rows)
@@ -59,6 +69,164 @@ public static class NodeFactory
 
         return node;
     }
+
+    /// <summary>
+    /// Creates a CsvFile node.
+    /// Output: "Rows" (PortKind.Rows)
+    /// Settings: FilePath, Separator, HasHeader, SkipLines, EncodingName, PreviewRows.
+    /// </summary>
+    public static NodeViewModel CreateCsvFile(Point location)
+    {
+        NodeViewModel? node = null;
+
+        node = new NodeViewModel(Guid.NewGuid(), "CsvFile", NodeType.CsvFile, settings =>
+        {
+            if (node is null)
+            {
+                return false;
+            }
+
+            return CsvPreviewHandler?.Invoke(node, settings) ?? false;
+        })
+        {
+            Location = location,
+            ConfigurationStatus = "Not configured"
+        };
+
+        var rowsOutput = new ConnectorViewModel("Rows", PortKind.Rows, isInput: false, node);
+        node.Outputs.Add(rowsOutput);
+
+        var filePath = new SettingViewModel("FilePath", "File path", SettingKind.FilePath, required: true);
+        var separator = new SettingViewModel("Separator", "Separator", SettingKind.ComboBox, required: true, "Comma");
+        separator.ComboBoxItems.Add("Comma");
+        separator.ComboBoxItems.Add("Semicolon");
+        separator.ComboBoxItems.Add("Tab");
+        separator.ComboBoxItems.Add("Pipe");
+
+        var hasHeader = new SettingViewModel("HasHeader", "Header row", SettingKind.CheckBox, required: false, bool.TrueString);
+        var skipLines = new SettingViewModel("SkipLines", "Skip lines", SettingKind.Number, required: true, "0");
+        var encoding = new SettingViewModel("EncodingName", "Encoding", SettingKind.ComboBox, required: true, "utf-8");
+        encoding.ComboBoxItems.Add("utf-8");
+        encoding.ComboBoxItems.Add("windows-1252");
+        encoding.ComboBoxItems.Add("utf-16");
+        var previewRows = new SettingViewModel("PreviewRows", "Preview rows", SettingKind.Number, required: true, "5");
+
+        var hasGuessedFromFirstFile = false;
+        filePath.ValueChanged += (_, _) =>
+        {
+            if (hasGuessedFromFirstFile)
+            {
+                return;
+            }
+
+            var selected = filePath.Value;
+            if (string.IsNullOrWhiteSpace(selected) || !File.Exists(selected))
+            {
+                return;
+            }
+
+            var guess = CsvDialectGuesser.Guess(selected);
+            separator.Value = guess.Separator switch
+            {
+                ";" => "Semicolon",
+                "tab" => "Tab",
+                "|" => "Pipe",
+                _ => "Comma"
+            };
+
+            hasHeader.BoolValue = guess.HasHeader;
+            separator.InfoMessage = SuggestedFromFileNote;
+            hasHeader.InfoMessage = SuggestedFromFileNote;
+            hasGuessedFromFirstFile = true;
+        };
+
+        node.Settings.Add(filePath);
+        node.Settings.Add(separator);
+        node.Settings.Add(hasHeader);
+        node.Settings.Add(skipLines);
+        node.Settings.Add(encoding);
+        node.Settings.Add(previewRows);
+
+        foreach (var setting in node.Settings)
+        {
+            setting.ValueChanged += (_, _) => node.LoadPreviewCommand.RaiseCanExecuteChanged();
+
+            // Any setting change may change the columns (header, separator, file).
+            setting.ValueChanged += (_, _) => node.KnownColumns = null;
+        }
+
+        return node;
+    }
+
+    /// <summary>
+    /// Creates a ParseValue node.
+    /// Input: "Rows" (PortKind.Rows), from a CsvFile node only.
+    /// Output: "Parsed" (PortKind.ParsedRows).
+    /// Settings: a ParseValueSettings on the node, edited in its dialog. The settings panel shows
+    /// a read-only summary.
+    /// </summary>
+    public static NodeViewModel CreateParseValue(Point location)
+    {
+        NodeViewModel? node = null;
+
+        node = new NodeViewModel(Guid.NewGuid(), "ParseValue", NodeType.ParseValue)
+        {
+            Location = location,
+            ConfigurationStatus = "Not configured",
+            ConfigureCommand = new RelayCommand(_ =>
+            {
+                if (node is not null)
+                {
+                    ParseValueConfigureHandler?.Invoke(node);
+                }
+            })
+        };
+
+        node.Inputs.Add(new ConnectorViewModel("Rows", PortKind.Rows, isInput: true, node));
+        node.Outputs.Add(new ConnectorViewModel("Parsed", PortKind.ParsedRows, isInput: false, node));
+
+        var source = new SettingViewModel("SourceColumn", "Source column", SettingKind.Summary, required: false);
+        var levels = new SettingViewModel("DelimiterLevels", "Delimiter levels", SettingKind.Summary, required: false);
+        var slots = new SettingViewModel("Slots", "Slots", SettingKind.Summary, required: false);
+        var carry = new SettingViewModel("CarryColumns", "Carry columns", SettingKind.Summary, required: false);
+        node.Settings.Add(source);
+        node.Settings.Add(levels);
+        node.Settings.Add(slots);
+        node.Settings.Add(carry);
+
+        node.ParseValueSettingsChanged += (_, _) =>
+        {
+            var settings = node.ParseValueSettings;
+            if (settings is null)
+            {
+                return;
+            }
+
+            source.Value = string.IsNullOrWhiteSpace(settings.SourceColumn) ? "(not chosen)" : settings.SourceColumn;
+            levels.Value = settings.DelimiterLevels.Count.ToString();
+            slots.Value = settings.Slots.Count.ToString();
+            carry.Value = settings.CarryColumns.AllOtherColumns ? "All other columns"
+                : settings.CarryColumns.Names.Count == 0 ? "None"
+                : string.Join(", ", settings.CarryColumns.Names);
+        };
+
+        node.ParseValueSettings = DefaultParseValueSettings();
+
+        return node;
+    }
+
+    /// <summary>
+    /// Defaults from spec section 4: two levels (":" once, "|" all), trim and drop empty on,
+    /// six empty slots, reject excess, allow duplicates, long shape. Carry is All because the spec
+    /// carries all other columns when the file has a header; the node does not know yet whether
+    /// it has one [U].
+    /// </summary>
+    public static ParseValueSettings DefaultParseValueSettings() => new()
+    {
+        SourceColumn = string.Empty,
+        Slots = Enumerable.Range(1, 6).Select(i => new Slot($"S{i}", Array.Empty<string>())).ToList(),
+        CarryColumns = CarryColumns.All
+    };
 
     /// <summary>
     /// Creates a ToJson node.

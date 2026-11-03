@@ -1,0 +1,66 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <Color x:Key="surface">#FFFDFEFF</Color>
+    <Color x:Key="surface-alt">#FFF3F6FB</Color>
+    <Color x:Key="border">#FFC7D1E0</Color>
+    <Color x:Key="text">#FF111111</Color>
+    <Color x:Key="text-muted">#FF445063</Color>
+    <Color x:Key="accent">#FF1E88E5</Color>
+    <Color x:Key="accent-soft">#FFDCEBFA</Color>
+    <Color x:Key="success">#FF2E7D32</Color>
+    <Color x:Key="warning">#FFB26A00</Color>
+    <Color x:Key="error">#FFB3261E</Color>
+    <Color x:Key="canvas">#FFE9EEFE</Color>
+
+    <SolidColorBrush x:Key="surface-brush" Color="{DynamicResource surface}" />
+    <SolidColorBrush x:Key="surface-alt-brush" Color="{DynamicResource surface-alt}" />
+    <SolidColorBrush x:Key="border-brush" Color="{DynamicResource border}" />
+    <SolidColorBrush x:Key="text-brush" Color="{DynamicResource text}" />
+    <SolidColorBrush x:Key="text-muted-brush" Color="{DynamicResource text-muted}" />
+    <SolidColorBrush x:Key="accent-brush" Color="{DynamicResource accent}" />
+    <SolidColorBrush x:Key="accent-soft-brush" Color="{DynamicResource accent-soft}" />
+    <SolidColorBrush x:Key="success-brush" Color="{DynamicResource success}" />
+    <SolidColorBrush x:Key="warning-brush" Color="{DynamicResource warning}" />
+    <SolidColorBrush x:Key="error-brush" Color="{DynamicResource error}" />
+    <SolidColorBrush x:Key="canvas-brush" Color="{DynamicResource canvas}" />
+
+    <!-- Node card. Header and body text pairs are at least 4.5:1 contrast. -->
+    <SolidColorBrush x:Key="NodeHeaderBackground" Color="#FF1A5FA8" />
+    <SolidColorBrush x:Key="NodeHeaderForeground" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="NodeBodyBackground" Color="#FFFDFEFF" />
+    <SolidColorBrush x:Key="NodeBodyForeground" Color="#FF111111" />
+
+    <!-- Node footer by run state; footer text uses text-brush and text-muted-brush. -->
+    <SolidColorBrush x:Key="NodeStateIdleBackground" Color="#FFE4E8EF" />
+    <SolidColorBrush x:Key="NodeStateRunningBackground" Color="#FFD6E8FA" />
+    <SolidColorBrush x:Key="NodeStateSucceededBackground" Color="#FFD5EED6" />
+    <SolidColorBrush x:Key="NodeStateFailedBackground" Color="#FFF8D7D5" />
+    <SolidColorBrush x:Key="NodeStateNotRunBackground" Color="#FFF7F0CC" />
+
+    <!-- Dims a dialog while a long task runs. -->
+    <SolidColorBrush x:Key="overlay-brush" Color="#66000000" />
+
+    <sys:Double x:Key="spacing-4">4</sys:Double>
+    <sys:Double x:Key="spacing-8">8</sys:Double>
+    <sys:Double x:Key="spacing-12">12</sys:Double>
+    <sys:Double x:Key="spacing-16">16</sys:Double>
+    <sys:Double x:Key="spacing-24">24</sys:Double>
+
+    <Thickness x:Key="Thickness4">4</Thickness>
+    <Thickness x:Key="Thickness8">8</Thickness>
+    <Thickness x:Key="Thickness12">12</Thickness>
+    <Thickness x:Key="Thickness16">16</Thickness>
+    <Thickness x:Key="Thickness24">24</Thickness>
+
+    <CornerRadius x:Key="corner-radius">4</CornerRadius>
+
+    <sys:Double x:Key="font-caption">11</sys:Double>
+    <sys:Double x:Key="font-body">13</sys:Double>
+    <sys:Double x:Key="font-title">16</sys:Double>
+
+    <FontFamily x:Key="font-text">Segoe UI Variable Text</FontFamily>
+    <FontFamily x:Key="font-data">Cascadia Mono, Consolas</FontFamily>
+
+</ResourceDictionary>

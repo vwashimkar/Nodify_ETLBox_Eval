@@ -1,0 +1,378 @@
+<Window x:Class="Nodify_ETLBox.UI.DataStudioWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Data Studio"
+        Width="1000"
+        Height="700"
+        MinWidth="900"
+        MinHeight="620"
+        ResizeMode="CanResize"
+        Background="{DynamicResource surface-brush}"
+        Foreground="{DynamicResource text-brush}"
+        FontFamily="{DynamicResource font-text}"
+        FontSize="{DynamicResource font-body}">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- Theme-aware styles. The default Windows control styles ignore the window's
+             colours (CheckBox text, TabItem header, DataGrid, StatusBar, editable ComboBox). -->
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+        </Style>
+
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource surface-brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource border-brush}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource text-brush}" />
+        </Style>
+
+        <Style TargetType="StatusBar">
+            <Setter Property="Background" Value="{DynamicResource surface-alt-brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource border-brush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="{DynamicResource surface-brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource border-brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd"
+                                Background="{DynamicResource surface-alt-brush}"
+                                BorderBrush="{DynamicResource border-brush}"
+                                BorderThickness="1,1,1,0"
+                                Padding="{DynamicResource Thickness8}">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource accent-soft-brush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource surface-brush}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource accent-brush}" />
+                                <Setter Property="Panel.ZIndex" Value="1" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Column header with the two resize grippers DataGrid looks for by name -->
+        <Style x:Key="HeaderGripperStyle" TargetType="Thumb">
+            <Setter Property="Width" Value="{DynamicResource spacing-8}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="SizeWE" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource surface-alt-brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource border-brush}" />
+            <Setter Property="Padding" Value="{DynamicResource Thickness4}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridColumnHeader">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="0,0,1,1"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                            </Border>
+                            <Thumb x:Name="PART_LeftHeaderGripper" HorizontalAlignment="Left" Style="{StaticResource HeaderGripperStyle}" />
+                            <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right" Style="{StaticResource HeaderGripperStyle}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource accent-soft-brush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource accent-brush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="{DynamicResource surface-brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource border-brush}" />
+            <Setter Property="RowBackground" Value="{DynamicResource surface-brush}" />
+            <Setter Property="AlternatingRowBackground" Value="{DynamicResource surface-alt-brush}" />
+            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource border-brush}" />
+            <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource border-brush}" />
+        </Style>
+
+        <!-- Editable ComboBox (Separator, Encoding). The Windows template paints an editable
+             box white in every theme, so it is replaced here. -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Setter Property="Padding" Value="{DynamicResource Thickness4}" />
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource surface-brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource border-brush}" />
+            <Setter Property="Padding" Value="{DynamicResource Thickness4}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.ColumnSpan="2"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1" />
+                            <ContentPresenter x:Name="ContentSite"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                            <TextBox x:Name="PART_EditableTextBox"
+                                     Margin="{TemplateBinding Padding}"
+                                     VerticalAlignment="Center"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="{TemplateBinding Foreground}"
+                                     Visibility="Collapsed"
+                                     IsReadOnly="{Binding IsReadOnly, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <ToggleButton x:Name="DropDownToggle"
+                                          Grid.Column="1"
+                                          Width="{DynamicResource spacing-24}"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent">
+                                            <Path HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  Data="M0,0 L4,4 L8,0 Z"
+                                                  Fill="{DynamicResource text-muted-brush}" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup"
+                                   Placement="Bottom"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <Border Background="{DynamicResource surface-brush}"
+                                        BorderBrush="{DynamicResource border-brush}"
+                                        BorderThickness="1"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="ContentSite" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="{DynamicResource Thickness16}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}">
+            <WrapPanel>
+                <TextBlock Text="Separator" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <ComboBox Width="120" Margin="{DynamicResource Thickness4}" IsEditable="True" ItemsSource="{Binding SeparatorPresets}" Text="{Binding Separator, UpdateSourceTrigger=PropertyChanged}" />
+                <CheckBox Content="Header row" Margin="{DynamicResource Thickness4}" IsChecked="{Binding HasHeader, Mode=TwoWay}" VerticalAlignment="Center" />
+                <TextBlock Text="Skip lines" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding SkipLines, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Text="Encoding" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <ComboBox Width="140" Margin="{DynamicResource Thickness4}" IsEditable="True" ItemsSource="{Binding EncodingPresets}" Text="{Binding EncodingName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding PreviewRows, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Content="Reload" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding ReloadCommand}" />
+            </WrapPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="{DynamicResource Thickness8}">
+            <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+                <TabItem Header="Data">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Background="{DynamicResource surface-alt-brush}" BorderBrush="{DynamicResource error-brush}" BorderThickness="1" Padding="{DynamicResource Thickness8}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PreviewError}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PreviewError}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="{Binding PreviewError}" TextWrapping="Wrap" Foreground="{DynamicResource error-brush}" />
+                                <TextBlock Text="Check the separator, the header setting and the encoding." Margin="{DynamicResource Thickness4}" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
+
+                        <DataGrid Grid.Row="1"
+                                  Margin="{DynamicResource Thickness8}"
+                                  ItemsSource="{Binding DataRowsView}"
+                                  AutoGenerateColumns="True"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  HeadersVisibility="Column"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  FontFamily="{DynamicResource font-data}"
+                                  CurrentCell="{Binding CurrentCell, Mode=TwoWay}" />
+
+                        <StackPanel Grid.Row="2" Margin="{DynamicResource Thickness8}">
+                            <TextBlock Text="Selected cell" FontWeight="SemiBold" />
+                            <TextBox Text="{Binding SelectedCellValue, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="70" FontFamily="{DynamicResource font-data}" />
+                            <TextBlock Text="{Binding EmptyStateMessage}" Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="Columns">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <WrapPanel>
+                            <TextBlock Text="Filter" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                            <TextBox Width="240" Margin="{DynamicResource Thickness4}" Text="{Binding ColumnFilter, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Content="All" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding SelectAllColumnsCommand}" />
+                            <Button Content="None" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding SelectNoColumnsCommand}" />
+                            <Button Content="Invert" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding InvertColumnsCommand}" />
+                        </WrapPanel>
+
+                        <StackPanel Grid.Row="1" Orientation="Horizontal">
+                            <RadioButton Content="Ignore these" Margin="{DynamicResource Thickness4}" IsChecked="{Binding IsIgnoreMode, Mode=TwoWay}" />
+                            <RadioButton Content="Keep only these" Margin="{DynamicResource Thickness4}" IsChecked="{Binding IsKeepOnlyMode, Mode=TwoWay}" />
+                            <CheckBox Content="Hide ignored columns in the grid" Margin="{DynamicResource Thickness4}" IsChecked="{Binding HideIgnoredColumnsInGrid, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding FilteredColumns}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="{DynamicResource Thickness4}">
+                                            <TextBlock>
+                                                <Run Text="{Binding Name, Mode=OneWay}" />
+                                                <Run Text=": " />
+                                                <Run Text="{Binding SampleValue, Mode=OneWay}" Foreground="{DynamicResource text-muted-brush}" FontFamily="{DynamicResource font-data}" />
+                                            </TextBlock>
+                                        </CheckBox>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="Result">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                            <TextBlock Text="Rows:" Margin="{DynamicResource Thickness4}" />
+                            <TextBlock Text="{Binding LoadedRowCount}" Margin="{DynamicResource Thickness4}" />
+                        </StackPanel>
+
+                        <DataGrid Grid.Row="1"
+                                  Margin="{DynamicResource Thickness8}"
+                                  ItemsSource="{Binding ResultRowsView}"
+                                  AutoGenerateColumns="True"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  FontFamily="{DynamicResource font-data}" />
+                    </Grid>
+                </TabItem>
+            </TabControl>
+
+            <Border Background="{DynamicResource overlay-brush}" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}">
+                <Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness16}">
+                    <StackPanel>
+                        <TextBlock Text="Loading preview..." FontWeight="SemiBold" HorizontalAlignment="Center" />
+                        <ProgressBar IsIndeterminate="True" Width="220" Margin="{DynamicResource Thickness8}" />
+                        <Button Content="Cancel" Width="120" HorizontalAlignment="Center" Visibility="{Binding ShowCancelLoad, Converter={StaticResource BoolToVisibility}}" Command="{Binding CancelLoadCommand}" />
+                    </StackPanel>
+                </Border>
+            </Border>
+        </Grid>
+
+        <StatusBar Grid.Row="2" Margin="{DynamicResource Thickness8}">
+            <TextBlock Text="{Binding StatusText}" />
+        </StatusBar>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource Thickness8}">
+            <Button Content="Test dataset" Width="120" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding TestDatasetCommand}" />
+            <Button Content="Save" Width="100" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding SaveCommand}" CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+            <Button Content="Cancel" Width="100" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding CancelCommand}" CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+        </StackPanel>
+    </Grid>
+</Window>

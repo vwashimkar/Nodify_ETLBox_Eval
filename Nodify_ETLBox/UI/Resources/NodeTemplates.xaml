@@ -12,7 +12,7 @@
     <!-- Node Template for NodeViewModel using Border (WPF-only for now) -->
     <DataTemplate DataType="{x:Type vm:NodeViewModel}">
         <Border Background="{Binding State, Converter={StaticResource NodeStateToColorConverter}}"
-                BorderBrush="#333"
+                BorderBrush="{DynamicResource border-brush}"
                 BorderThickness="2"
                 CornerRadius="4"
                 Width="160"
@@ -26,8 +26,9 @@
                           FontWeight="Bold"
                           Margin="0,0,0,8"
                           TextAlignment="Center"
-                          Foreground="Black"
-                          FontSize="11" />
+                          Foreground="{DynamicResource text-brush}"
+                          FontFamily="{DynamicResource font-text}"
+                          FontSize="{DynamicResource font-caption}" />
 
                 <!-- Input connectors -->
                 <ItemsControl ItemsSource="{Binding Inputs}" Margin="0,0,0,8">
@@ -39,8 +40,9 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:ConnectorViewModel}">
                             <TextBlock Text="{Binding Name}"
-                                      FontSize="9"
-                                      Foreground="DarkGreen"
+                                      FontSize="{DynamicResource font-caption}"
+                                      Foreground="{DynamicResource success-brush}"
+                                      FontFamily="{DynamicResource font-text}"
                                       Margin="0,2,0,2"
                                       ToolTip="{Binding Kind}" />
                         </DataTemplate>
@@ -48,7 +50,7 @@
                 </ItemsControl>
 
                 <!-- Separator if both inputs and outputs exist -->
-                <Separator Margin="0,4,0,4" Background="#CCC" Height="1" />
+                <Separator Margin="0,4,0,4" Background="{DynamicResource border-brush}" Height="1" />
 
                 <!-- Output connectors -->
                 <ItemsControl ItemsSource="{Binding Outputs}" Margin="0,8,0,0">
@@ -60,8 +62,9 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:ConnectorViewModel}">
                             <TextBlock Text="{Binding Name}"
-                                      FontSize="9"
-                                      Foreground="DarkRed"
+                                      FontSize="{DynamicResource font-caption}"
+                                      Foreground="{DynamicResource error-brush}"
+                                      FontFamily="{DynamicResource font-text}"
                                       Margin="0,2,0,2"
                                       ToolTip="{Binding Kind}" />
                         </DataTemplate>
@@ -69,15 +72,17 @@
                 </ItemsControl>
 
                 <!-- Footer: State and RowCount -->
-                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Background="#E0E0E0">
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Background="{DynamicResource surface-alt-brush}">
                     <TextBlock Text="{Binding State}"
-                              FontSize="8"
+                              FontSize="{DynamicResource font-caption}"
                               Margin="2,1,2,1"
-                              Foreground="#333" />
+                              Foreground="{DynamicResource text-brush}"
+                              FontFamily="{DynamicResource font-text}" />
                     <TextBlock Text="{Binding RowCount, StringFormat='rows: {0}'}"
-                              FontSize="8"
+                              FontSize="{DynamicResource font-caption}"
                               Margin="2,1,2,1"
-                              Foreground="#333" />
+                              Foreground="{DynamicResource text-brush}"
+                              FontFamily="{DynamicResource font-text}" />
                 </StackPanel>
             </StackPanel>
         </Border>

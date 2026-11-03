@@ -9,13 +9,19 @@ public enum SettingKind
     Text,
     FilePath,
     ComboBox,
-    Fields
+    Fields,
+    CheckBox,
+    Number,
+
+    /// <summary>Read-only text shown in the settings panel (a summary of settings edited in a dialog).</summary>
+    Summary
 }
 
 public class SettingViewModel : ObservableObject
 {
     private string _value;
     private string? _warningMessage;
+    private string? _infoMessage;
 
     public SettingViewModel(string key, string label, SettingKind kind, bool required, string defaultValue = "")
     {
@@ -52,6 +58,18 @@ public class SettingViewModel : ObservableObject
     {
         get => _warningMessage;
         set => SetProperty(ref _warningMessage, value);
+    }
+
+    public string? InfoMessage
+    {
+        get => _infoMessage;
+        set => SetProperty(ref _infoMessage, value);
+    }
+
+    public bool BoolValue
+    {
+        get => string.Equals(Value, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+        set => Value = value ? bool.TrueString : bool.FalseString;
     }
 
     /// <summary>

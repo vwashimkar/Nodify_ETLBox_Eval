@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="Nodify_ETLBox.Tests/Nodify_ETLBox.Tests.csproj" />
   <Project Path="Nodify_ETLBox/Nodify_ETLBox.csproj" />
 </Solution>
