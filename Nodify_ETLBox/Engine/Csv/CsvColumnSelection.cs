@@ -1,4 +1,4 @@
-namespace EtlDesigner.UI.ViewModels;
+namespace EtlDesigner.Engine.Csv;
 
 public enum CsvColumnSelectionMode
 {

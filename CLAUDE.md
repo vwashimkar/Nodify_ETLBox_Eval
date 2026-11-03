@@ -27,7 +27,7 @@ The user is not a professional developer. Explain what you changed in plain word
 Close any running copy of the app before building. A running copy locks the DLLs.
 
 - Build: `dotnet build Nodify_ETLBox_Eval.slnx`
-- Unit tests: `dotnet test Nodify_ETLBox_Eval.slnx` (currently 50 tests, all pass; add `--blame-hang-timeout 60s` so a hang cannot freeze the run)
+- Unit tests: `dotnet test Nodify_ETLBox_Eval.slnx` (currently 108 tests: 107 pass, 1 skipped (C10, needs a licence); add `--blame-hang-timeout 60s` so a hang cannot freeze the run)
 - Legacy test run: `dotnet run --project Nodify_ETLBox/Nodify_ETLBox.csproj -- --run-tests`
   - The baseline is **43 PASS / 5 FAIL / 4 OBSERVED** while the ETLBox trial licence is expired (the five failures are T048 to T052, with the message "The registered trial key expired"). With a valid licence the baseline is 48 / 0 / 4. Any other result means you changed something legacy: stop and report.
 - CSV probe: `dotnet run --project Nodify_ETLBox/Nodify_ETLBox.csproj -- --probe-csv`
