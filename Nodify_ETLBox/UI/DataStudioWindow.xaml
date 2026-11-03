@@ -1,33 +1,180 @@
 <Window x:Class="Nodify_ETLBox.UI.DataStudioWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CSV Preview (placeholder)"
-        Width="900"
-        Height="600"
-        MinWidth="700"
-        MinHeight="450"
+        Title="Data Studio"
+        Width="1000"
+        Height="700"
+        MinWidth="900"
+        MinHeight="620"
         ResizeMode="CanResize"
         Background="{DynamicResource surface-brush}"
         Foreground="{DynamicResource text-brush}"
         FontFamily="{DynamicResource font-text}"
         FontSize="{DynamicResource font-body}">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </Window.Resources>
+
     <Grid Margin="{DynamicResource Thickness16}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="{DynamicResource font-title}" Margin="0,0,0,8" />
-
-        <Border Grid.Row="1" BorderBrush="{DynamicResource border-brush}" BorderThickness="1" CornerRadius="{DynamicResource corner-radius}" Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness12}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                <TextBlock Text="{Binding SettingsSummary}" FontFamily="{DynamicResource font-data}" TextWrapping="Wrap" />
-            </ScrollViewer>
+        <Border BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}">
+            <WrapPanel>
+                <TextBlock Text="Separator" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <ComboBox Width="120" Margin="{DynamicResource Thickness4}" IsEditable="True" ItemsSource="{Binding SeparatorPresets}" Text="{Binding Separator, UpdateSourceTrigger=PropertyChanged}" />
+                <CheckBox Content="Header row" Margin="{DynamicResource Thickness4}" IsChecked="{Binding HasHeader, Mode=TwoWay}" VerticalAlignment="Center" />
+                <TextBlock Text="Skip lines" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding SkipLines, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Text="Encoding" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <TextBox Width="140" Margin="{DynamicResource Thickness4}" Text="{Binding EncodingName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding PreviewRows, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Content="Reload" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding ReloadCommand}" />
+            </WrapPanel>
         </Border>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="Close" Width="100" Command="{Binding CloseCommand}" CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+        <Grid Grid.Row="1" Margin="{DynamicResource Thickness8}">
+            <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+                <TabItem Header="Data">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Background="{DynamicResource error-brush}" Padding="{DynamicResource Thickness8}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PreviewError}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PreviewError}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="{Binding PreviewError}" TextWrapping="Wrap" />
+                                <TextBlock Text="Check the separator, the header setting and the encoding." Margin="{DynamicResource Thickness4}" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
+
+                        <DataGrid Grid.Row="1"
+                                  Margin="{DynamicResource Thickness8}"
+                                  ItemsSource="{Binding DataRowsView}"
+                                  AutoGenerateColumns="True"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  HeadersVisibility="Column"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  FontFamily="{DynamicResource font-data}"
+                                  CurrentCell="{Binding CurrentCell, Mode=TwoWay}" />
+
+                        <StackPanel Grid.Row="2" Margin="{DynamicResource Thickness8}">
+                            <TextBlock Text="Selected cell" FontWeight="SemiBold" />
+                            <TextBox Text="{Binding SelectedCellValue}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="70" FontFamily="{DynamicResource font-data}" />
+                            <TextBlock Text="{Binding EmptyStateMessage}" Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="Columns">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <WrapPanel>
+                            <TextBlock Text="Filter" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                            <TextBox Width="240" Margin="{DynamicResource Thickness4}" Text="{Binding ColumnFilter, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Content="All" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding SelectAllColumnsCommand}" />
+                            <Button Content="None" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding SelectNoColumnsCommand}" />
+                            <Button Content="Invert" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding InvertColumnsCommand}" />
+                        </WrapPanel>
+
+                        <StackPanel Grid.Row="1" Orientation="Horizontal">
+                            <RadioButton Content="Ignore these" Margin="{DynamicResource Thickness4}" IsChecked="{Binding IsIgnoreMode, Mode=TwoWay}" />
+                            <RadioButton Content="Keep only these" Margin="{DynamicResource Thickness4}" IsChecked="{Binding IsKeepOnlyMode, Mode=TwoWay}" />
+                            <CheckBox Content="Hide ignored columns in the grid" Margin="{DynamicResource Thickness4}" IsChecked="{Binding HideIgnoredColumnsInGrid, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding FilteredColumns}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="{DynamicResource Thickness4}">
+                                            <TextBlock>
+                                                <Run Text="{Binding Name}" />
+                                                <Run Text=": " />
+                                                <Run Text="{Binding SampleValue}" Foreground="{DynamicResource text-muted-brush}" FontFamily="{DynamicResource font-data}" />
+                                            </TextBlock>
+                                        </CheckBox>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="Result">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding ResultSummary}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                            <TextBlock Text="Rows:" Margin="{DynamicResource Thickness4}" />
+                            <TextBlock Text="{Binding LoadedRowCount}" Margin="{DynamicResource Thickness4}" />
+                        </StackPanel>
+
+                        <DataGrid Grid.Row="1"
+                                  Margin="{DynamicResource Thickness8}"
+                                  ItemsSource="{Binding ResultRowsView}"
+                                  AutoGenerateColumns="True"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  FontFamily="{DynamicResource font-data}" />
+                    </Grid>
+                </TabItem>
+            </TabControl>
+
+            <Border Background="#66000000" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}">
+                <Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness16}">
+                    <StackPanel>
+                        <TextBlock Text="Loading preview..." FontWeight="SemiBold" HorizontalAlignment="Center" />
+                        <ProgressBar IsIndeterminate="True" Width="220" Margin="{DynamicResource Thickness8}" />
+                        <Button Content="Cancel" Width="120" HorizontalAlignment="Center" Visibility="{Binding ShowCancelLoad, Converter={StaticResource BoolToVisibility}}" Command="{Binding CancelLoadCommand}" />
+                    </StackPanel>
+                </Border>
+            </Border>
+        </Grid>
+
+        <StatusBar Grid.Row="2" Margin="{DynamicResource Thickness8}">
+            <TextBlock Text="{Binding StatusText}" />
+        </StatusBar>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource Thickness8}">
+            <Button Content="Test dataset" Width="120" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding TestDatasetCommand}" />
+            <Button Content="Save" Width="100" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding SaveCommand}" CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+            <Button Content="Cancel" Width="100" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding CancelCommand}" CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
         </StackPanel>
     </Grid>
 </Window>

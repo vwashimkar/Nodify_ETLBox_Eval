@@ -705,13 +705,12 @@ public class EditorViewModel : ObservableObject
         {
             var filePath = GetSettingValue(node, "FilePath");
             var separatorRaw = GetSettingValue(node, "Separator");
-            var hasHeaderRaw = GetSettingValue(node, "HasHeader");
+            var hasHeader = node.Settings.FirstOrDefault(s => s.Key == "HasHeader")?.BoolValue ?? true;
             var skipLinesRaw = GetSettingValue(node, "SkipLines");
             var encodingRaw = GetSettingValue(node, "EncodingName");
             var previewRowsRaw = GetSettingValue(node, "PreviewRows");
 
             var separator = NormalizeSeparator(separatorRaw);
-            var hasHeader = bool.TryParse(hasHeaderRaw, out var parsedHasHeader) ? parsedHasHeader : true;
             var skipLines = int.TryParse(skipLinesRaw, out var parsedSkipLines) ? parsedSkipLines : -1;
             var previewRows = int.TryParse(previewRowsRaw, out var parsedPreviewRows) ? parsedPreviewRows : 0;
 

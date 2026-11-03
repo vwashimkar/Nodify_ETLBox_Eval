@@ -12,7 +12,7 @@ public static class NodeFactory
 {
     private const string SuggestedFromFileNote = "Suggested from the file. Change if wrong.";
 
-    public static Func<CsvFileSettings, bool>? CsvPreviewHandler { get; set; }
+    public static Func<NodeViewModel, CsvFileSettings, bool>? CsvPreviewHandler { get; set; }
     /// <summary>
     /// Creates a CsvSource node.
     /// Output: "Rows" (PortKind.Rows)
@@ -72,10 +72,16 @@ public static class NodeFactory
     /// </summary>
     public static NodeViewModel CreateCsvFile(Point location)
     {
-        var node = new NodeViewModel(Guid.NewGuid(), "CsvFile", NodeType.CsvFile, settings =>
+        NodeViewModel? node = null;
+
+        node = new NodeViewModel(Guid.NewGuid(), "CsvFile", NodeType.CsvFile, settings =>
         {
-            CsvPreviewHandler?.Invoke(settings);
-            return true;
+            if (node is null)
+            {
+                return false;
+            }
+
+            return CsvPreviewHandler?.Invoke(node, settings) ?? false;
         })
         {
             Location = location,

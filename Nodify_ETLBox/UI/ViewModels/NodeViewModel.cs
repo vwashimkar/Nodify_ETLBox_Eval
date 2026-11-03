@@ -135,6 +135,8 @@ public class NodeViewModel : ObservableObject
 
     public ObservableCollection<SettingViewModel> Settings { get; }
 
+    public CsvColumnSelection ColumnSelection { get; } = new();
+
     private bool CanLoadPreview()
     {
         if (NodeType != NodeType.CsvFile)
@@ -155,10 +157,9 @@ public class NodeViewModel : ObservableObject
 
         var filePath = Settings.FirstOrDefault(s => s.Key == "FilePath")?.Value ?? string.Empty;
         var separator = NormalizeSeparator(Settings.FirstOrDefault(s => s.Key == "Separator")?.Value ?? ",");
-        var hasHeaderRaw = Settings.FirstOrDefault(s => s.Key == "HasHeader")?.Value ?? bool.TrueString;
+        var hasHeader = Settings.FirstOrDefault(s => s.Key == "HasHeader")?.BoolValue ?? true;
         var encodingName = Settings.FirstOrDefault(s => s.Key == "EncodingName")?.Value ?? "utf-8";
 
-        var hasHeader = bool.TryParse(hasHeaderRaw, out var parsedHasHeader) ? parsedHasHeader : true;
         var skipLines = int.TryParse(Settings.FirstOrDefault(s => s.Key == "SkipLines")?.Value, out var parsedSkipLines) ? parsedSkipLines : 0;
         var previewRows = int.TryParse(Settings.FirstOrDefault(s => s.Key == "PreviewRows")?.Value, out var parsedPreviewRows) ? parsedPreviewRows : 5;
 

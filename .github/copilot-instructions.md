@@ -66,3 +66,9 @@ Process
 - Read-only investigation first when a prompt says so, and report before editing.
 - Never edit EVALUATION.md, README.md, anything in docs/, etlbox.lic, or Engine/Generation/ unless the prompt names the file.
 - Facts about ETLBox that are not proven in this repo are marked unverified in code comments and tests until a probe confirms them.
+
+
+Reports
+- Write your report to reports/<short-name>-report.md using a file tool. This is the only place you may write reports, even though docs/ is off limits.
+- Append to the file after each numbered step (what you did, the build result, the test result), so a hang loses nothing.
+- Your last chat message is at most 5 lines: the file path, the build result, the dotnet test summary line, and the --run-tests totals. Do not paste the report into the chat.

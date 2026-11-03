@@ -198,11 +198,11 @@ public class MainViewModel : ObservableObject
         Editor.Validate();
     }
 
-    private bool ShowCsvPreview(CsvFileSettings settings)
+    private bool ShowCsvPreview(NodeViewModel node, CsvFileSettings settings)
     {
         try
         {
-            _dialogService.ShowCsvPreview(settings);
+            _dialogService.ShowCsvPreview(node, settings);
             return true;
         }
         catch (Exception ex)
@@ -212,7 +212,6 @@ public class MainViewModel : ObservableObject
             return false;
         }
     }
-
     private void HookCountryRefreshListenersForCurrentNodes()
     {
         foreach (var node in Editor.Nodes)

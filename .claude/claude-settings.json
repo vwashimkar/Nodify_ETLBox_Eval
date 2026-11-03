@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/etlbox.lic)",
+      "Read(./etlbox.lic)",
+      "Read(**/*.lic)"
+    ]
+  }
+}
