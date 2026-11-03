@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows;
 using EtlDesigner.Engine;
 using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Parsing;
+using EtlDesigner.UI.Services;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -355,6 +357,7 @@ public class EditorViewModel : ObservableObject
         }
 
         ValidateCsvFileNodes();
+        ValidateParseValueNodes();
 
         if (Issues.Count == 0)
         {
@@ -766,6 +769,35 @@ public class EditorViewModel : ObservableObject
             node.ConfigurationStatus = messages.Count == 0 && !string.IsNullOrWhiteSpace(filePath)
                 ? "Configured"
                 : "Not configured";
+        }
+    }
+
+    /// <summary>
+    /// Runs after ValidateCsvFileNodes, because a ParseValue node needs a configured CsvFile node.
+    /// Each problem is listed once, with the node title in front.
+    /// </summary>
+    private void ValidateParseValueNodes()
+    {
+        foreach (var node in Nodes.Where(n => n.NodeType == NodeType.ParseValue))
+        {
+            var messages = new List<string>();
+            var upstream = ParseValueUpstreamResolver.Resolve(node, Connections);
+            if (upstream.Message is not null)
+            {
+                messages.Add(upstream.Message);
+            }
+
+            if (node.ParseValueSettings is not null)
+            {
+                messages.AddRange(ParseValueValidator.Validate(node.ParseValueSettings, upstream.KeptColumns));
+            }
+
+            foreach (var message in messages.Distinct())
+            {
+                Issues.Add($"{node.Title}: {message}");
+            }
+
+            node.ConfigurationStatus = messages.Count == 0 ? "Configured" : "Not configured";
         }
     }
 
