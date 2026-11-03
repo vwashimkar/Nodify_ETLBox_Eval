@@ -178,6 +178,11 @@ public class EditorViewModel : ObservableObject
             Nodes.Remove(node);
             _selectedNodes.Remove(node);
         }
+
+        if (connectionsToRemove.Any(InvolvesParseValue))
+        {
+            Validate();
+        }
     }
 
     /// <summary>
@@ -222,6 +227,12 @@ public class EditorViewModel : ObservableObject
             sourceConnector.IsConnected = true;
             targetConnector.IsConnected = true;
             Issues.Clear();
+
+            // A ParseValue node's state depends on its upstream CsvFile node.
+            if (InvolvesParseValue(connection))
+            {
+                Validate();
+            }
         }
         else
         {
@@ -241,6 +252,11 @@ public class EditorViewModel : ObservableObject
         Connections.Remove(connection);
         connection.Source.IsConnected = Connections.Any(c => c.Source == connection.Source);
         connection.Target.IsConnected = Connections.Any(c => c.Target == connection.Target);
+
+        if (InvolvesParseValue(connection))
+        {
+            Validate();
+        }
     }
 
     /// <summary>
@@ -505,6 +521,16 @@ public class EditorViewModel : ObservableObject
         if (!target.IsInput)
             return new ConnectionValidationResult { IsValid = false, ErrorMessage = "Target must be an input." };
 
+        // ParseValue takes its rows from one CsvFile node only (for now).
+        if (target.ParentNode.NodeType == NodeType.ParseValue)
+        {
+            if (source.ParentNode.NodeType != NodeType.CsvFile)
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input accepts only a CsvFile node for now. Connect the output of a CsvFile node." };
+
+            if (target.IsConnected || Connections.Any(c => c.Target == target))
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input already has a connection. Remove it before connecting another node." };
+        }
+
         if (source.Kind != target.Kind)
             return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"Port kind mismatch: {source.Kind} → {target.Kind}." };
 
@@ -526,6 +552,10 @@ public class EditorViewModel : ObservableObject
 
         return new ConnectionValidationResult { IsValid = true };
     }
+
+    private static bool InvolvesParseValue(ConnectionViewModel connection)
+        => connection.Source.ParentNode.NodeType == NodeType.ParseValue
+           || connection.Target.ParentNode.NodeType == NodeType.ParseValue;
 
     /// <summary>
     /// Checks if nodeA is downstream of nodeB (i.e., nodeB → ... → nodeA).
