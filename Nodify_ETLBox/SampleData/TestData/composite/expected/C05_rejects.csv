@@ -1,2 +1,2 @@
-record_number,start_line,reason
-4,6,no key delimiter
+record_number,reason
+4,no key delimiter

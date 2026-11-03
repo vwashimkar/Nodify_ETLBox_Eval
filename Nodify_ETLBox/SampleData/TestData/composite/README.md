@@ -3,7 +3,7 @@
 Made-up data for the CSV workflow spec. Nothing here comes from a real file.
 
 - `expected_results.csv` lists every test, the settings to use, and the expected counts.
-- `expected/Cxx_output.csv` is the expected long-form output. `_rejects.csv` and `_flagged.csv` list rejected and flagged records by record number. Rejects also give the file line where the record starts (it differs from the record number when a quoted cell contains a line break, and it counts skipped lines).
+- `expected/Cxx_output.csv` is the expected long-form output. `_rejects.csv` and `_flagged.csv` list rejected and flagged records by record number. The record number is counted from the first data record (header and skipped lines are not counted), and a record that spans two lines counts once. ETLBox does not give line numbers, so none are listed.
 - **slots**: the mapping from component position to value columns, stored by column name. `auto(r01..r18;3)` means the named columns in order, cut into groups of 3. `S1=m01,m02;S2=m03,...` is an explicit mapping; slots may differ in size and may skip columns. A record may have fewer components than slots; only the slots it needs are used.
 - **excess_policy**: what to do when a record has more components than slots: `reject`, or `pair what fits` (flagged).
 - **duplicate_policy**: `allow` (default) or `flag`.
