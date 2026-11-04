@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Data;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Parsing;
@@ -146,7 +147,7 @@ public sealed record HighlightSegment(string Text, SegmentKind Kind);
 /// them back, Cancel leaves the node unchanged. Preview rows come from the upstream CsvFile node
 /// through CsvPreviewReader, with only the kept columns.
 /// </summary>
-public class ParseStudioViewModel : ObservableObject
+public partial class ParseStudioViewModel : ObservableObject
 {
     private readonly NodeViewModel _node;
     private readonly ParseValueUpstream _upstream;
@@ -726,6 +727,18 @@ public class ParseStudioViewModel : ObservableObject
         ShowCancelLoad = false;
     }
 
+    // ----- Messages -----
+
+    /// <summary>
+    /// Removes the " (Parameter 'levels')" that .NET adds to an ArgumentException message, so the
+    /// dialog shows only the sentence meant for the user. Other text is left as it is.
+    /// </summary>
+    public static string WithoutParameterName(string message)
+        => ParameterSuffix().Replace(message ?? string.Empty, string.Empty);
+
+    [GeneratedRegex(@"\s*\(Parameter '[^']*'\)\s*$")]
+    private static partial Regex ParameterSuffix();
+
     // ----- Highlighting -----
 
     /// <summary>Splits <paramref name="cellText"/> with the delimiter levels as currently edited.</summary>
@@ -1008,11 +1021,11 @@ public class ParseStudioViewModel : ObservableObject
             }
             catch (ArgumentException ex)
             {
-                TestError = ex.Message;
+                TestError = WithoutParameterName(ex.Message);
             }
             catch (NotSupportedException ex)
             {
-                TestError = ex.Message;
+                TestError = WithoutParameterName(ex.Message);
             }
         }
 
@@ -1249,7 +1262,7 @@ public class ParseStudioViewModel : ObservableObject
         }
         catch (ArgumentException ex)
         {
-            ComponentsError = ex.Message;
+            ComponentsError = WithoutParameterName(ex.Message);
         }
     }
 

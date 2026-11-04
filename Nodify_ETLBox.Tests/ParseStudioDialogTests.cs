@@ -191,3 +191,8 @@ public partial class ParseStudioViewModelTests
         => Assert.Equal("Wide output comes later",
             Studio("c01_basic.csv").Vm.OutputShapes.Single(o => o.Shape == OutputShape.Wide).Label);
 }
+
+public partial class ParseStudioViewModelTests
+{
+    internal static async Task<ParseStudioViewModel> LoadedC01ForOtherTests() => (await LoadedC01()).Vm;
+}
