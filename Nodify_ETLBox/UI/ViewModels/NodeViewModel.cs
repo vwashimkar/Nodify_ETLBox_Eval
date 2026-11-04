@@ -15,7 +15,8 @@ public enum NodeType
     ToJson,
     ParseJson,
     ResultJson,
-    ParseValue
+    ParseValue,
+    DotNetObject
 }
 
 public enum NodeState
@@ -169,6 +170,13 @@ public class NodeViewModel : ObservableObject
 
     /// <summary>Opens the node's dialog (ParseValue). Null for nodes without one.</summary>
     public RelayCommand? ConfigureCommand { get; init; }
+
+    /// <summary>DotNetObject only: the output settings from the "Output type" row (default when unreadable).</summary>
+    public OutputSettings GetOutputSettings()
+    {
+        var value = Settings.FirstOrDefault(s => s.Key == "OutputType")?.Value;
+        return Enum.TryParse<ObjectKind>(value, out var kind) ? new OutputSettings(kind) : OutputSettings.Default;
+    }
 
     /// <summary>CsvFile only: the reader settings from the node's setting rows.</summary>
     public CsvFileSettings GetCsvFileSettings()

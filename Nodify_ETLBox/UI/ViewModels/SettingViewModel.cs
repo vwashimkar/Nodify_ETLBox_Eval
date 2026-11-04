@@ -14,8 +14,14 @@ public enum SettingKind
     Number,
 
     /// <summary>Read-only text shown in the settings panel (a summary of settings edited in a dialog).</summary>
-    Summary
+    Summary,
+
+    /// <summary>A drop-down of <see cref="SettingViewModel.Choices"/>; Value is the chosen Choice.Value. Disabled choices show but cannot be picked.</summary>
+    Choice
 }
+
+/// <summary>One entry of a <see cref="SettingKind.Choice"/> setting.</summary>
+public sealed record SettingChoice(string Value, string Label, bool IsEnabled);
 
 public class SettingViewModel : ObservableObject
 {
@@ -81,6 +87,9 @@ public class SettingViewModel : ObservableObject
     /// For ComboBox settings only: the list of selectable items.
     /// </summary>
     public ObservableCollection<string> ComboBoxItems { get; } = new();
+
+    /// <summary>For Choice settings only: the entries, some of which may be disabled.</summary>
+    public ObservableCollection<SettingChoice> Choices { get; } = new();
 
     public RelayCommand BrowseCommand { get; }
 
