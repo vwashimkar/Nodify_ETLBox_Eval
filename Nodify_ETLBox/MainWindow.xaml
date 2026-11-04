@@ -155,7 +155,9 @@
                     ToolTip="{Binding ExecuteHint, Mode=OneWay}"
                     ToolTipService.ShowOnDisabled="True" />
             <Separator />
-            <Button Content="Generate DLL" Width="100" Command="{Binding GenerateDllCommand}" />
+            <Button Content="Generate DLL" Width="100" Command="{Binding GenerateDllCommand}"
+                    ToolTip="{Binding GenerateDllHint, Mode=OneWay}"
+                    ToolTipService.ShowOnDisabled="True" />
             <Separator />
             <Button Content="Delete" Width="60" Command="{Binding Editor.DeleteSelectedCommand}" />
             <Separator />

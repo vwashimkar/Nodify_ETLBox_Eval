@@ -85,6 +85,32 @@ public class DialogService : IDialogService
         window.ShowDialog();
     }
 
+    public void ShowGenerateDll(GenerateDllViewModel viewModel)
+    {
+        var owner = Application.Current.MainWindow;
+
+        var window = new GenerateDllWindow
+        {
+            Owner = owner,
+            DataContext = viewModel,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+
+        window.ShowDialog();
+    }
+
+    public string? PickFolder(string? currentFolder)
+    {
+        var dialog = new OpenFolderDialog { Title = "Choose the output folder for the DLL", Multiselect = false };
+        if (!string.IsNullOrWhiteSpace(currentFolder) && Directory.Exists(currentFolder))
+        {
+            dialog.InitialDirectory = currentFolder;
+        }
+
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
+
     public string? PickCsvFile(string? currentPath)
     {
         var dialog = new OpenFileDialog

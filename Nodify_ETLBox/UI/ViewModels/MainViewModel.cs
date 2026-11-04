@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
 using Microsoft.Win32;
@@ -6,6 +8,9 @@ using EtlDesigner.Engine;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Generation;
 using PipelineDefinition = EtlDesigner.Engine.Pipeline.PipelineDefinition;
+using PipelineDefinitionValidator = EtlDesigner.Engine.Pipeline.PipelineDefinitionValidator;
+using PipelineResult = EtlDesigner.Engine.Pipeline.PipelineResult;
+using SettingsJson = EtlDesigner.Engine.Pipeline.SettingsJson;
 using EtlDesigner.UI.Mvvm;
 using EtlDesigner.UI.Services;
 
@@ -26,6 +31,7 @@ public class MainViewModel : ObservableObject
     private string _parsedJsonOutput;
     private int _countryLoadVersion;
     private PipelineSettings? _lastSuccessfulRunSettings;
+    private (string Hash, IReadOnlyList<string> Columns)? _lastSuccessfulPipelineRun;
     private bool _isRunInProgress;
     private bool _isGenerating;
     private readonly IDialogService _dialogService;
@@ -43,6 +49,9 @@ public class MainViewModel : ObservableObject
         ExecuteCommand = new RelayCommand(_ => Execute(), _ => !_isRunInProgress && !_isGenerating && ExecuteBlockedReason is null);
         Editor.Nodes.CollectionChanged += (_, _) => UpdateCommandStates();
         Editor.Connections.CollectionChanged += (_, _) => UpdateCommandStates();
+        Editor.Nodes.CollectionChanged += (_, _) => { ClearSuccessfulPipelineRun(); HookPipelineChangeListeners(); };
+        Editor.Connections.CollectionChanged += (_, _) => ClearSuccessfulPipelineRun();
+        HookPipelineChangeListeners();
 
         NodeFactory.CsvPreviewHandler = ShowCsvPreview;
         NodeFactory.ParseValueConfigureHandler = ShowParseValue;
@@ -63,6 +72,55 @@ public class MainViewModel : ObservableObject
     public RelayCommand ExecuteCommand { get; }
 
     public const string ExecuteReadyHint = "Run CsvFile -> ParseValue -> DotNetObject over the whole file.";
+
+    public const string GenerateDllNotTestedHint = "Run Execute successfully first. The DLL is generated only from a pipeline that has been tested.";
+
+    public const string GenerateDllReadyHint = "Generate a DLL from the tested pipeline.";
+
+    public const string GenerateDllLegacyHint = "Run the five-node chain successfully first, or build CsvFile -> ParseValue -> DotNetObject and run Execute successfully.";
+
+    /// <summary>
+    /// Why Generate DLL is disabled, or null when it can run. With CsvFile, ParseValue or DotNetObject on the
+    /// canvas the new pipeline rules apply: the definition validates and Execute ran it without an error.
+    /// Otherwise the legacy rule applies: the five-node chain ran successfully.
+    /// </summary>
+    public string? GenerateDllBlockedReason
+    {
+        get
+        {
+            if (_isRunInProgress || _isGenerating)
+            {
+                return "Wait until the current run has finished.";
+            }
+
+            if (!IsNewPipelineGraph)
+            {
+                return _lastSuccessfulRunSettings is null ? GenerateDllLegacyHint : null;
+            }
+
+            if (!TryBuildExecuteDefinition(out var definition, out var reason) || definition is null)
+            {
+                return reason;
+            }
+
+            if (_lastSuccessfulPipelineRun is not { } run || run.Hash != PipelineHash(definition))
+            {
+                return GenerateDllNotTestedHint;
+            }
+
+            return PipelineDefinitionValidator.Validate(definition).FirstOrDefault();
+        }
+    }
+
+    /// <summary>The Generate DLL button's tooltip: the reason it is disabled, or what it does.</summary>
+    public string GenerateDllHint => GenerateDllBlockedReason ?? GenerateDllReadyHint;
+
+    private bool IsNewPipelineGraph
+        => Editor.Nodes.Any(n => n.NodeType is NodeType.CsvFile or NodeType.ParseValue or NodeType.DotNetObject);
+
+    /// <summary>The key of "last successful run": a SHA-256 of the definition JSON.</summary>
+    internal static string PipelineHash(PipelineDefinition definition)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SettingsJson.Serialize(definition))));
 
     /// <summary>Why Execute is disabled, or null when it can run.</summary>
     public string? ExecuteBlockedReason => TryBuildExecuteDefinition(out _, out var reason) ? null : reason;
@@ -128,7 +186,9 @@ public class MainViewModel : ObservableObject
 
         try
         {
-            _dialogService.ShowExecute(new ExecuteViewModel(definition, _dialogService.PickCsvFile, CopyToClipboard));
+            var tested = definition;
+            _dialogService.ShowExecute(new ExecuteViewModel(definition, _dialogService.PickCsvFile, text => CopyToClipboard(text),
+                result => OnExecuteRunFinished(tested, result)));
         }
         catch (Exception ex)
         {
@@ -137,7 +197,49 @@ public class MainViewModel : ObservableObject
         }
     }
 
-    private void CopyToClipboard(string text)
+    /// <summary>A run without an error, cancel or licence stop counts as tested for Generate DLL.</summary>
+    internal void OnExecuteRunFinished(PipelineDefinition definition, PipelineResult result)
+    {
+        if (result.Error is null && !result.Cancelled && !result.LicenceLimitReached)
+        {
+            _lastSuccessfulPipelineRun = (PipelineHash(definition), result.Columns.ToList());
+        }
+
+        UpdateCommandStates();
+    }
+
+    private void ClearSuccessfulPipelineRun()
+    {
+        _lastSuccessfulPipelineRun = null;
+        UpdateCommandStates();
+    }
+
+    /// <summary>Any change to a node setting (including the ParseValue settings) clears the last successful run.</summary>
+    private void HookPipelineChangeListeners()
+    {
+        foreach (var node in Editor.Nodes)
+        {
+            node.PropertyChanged -= OnNodePropertyChanged;
+            node.PropertyChanged += OnNodePropertyChanged;
+            foreach (var setting in node.Settings)
+            {
+                setting.ValueChanged -= OnAnySettingValueChanged;
+                setting.ValueChanged += OnAnySettingValueChanged;
+            }
+        }
+    }
+
+    private void OnAnySettingValueChanged(object? sender, EventArgs e) => ClearSuccessfulPipelineRun();
+
+    private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NodeViewModel.ParseValueSettings))
+        {
+            ClearSuccessfulPipelineRun();
+        }
+    }
+
+    private void CopyToClipboard(string text, string source = "Execute")
     {
         try
         {
@@ -145,7 +247,7 @@ public class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Editor.Issues.Add($"Execute: could not copy to the clipboard. Try again. Details: {ex.Message}");
+            Editor.Issues.Add($"{source}: could not copy to the clipboard. Try again. Details: {ex.Message}");
         }
     }
 
@@ -446,8 +548,15 @@ public class MainViewModel : ObservableObject
 
     private async Task GenerateDllAsync()
     {
+        if (IsNewPipelineGraph)
+        {
+            GenerateCsvPipelineDll();
+            return;
+        }
+
         if (_lastSuccessfulRunSettings == null)
         {
+            Editor.Issues.Add($"Generate DLL: {GenerateDllLegacyHint}");
             return;
         }
 
@@ -543,9 +652,32 @@ public class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>Opens the Generate DLL dialog for CsvFile -> ParseValue -> DotNetObject, or says in Issues why not.</summary>
+    private void GenerateCsvPipelineDll()
+    {
+        var reason = GenerateDllBlockedReason;
+        if (reason is not null || !TryBuildExecuteDefinition(out var definition, out _) || definition is null
+            || _lastSuccessfulPipelineRun is not { } run)
+        {
+            Editor.Issues.Add($"Generate DLL: {reason ?? GenerateDllNotTestedHint}");
+            return;
+        }
+
+        try
+        {
+            _dialogService.ShowGenerateDll(new GenerateDllViewModel(definition, run.Columns,
+                pickFolder: _dialogService.PickFolder, copyText: text => CopyToClipboard(text, "Generate DLL")));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to open the Generate DLL dialog.\n\n{ex}", "Generate DLL error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Editor.Issues.Add($"Generate DLL: {ex.Message}");
+        }
+    }
+
     private bool CanGenerateDll()
     {
-        return _lastSuccessfulRunSettings != null && !_isRunInProgress && !_isGenerating;
+        return GenerateDllBlockedReason is null;
     }
 
     private void ClearSuccessfulRunSnapshot()
@@ -559,9 +691,10 @@ public class MainViewModel : ObservableObject
         GenerateDllCommand.RaiseCanExecuteChanged();
         ExecuteCommand?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(ExecuteHint));
+        OnPropertyChanged(nameof(GenerateDllHint));
     }
 
-    private static bool IsInsideProjectFolder(string folderPath)
+    internal static bool IsInsideProjectFolder(string folderPath)
     {
         var current = new DirectoryInfo(folderPath);
 

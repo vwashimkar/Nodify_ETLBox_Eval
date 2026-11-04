@@ -153,6 +153,9 @@ public class ExecuteEnablingTests
         public void ShowParseValue(NodeViewModel node, ParseValueUpstream upstream) { }
         public void ShowExecute(ExecuteViewModel viewModel) => Shown = viewModel;
         public string? PickCsvFile(string? currentPath) => null;
+        public GenerateDllViewModel? ShownGenerateDll { get; private set; }
+        public void ShowGenerateDll(GenerateDllViewModel viewModel) => ShownGenerateDll = viewModel;
+        public string? PickFolder(string? currentFolder) => null;
     }
 
     private static (MainViewModel Main, NodeViewModel Csv, NodeViewModel Parse, NodeViewModel Output, NoDialogs Dialogs) BuildGraph(bool connectOutput = true)

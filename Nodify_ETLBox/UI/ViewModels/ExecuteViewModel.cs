@@ -22,6 +22,7 @@ public sealed class ExecuteViewModel : ObservableObject
     private readonly PipelineDefinition _definition;
     private readonly Func<string?, string?>? _pickFile;
     private readonly Action<string>? _copyText;
+    private readonly Action<PipelineResult>? _runFinished;
     private CancellationTokenSource? _runCts;
     private string _filePath;
     private bool _isRunning;
@@ -38,8 +39,11 @@ public sealed class ExecuteViewModel : ObservableObject
 
     /// <param name="pickFile">Shows a file dialog, starting at the given path; null when the user cancels.</param>
     /// <param name="copyText">Puts text on the clipboard.</param>
-    public ExecuteViewModel(PipelineDefinition definition, Func<string?, string?>? pickFile = null, Action<string>? copyText = null)
+    /// <param name="runFinished">Told about every finished run (Generate DLL needs a successful one).</param>
+    public ExecuteViewModel(PipelineDefinition definition, Func<string?, string?>? pickFile = null, Action<string>? copyText = null,
+        Action<PipelineResult>? runFinished = null)
     {
+        _runFinished = runFinished;
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _pickFile = pickFile;
         _copyText = copyText;
@@ -243,6 +247,7 @@ public sealed class ExecuteViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowNoRejects));
         OnPropertyChanged(nameof(ShowNoFlagged));
         CopyRejectsCommand.RaiseCanExecuteChanged();
+        _runFinished?.Invoke(result);
     }
 
     /// <summary>Tab-separated: a header line, then one line per reject.</summary>

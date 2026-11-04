@@ -18,4 +18,10 @@ public interface IDialogService
 
     /// <summary>Asks for a CSV file, starting near <paramref name="currentPath"/>. Null when the user cancels.</summary>
     string? PickCsvFile(string? currentPath);
+
+    /// <summary>Opens the Generate DLL dialog for CsvFile -> ParseValue -> DotNetObject (modal, owned by the main window).</summary>
+    void ShowGenerateDll(GenerateDllViewModel viewModel);
+
+    /// <summary>Asks for a folder, starting at <paramref name="currentFolder"/>. Null when the user cancels.</summary>
+    string? PickFolder(string? currentFolder);
 }
