@@ -149,6 +149,7 @@ public class EditorViewModel : ObservableObject
             _ => throw new ArgumentException($"Unknown node type: {nodeType}")
         };
 
+        EtlDesigner.UI.PaletteTrace.Write($"AddNode type={nodeType} at=({location.X:0},{location.Y:0}) stack={EtlDesigner.UI.PaletteTrace.Stack()}");
         Nodes.Add(node);
     }
 
