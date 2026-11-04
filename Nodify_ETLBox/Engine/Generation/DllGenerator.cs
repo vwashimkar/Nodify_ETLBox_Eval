@@ -1,6 +1,8 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using System.IO;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -52,6 +54,32 @@ public static class DllGenerator
             generatedSources.Add(("Generated.GlobalUsings.g.cs", BuildGlobalUsingsSource(globalUsingsPath)));
             generatedSources.Add(("GeneratedPipeline.cs", BuildGeneratedPipelineSource(settings)));
 
+            return Compile(generatedSources, outputFolder, assemblyName);
+        }
+        catch (Exception ex)
+        {
+            diagnostics.Add(ex.ToString());
+            return new DllGenerationResult(false, null, outputSourcePaths, diagnostics, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Writes the sources to <paramref name="outputFolder"/>, compiles them against the .NET 10 reference pack
+    /// and the non-framework dependencies, and refuses a DLL that references System.Private.*.
+    /// Shared by the legacy generator and <see cref="CsvPipelineDllGenerator"/>.
+    /// </summary>
+    internal static DllGenerationResult Compile(IReadOnlyList<(string FileName, string Content)> generatedSources, string outputFolder, string assemblyName)
+        => CompileWithDiagnostics(generatedSources, outputFolder, assemblyName).Result;
+
+    internal static (DllGenerationResult Result, IReadOnlyList<Diagnostic> Diagnostics) CompileWithDiagnostics(
+        IReadOnlyList<(string FileName, string Content)> generatedSources, string outputFolder, string assemblyName)
+    {
+        var outputSourcePaths = new List<string>();
+        var diagnostics = new List<string>();
+        var compilerDiagnostics = new List<Diagnostic>();
+
+        try
+        {
             foreach (var source in generatedSources)
             {
                 var outPath = Path.Combine(outputFolder, source.FileName);
@@ -79,6 +107,7 @@ public static class DllGenerator
             using (var fs = new FileStream(tempDllPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 var emitResult = compilation.Emit(fs);
+                compilerDiagnostics.AddRange(emitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
                 diagnostics.AddRange(emitResult.Diagnostics
                     .Where(d => d.Severity is DiagnosticSeverity.Warning or DiagnosticSeverity.Error)
                     .Select(d => d.ToString()));
@@ -89,7 +118,7 @@ public static class DllGenerator
                     fs.Close();
                     if (File.Exists(tempDllPath))
                         File.Delete(tempDllPath);
-                    return new DllGenerationResult(false, null, outputSourcePaths, diagnostics, "Compilation failed.");
+                    return (new DllGenerationResult(false, null, outputSourcePaths, diagnostics, "Compilation failed."), compilerDiagnostics);
                 }
             }
 
@@ -103,19 +132,19 @@ public static class DllGenerator
                 diagnostics.Add($"Forbidden framework implementation reference detected: {forbiddenReference}");
                 if (File.Exists(finalDllPath))
                     File.Delete(finalDllPath);
-                return new DllGenerationResult(false, null, outputSourcePaths, diagnostics, "Generated assembly has forbidden references.");
+                return (new DllGenerationResult(false, null, outputSourcePaths, diagnostics, "Generated assembly has forbidden references."), compilerDiagnostics);
             }
 
-            return new DllGenerationResult(true, finalDllPath, outputSourcePaths, diagnostics, null);
+            return (new DllGenerationResult(true, finalDllPath, outputSourcePaths, diagnostics, null), compilerDiagnostics);
         }
         catch (Exception ex)
         {
             diagnostics.Add(ex.ToString());
-            return new DllGenerationResult(false, null, outputSourcePaths, diagnostics, ex.Message);
+            return (new DllGenerationResult(false, null, outputSourcePaths, diagnostics, ex.Message), compilerDiagnostics);
         }
     }
 
-    private static string ReadSourceContent(string relativePath)
+    internal static string ReadSourceContent(string relativePath)
     {
         var logicalName = relativePath.Replace('/', '.').Replace('\\', '.');
         var embeddedName = $"EtlDesigner.{logicalName}";
@@ -358,9 +387,12 @@ public static class DllGenerator
 
     private static string? GetForbiddenReference(string assemblyPath)
     {
-        var asm = Assembly.LoadFrom(assemblyPath);
-        return asm.GetReferencedAssemblies()
-            .Select(a => a.Name)
+        // Metadata only: loading the DLL would lock the file and keep it in the app.
+        using var stream = File.OpenRead(assemblyPath);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        return metadata.AssemblyReferences
+            .Select(h => metadata.GetString(metadata.GetAssemblyReference(h).Name))
             .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name) && name.StartsWith("System.Private.", StringComparison.Ordinal));
     }
 
