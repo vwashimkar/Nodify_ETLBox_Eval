@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using EtlDesigner.Engine;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Generation;
+using PipelineDefinition = EtlDesigner.Engine.Pipeline.PipelineDefinition;
 using EtlDesigner.UI.Mvvm;
 using EtlDesigner.UI.Services;
 
@@ -39,6 +40,9 @@ public class MainViewModel : ObservableObject
 
         RunCommand = new AsyncRelayCommand(async _ => await RunAsync(), _ => !_isGenerating);
         GenerateDllCommand = new AsyncRelayCommand(async _ => await GenerateDllAsync(), _ => CanGenerateDll());
+        ExecuteCommand = new RelayCommand(_ => Execute(), _ => !_isRunInProgress && !_isGenerating && ExecuteBlockedReason is null);
+        Editor.Nodes.CollectionChanged += (_, _) => UpdateCommandStates();
+        Editor.Connections.CollectionChanged += (_, _) => UpdateCommandStates();
 
         NodeFactory.CsvPreviewHandler = ShowCsvPreview;
         NodeFactory.ParseValueConfigureHandler = ShowParseValue;
@@ -54,6 +58,96 @@ public class MainViewModel : ObservableObject
     public AsyncRelayCommand RunCommand { get; }
 
     public AsyncRelayCommand GenerateDllCommand { get; }
+
+    /// <summary>Runs CsvFile -> ParseValue -> DotNetObject over a whole file in the Execute dialog. The legacy Run is separate.</summary>
+    public RelayCommand ExecuteCommand { get; }
+
+    public const string ExecuteReadyHint = "Run CsvFile -> ParseValue -> DotNetObject over the whole file.";
+
+    /// <summary>Why Execute is disabled, or null when it can run.</summary>
+    public string? ExecuteBlockedReason => TryBuildExecuteDefinition(out _, out var reason) ? null : reason;
+
+    /// <summary>The Execute button's tooltip: the reason it is disabled, or what it does.</summary>
+    public string ExecuteHint => ExecuteBlockedReason ?? ExecuteReadyHint;
+
+    /// <summary>
+    /// The graph must be exactly CsvFile -> ParseValue -> DotNetObject (three nodes, two
+    /// connections), every node Configured, and no Issues line for those nodes.
+    /// </summary>
+    public bool TryBuildExecuteDefinition(out PipelineDefinition? definition, out string? reason)
+    {
+        definition = null;
+        var nodes = Editor.Nodes;
+        var csv = nodes.FirstOrDefault(n => n.NodeType == NodeType.CsvFile);
+        var parse = nodes.FirstOrDefault(n => n.NodeType == NodeType.ParseValue);
+        var output = nodes.FirstOrDefault(n => n.NodeType == NodeType.DotNetObject);
+
+        bool Linked(NodeViewModel? from, NodeViewModel? to)
+            => from is not null && to is not null && Editor.Connections.Any(c => c.Source.ParentNode == from && c.Target.ParentNode == to);
+
+        if (nodes.Count != 3 || csv is null || parse is null || output is null
+            || Editor.Connections.Count != 2 || !Linked(csv, parse) || !Linked(parse, output))
+        {
+            reason = "Execute needs exactly CsvFile -> ParseValue -> DotNetObject on the canvas, connected in that order.";
+            return false;
+        }
+
+        foreach (var node in new[] { csv, parse, output })
+        {
+            if (!string.Equals(node.ConfigurationStatus, "Configured", StringComparison.Ordinal))
+            {
+                reason = $"Configure every node first: {node.Title} is not configured. See the Issues tab.";
+                return false;
+            }
+
+            if (Editor.Issues.Any(i => i.StartsWith(node.Title + ":", StringComparison.Ordinal)))
+            {
+                reason = $"Fix the issues of {node.Title} in the Issues tab first.";
+                return false;
+            }
+        }
+
+        if (parse.ParseValueSettings is null)
+        {
+            reason = "Configure the ParseValue node first.";
+            return false;
+        }
+
+        definition = new PipelineDefinition(csv.GetCsvFileSettings(), csv.ColumnSelection, parse.ParseValueSettings, output.GetOutputSettings());
+        reason = null;
+        return true;
+    }
+
+    private void Execute()
+    {
+        if (!TryBuildExecuteDefinition(out var definition, out var reason) || definition is null)
+        {
+            Editor.Issues.Add($"Execute: {reason}");
+            return;
+        }
+
+        try
+        {
+            _dialogService.ShowExecute(new ExecuteViewModel(definition, _dialogService.PickCsvFile, CopyToClipboard));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to open the Execute dialog.\n\n{ex}", "Execute error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Editor.Issues.Add($"Execute: {ex.Message}");
+        }
+    }
+
+    private void CopyToClipboard(string text)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (Exception ex)
+        {
+            Editor.Issues.Add($"Execute: could not copy to the clipboard. Try again. Details: {ex.Message}");
+        }
+    }
 
     public string FilteredJsonOutput
     {
@@ -463,6 +557,8 @@ public class MainViewModel : ObservableObject
     {
         RunCommand.RaiseCanExecuteChanged();
         GenerateDllCommand.RaiseCanExecuteChanged();
+        ExecuteCommand?.RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(ExecuteHint));
     }
 
     private static bool IsInsideProjectFolder(string folderPath)

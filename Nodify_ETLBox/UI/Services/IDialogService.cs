@@ -12,4 +12,10 @@ public interface IDialogService
     /// writes the settings back to the node on Save.
     /// </summary>
     void ShowParseValue(NodeViewModel node, ParseValueUpstream upstream);
+
+    /// <summary>Opens the Execute dialog (modal, owned by the main window). Closing it cancels a running run.</summary>
+    void ShowExecute(ExecuteViewModel viewModel);
+
+    /// <summary>Asks for a CSV file, starting near <paramref name="currentPath"/>. Null when the user cancels.</summary>
+    string? PickCsvFile(string? currentPath);
 }
