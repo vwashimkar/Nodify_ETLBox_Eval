@@ -253,7 +253,7 @@ public class MainViewModel : ObservableObject
     {
         try
         {
-            _dialogService.ShowParseValue(node);
+            _dialogService.ShowParseValue(node, ParseValueUpstreamResolver.Resolve(node, Editor.Connections));
             Editor.Validate();
             return true;
         }

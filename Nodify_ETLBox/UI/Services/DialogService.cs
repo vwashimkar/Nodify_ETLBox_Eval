@@ -22,18 +22,38 @@ public class DialogService : IDialogService
         window.ShowDialog();
     }
 
-    public void ShowParseValue(NodeViewModel node)
+    public void ShowParseValue(NodeViewModel node, ParseValueUpstream upstream)
     {
         var owner = Application.Current.MainWindow;
+        var viewModel = new ParseStudioViewModel(node, upstream);
 
-        // Placeholder: the window shows the node's settings as read-only text. The real dialog
-        // will bind to ParseStudioViewModel.
         var window = new ParseValueWindow
         {
             Owner = owner,
-            DataContext = node,
+            DataContext = viewModel,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false
+        };
+
+        // Save writes the settings to the node inside the view model; the window only closes here.
+        viewModel.CloseRequested += (_, saved) =>
+        {
+            if (saved)
+            {
+                window.DialogResult = true;
+            }
+            else
+            {
+                window.Close();
+            }
+        };
+
+        window.Loaded += (_, _) =>
+        {
+            if (viewModel.LoadCommand.CanExecute(null))
+            {
+                viewModel.LoadCommand.Execute(null);
+            }
         };
 
         window.ShowDialog();

@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Data;
+using System.IO;
 using System.Windows;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Parsing;
+using EtlDesigner.Engine.Pipeline;
 using EtlDesigner.UI.Mvvm;
 using EtlDesigner.UI.Services;
 
@@ -70,7 +73,57 @@ public sealed class SlotItem : ObservableObject
     }
 
     public ObservableCollection<string> Columns { get; }
+
+    /// <summary>The kept columns as a drop-down check list; ticking one edits <see cref="Columns"/>.</summary>
+    public ObservableCollection<ColumnChoice> Choices { get; } = new();
 }
+
+/// <summary>One entry of a check list of the kept columns.</summary>
+public sealed class ColumnChoice : ObservableObject
+{
+    private readonly Action _changed;
+    private bool _isChecked;
+
+    public ColumnChoice(string name, bool isChecked, Action changed)
+    {
+        Name = name;
+        _isChecked = isChecked;
+        _changed = changed;
+    }
+
+    public string Name { get; }
+
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set
+        {
+            if (SetProperty(ref _isChecked, value))
+            {
+                _changed();
+            }
+        }
+    }
+
+    /// <summary>Follows the list it belongs to, without calling back.</summary>
+    internal void SetQuietly(bool value)
+    {
+        if (_isChecked != value)
+        {
+            _isChecked = value;
+            OnPropertyChanged(nameof(IsChecked));
+        }
+    }
+}
+
+/// <summary>One line of the Components list: 1-based number, name, sub-parts joined by " · ".</summary>
+public sealed record ComponentRow(int Number, string Name, string SubParts);
+
+/// <summary>A cell of the sample grid: 0-based row in the preview, column by name.</summary>
+public sealed record GridCell(int Row, string Column);
+
+/// <summary>What the sample grid has selected; <see cref="Current"/> is the cell with focus.</summary>
+public sealed record GridSelection(IReadOnlyList<GridCell> Cells, GridCell? Current);
 
 public sealed record OutputShapeOption(OutputShape Shape, string Label, bool IsAvailable);
 
@@ -117,6 +170,21 @@ public class ParseStudioViewModel : ObservableObject
     private string? _autoFillError;
     private string? _testError;
     private ParseValueResult? _testResult;
+    private readonly string _originalSettingsJson;
+    private IReadOnlyList<string> _selectedGridColumns = [];
+    private string? _currentColumn;
+    private string _displayedCellText = string.Empty;
+    private IReadOnlyList<HighlightSegment> _displayedCellSegments = [];
+    private string _displayedCellCaption = NothingSelectedText;
+    private int _selectedTabIndex;
+    private int _focusRowIndex = -1;
+    private bool _showDiscardPrompt;
+    private bool _hasLoaded;
+    private long _elapsedMs;
+    private DataView? _rowsView;
+    private DataView? _resultRowsView;
+
+    public const string NothingSelectedText = "Click a cell in the grid to see its full text here.";
 
     public ParseStudioViewModel(NodeViewModel node, ParseValueUpstream upstream, CsvPreviewReader? reader = null)
     {
@@ -136,14 +204,19 @@ public class ParseStudioViewModel : ObservableObject
             : CarryChoice.List;
 
         UpstreamMessage = upstream.Settings is null ? upstream.Message : null;
+        NodeTitle = node.Title;
+        FileName = string.IsNullOrEmpty(upstream.Settings?.Path) ? "(no file)" : Path.GetFileName(upstream.Settings.Path);
+        _originalSettingsJson = SettingsJson.Serialize(settings);
 
         Columns = new ObservableCollection<string>();
         Rows = new ObservableCollection<IReadOnlyList<string>>();
         DelimiterLevels = new ObservableCollection<DelimiterLevelItem>();
         Slots = new ObservableCollection<SlotItem>();
         CarryNames = new ObservableCollection<string>(settings.CarryColumns.AllOtherColumns ? [] : settings.CarryColumns.Names);
+        CarryChoices = new ObservableCollection<ColumnChoice>();
         AutoFillColumns = new ObservableCollection<string>();
         Components = new ObservableCollection<ParsedComponent>();
+        ComponentRows = new ObservableCollection<ComponentRow>();
         OutputColumns = new ObservableCollection<string>();
         ResultColumns = new ObservableCollection<string>();
         ResultRows = new ObservableCollection<IReadOnlyList<string>>();
@@ -152,7 +225,7 @@ public class ParseStudioViewModel : ObservableObject
         OutputShapes =
         [
             new OutputShapeOption(OutputShape.Long, "Long (one row per component)", true),
-            new OutputShapeOption(OutputShape.Wide, "Wide (not available yet)", false)
+            new OutputShapeOption(OutputShape.Wide, "Wide output comes later", false)
         ];
 
         foreach (var level in settings.DelimiterLevels)
@@ -167,34 +240,172 @@ public class ParseStudioViewModel : ObservableObject
 
         DelimiterLevels.CollectionChanged += (_, _) => OnParsingInputChanged();
         Slots.CollectionChanged += (_, _) => RefreshOutputColumns();
-        CarryNames.CollectionChanged += (_, _) => RefreshOutputColumns();
+        CarryNames.CollectionChanged += (_, _) =>
+        {
+            SyncChoices(CarryChoices, CarryNames);
+            RefreshOutputColumns();
+        };
 
         LoadCommand = new AsyncRelayCommand(async _ => await ReloadNowAsync(), _ => !IsLoading && UpstreamMessage is null);
         CancelLoadCommand = new RelayCommand(_ => _loadCts?.Cancel(), _ => IsLoading && ShowCancelLoad);
         AddLevelCommand = new RelayCommand(_ => AddLevel());
-        RemoveLevelCommand = new RelayCommand(p => RemoveLevel(ToIndex(p)));
-        MoveLevelUpCommand = new RelayCommand(p => MoveLevelUp(ToIndex(p)));
-        MoveLevelDownCommand = new RelayCommand(p => MoveLevelDown(ToIndex(p)));
+        RemoveLevelCommand = new RelayCommand(p => RemoveLevel(LevelIndex(p)));
+        MoveLevelUpCommand = new RelayCommand(p => MoveLevelUp(LevelIndex(p)));
+        MoveLevelDownCommand = new RelayCommand(p => MoveLevelDown(LevelIndex(p)));
         AddSlotCommand = new RelayCommand(_ => AddSlot());
-        RemoveSlotCommand = new RelayCommand(p => RemoveSlot(ToIndex(p)));
-        AutoFillCommand = new RelayCommand(_ => AutoFill(AutoFillGroupSize));
-        TestParsingCommand = new RelayCommand(_ => TestParsing());
+        RemoveSlotCommand = new RelayCommand(p => RemoveSlot(p is SlotItem slot ? Slots.IndexOf(slot) : ToIndex(p)));
+        AutoFillCommand = new RelayCommand(_ => AutoFillFromSelection());
+        TestParsingCommand = new RelayCommand(_ =>
+        {
+            TestParsing();
+            SelectedTabIndex = 1;
+        });
+        GridSelectionChangedCommand = new RelayCommand(p =>
+        {
+            if (p is GridSelection selection)
+            {
+                SetGridSelection(selection);
+            }
+        });
+        UseAsSourceCommand = new RelayCommand(_ => SourceColumn = CurrentColumn!, _ => CurrentColumn is not null);
+        UseGridSelectionCommand = new RelayCommand(
+            p => AssignColumnsToSlot(p is SlotItem slot ? Slots.IndexOf(slot) : ToIndex(p), SelectedGridColumns),
+            _ => SelectedGridColumns.Count > 0);
+        SelectRecordCommand = new RelayCommand(p =>
+        {
+            if (p is RecordIssue issue)
+            {
+                SelectRecord(issue.RecordNumber);
+            }
+        });
         SaveCommand = new RelayCommand<Window>(window =>
         {
             Save();
-            if (window != null)
+            Close(window, saved: true);
+        });
+        CancelCommand = new RelayCommand<Window>(window =>
+        {
+            if (HasChanges)
             {
-                window.DialogResult = true;
-                window.Close();
+                ShowDiscardPrompt = true;
+            }
+            else
+            {
+                Close(window, saved: false);
             }
         });
-        CancelCommand = new RelayCommand<Window>(window => window?.Close());
+        DiscardCommand = new RelayCommand<Window>(window =>
+        {
+            ShowDiscardPrompt = false;
+            Close(window, saved: false);
+        });
+        KeepEditingCommand = new RelayCommand(_ => ShowDiscardPrompt = false);
 
         RefreshOutputColumns();
     }
 
     /// <summary>Set when there is no configured CsvFile node above; says what to do.</summary>
     public string? UpstreamMessage { get; }
+
+    /// <summary>
+    /// Raised by Save, Cancel and Discard when no window was passed to the command. The argument
+    /// is true after Save. The dialog service closes the window.
+    /// </summary>
+    public event EventHandler<bool>? CloseRequested;
+
+    public string NodeTitle { get; }
+
+    /// <summary>The upstream file's name, without the folder.</summary>
+    public string FileName { get; }
+
+    public long ElapsedMs
+    {
+        get => _elapsedMs;
+        private set => SetProperty(ref _elapsedMs, value);
+    }
+
+    public string StatusText => UpstreamMessage is not null || !_hasLoaded
+        ? string.Empty
+        : $"Showing {Rows.Count} rows · {Columns.Count} columns · {ElapsedMs} ms";
+
+    /// <summary>
+    /// What the grid area says instead of an empty grid: the upstream message, the load error,
+    /// or "no rows". Null when the grid has rows.
+    /// </summary>
+    public string? GridMessage => UpstreamMessage
+        ?? PreviewError
+        ?? (_hasLoaded && Rows.Count == 0 ? "The file has no data rows. Check the CsvFile node's settings." : null);
+
+    /// <summary>The preview rows for the grid, with a "#" row-number column first.</summary>
+    public DataView? RowsView
+    {
+        get => _rowsView;
+        private set => SetProperty(ref _rowsView, value);
+    }
+
+    /// <summary>0 = Data tab, 1 = Result tab.</summary>
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set => SetProperty(ref _selectedTabIndex, value);
+    }
+
+    /// <summary>
+    /// A row the grid should select and scroll to (0-based), set when a reject is clicked. The
+    /// grid behaviour reacts to each change; -1 means none.
+    /// </summary>
+    public int FocusRowIndex
+    {
+        get => _focusRowIndex;
+        private set => SetProperty(ref _focusRowIndex, value);
+    }
+
+    /// <summary>Distinct columns of the selected grid cells, in file order.</summary>
+    public IReadOnlyList<string> SelectedGridColumns
+    {
+        get => _selectedGridColumns;
+        private set => SetProperty(ref _selectedGridColumns, value);
+    }
+
+    /// <summary>Column of the grid cell with focus, or null.</summary>
+    public string? CurrentColumn
+    {
+        get => _currentColumn;
+        private set => SetProperty(ref _currentColumn, value);
+    }
+
+    /// <summary>
+    /// The text of the cell shown in the Selected cell pane: the cell with focus, or else the
+    /// source cell of the selected row.
+    /// </summary>
+    public string DisplayedCellText
+    {
+        get => _displayedCellText;
+        private set => SetProperty(ref _displayedCellText, value);
+    }
+
+    public IReadOnlyList<HighlightSegment> DisplayedCellSegments
+    {
+        get => _displayedCellSegments;
+        private set => SetProperty(ref _displayedCellSegments, value);
+    }
+
+    /// <summary>"Row 2 · column "sample"", or the empty-state text.</summary>
+    public string DisplayedCellCaption
+    {
+        get => _displayedCellCaption;
+        private set => SetProperty(ref _displayedCellCaption, value);
+    }
+
+    /// <summary>True when the settings differ from the node's.</summary>
+    public bool HasChanges => SettingsJson.Serialize(BuildSettings()) != _originalSettingsJson;
+
+    /// <summary>Shown after Cancel with unsaved changes: Discard or Keep editing.</summary>
+    public bool ShowDiscardPrompt
+    {
+        get => _showDiscardPrompt;
+        private set => SetProperty(ref _showDiscardPrompt, value);
+    }
 
     // ----- Preview -----
 
@@ -231,7 +442,13 @@ public class ParseStudioViewModel : ObservableObject
     public string? PreviewError
     {
         get => _previewError;
-        private set => SetProperty(ref _previewError, value);
+        private set
+        {
+            if (SetProperty(ref _previewError, value))
+            {
+                OnPropertyChanged(nameof(GridMessage));
+            }
+        }
     }
 
     // ----- Settings being edited -----
@@ -245,6 +462,7 @@ public class ParseStudioViewModel : ObservableObject
             {
                 UpdateSelectedCell();
                 RefreshOutputColumns();
+                UpdateDisplayedCell();
             }
         }
     }
@@ -302,6 +520,9 @@ public class ParseStudioViewModel : ObservableObject
     /// <summary>The carried columns when <see cref="CarryMode"/> is List.</summary>
     public ObservableCollection<string> CarryNames { get; }
 
+    /// <summary>The kept columns as a check list that edits <see cref="CarryNames"/>.</summary>
+    public ObservableCollection<ColumnChoice> CarryChoices { get; }
+
     public IReadOnlyList<OutputShapeOption> OutputShapes { get; }
 
     /// <summary>Only Long can be chosen; setting Wide is ignored (not defined in the spec yet).</summary>
@@ -349,6 +570,7 @@ public class ParseStudioViewModel : ObservableObject
             if (SetProperty(ref _selectedRowIndex, value))
             {
                 UpdateSelectedCell();
+                UpdateDisplayedCell();
             }
         }
     }
@@ -357,6 +579,9 @@ public class ParseStudioViewModel : ObservableObject
 
     /// <summary>What CompositeCellParser gives for the selected row's source cell.</summary>
     public ObservableCollection<ParsedComponent> Components { get; }
+
+    /// <summary><see cref="Components"/> numbered for the dialog's list.</summary>
+    public ObservableCollection<ComponentRow> ComponentRows { get; }
 
     public string? ComponentsError
     {
@@ -383,6 +608,17 @@ public class ParseStudioViewModel : ObservableObject
     public ObservableCollection<string> ResultColumns { get; }
 
     public ObservableCollection<IReadOnlyList<string>> ResultRows { get; }
+
+    /// <summary>The test output rows for the Result grid.</summary>
+    public DataView? ResultRowsView
+    {
+        get => _resultRowsView;
+        private set => SetProperty(ref _resultRowsView, value);
+    }
+
+    public string ResultSummary => _testResult is null
+        ? "Press Test parsing to run the settings on the preview rows."
+        : $"In {RowsIn} · Out {RowsOut} · Rejected {RowsRejected} · Flagged {RowsFlagged}";
 
     public ObservableCollection<RecordIssue> Rejects { get; }
 
@@ -419,6 +655,22 @@ public class ParseStudioViewModel : ObservableObject
     public RelayCommand<Window> SaveCommand { get; }
 
     public RelayCommand<Window> CancelCommand { get; }
+
+    public RelayCommand<Window> DiscardCommand { get; }
+
+    public RelayCommand KeepEditingCommand { get; }
+
+    /// <summary>Takes a <see cref="GridSelection"/> from the grid behaviour.</summary>
+    public RelayCommand GridSelectionChangedCommand { get; }
+
+    /// <summary>Makes the column of the cell with focus the source column.</summary>
+    public RelayCommand UseAsSourceCommand { get; }
+
+    /// <summary>Gives a slot (the parameter) the columns of the selected grid cells.</summary>
+    public RelayCommand UseGridSelectionCommand { get; }
+
+    /// <summary>Selects a reject's or flagged record's row (a RecordIssue) in the sample grid.</summary>
+    public RelayCommand SelectRecordCommand { get; }
 
     // ----- Loading (same cancel and newest-reload rules as DataStudioViewModel) -----
 
@@ -460,10 +712,15 @@ public class ParseStudioViewModel : ObservableObject
         }
 
         PreviewError = preview.Error;
+        ElapsedMs = preview.ElapsedMs;
         if (preview.Error is null)
         {
             ApplyPreview(preview);
         }
+
+        _hasLoaded = true;
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(GridMessage));
 
         IsLoading = false;
         ShowCancelLoad = false;
@@ -665,6 +922,57 @@ public class ParseStudioViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Auto-fill from the columns selected in the grid; when none are selected, from
+    /// <see cref="AutoFillColumns"/> if set, else from all kept columns except the source column [U].
+    /// </summary>
+    public void AutoFillFromSelection()
+    {
+        IReadOnlyList<string> columns = SelectedGridColumns.Count > 0 ? SelectedGridColumns
+            : AutoFillColumns.Count > 0 ? AutoFillColumns.ToList()
+            : Columns.Where(c => c != SourceColumn).ToList();
+        AutoFill(columns, AutoFillGroupSize);
+    }
+
+    // ----- Grid selection -----
+
+    /// <summary>Takes the grid's selected cells; cells outside the preview are ignored.</summary>
+    public void SetGridSelection(GridSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+
+        bool Valid(GridCell c) => c.Row >= 0 && c.Row < Rows.Count && IndexOf(Columns, c.Column) >= 0;
+        var cells = selection.Cells.Where(Valid).ToList();
+        var chosen = cells.Select(c => c.Column).ToHashSet(StringComparer.Ordinal);
+        SelectedGridColumns = Columns.Where(chosen.Contains).ToList();
+
+        var current = selection.Current is not null && Valid(selection.Current) ? selection.Current : cells.LastOrDefault();
+        CurrentColumn = current?.Column;
+        if (current is not null)
+        {
+            SelectedRowIndex = current.Row;
+        }
+
+        UpdateDisplayedCell();
+        UseAsSourceCommand.RaiseCanExecuteChanged();
+        UseGridSelectionCommand.RaiseCanExecuteChanged();
+    }
+
+    /// <summary>Selects record <paramref name="recordNumber"/> (1-based) in the grid when it is in the preview.</summary>
+    public void SelectRecord(int recordNumber)
+    {
+        var row = recordNumber - 1;
+        if (row < 0 || row >= Rows.Count)
+        {
+            return;
+        }
+
+        SelectedTabIndex = 0;
+        SelectedRowIndex = row;
+        FocusRowIndex = -1;
+        FocusRowIndex = row;
+    }
+
     // ----- Test, save -----
 
     /// <summary>Runs ParseValueTransform on the preview rows. Never writes anywhere.</summary>
@@ -716,10 +1024,13 @@ public class ParseStudioViewModel : ObservableObject
             foreach (var flag in _testResult.Flagged) Flagged.Add(flag);
         }
 
+        ResultRowsView = ResultColumns.Count == 0 ? null : BuildTable(ResultColumns, ResultRows, rowNumbers: false).DefaultView;
+
         OnPropertyChanged(nameof(RowsIn));
         OnPropertyChanged(nameof(RowsOut));
         OnPropertyChanged(nameof(RowsRejected));
         OnPropertyChanged(nameof(RowsFlagged));
+        OnPropertyChanged(nameof(ResultSummary));
     }
 
     /// <summary>The settings as currently edited in the dialog.</summary>
@@ -765,6 +1076,14 @@ public class ParseStudioViewModel : ObservableObject
             Rows.Add(positions.Select(i => i < row.Count ? row[i] : string.Empty).ToList());
         }
 
+        RowsView = BuildTable(Columns, Rows, rowNumbers: true).DefaultView;
+        foreach (var slot in Slots)
+        {
+            RebuildChoices(slot.Choices, slot.Columns);
+        }
+
+        RebuildChoices(CarryChoices, CarryNames);
+
         // Select the first row so the components show at once [U].
         if (_selectedRowIndex < 0 || _selectedRowIndex >= Rows.Count)
         {
@@ -774,7 +1093,123 @@ public class ParseStudioViewModel : ObservableObject
 
         UpdateSelectedCell();
         RefreshOutputColumns();
+        UpdateDisplayedCell();
     }
+
+    private void UpdateDisplayedCell()
+    {
+        var column = CurrentColumn ?? (IndexOf(Columns, SourceColumn) >= 0 ? SourceColumn : null);
+        var columnIndex = column is null ? -1 : IndexOf(Columns, column);
+        if (SelectedRowIndex < 0 || SelectedRowIndex >= Rows.Count || columnIndex < 0)
+        {
+            DisplayedCellText = string.Empty;
+            DisplayedCellSegments = [];
+            DisplayedCellCaption = NothingSelectedText;
+            return;
+        }
+
+        DisplayedCellText = Rows[SelectedRowIndex][columnIndex];
+        DisplayedCellSegments = HighlightSegments(DisplayedCellText);
+        DisplayedCellCaption = $"Row {SelectedRowIndex + 1} · column \"{column}\"";
+    }
+
+    /// <summary>
+    /// A table for a grid. A repeated name gets " (2)", " (3)" because a DataTable needs unique
+    /// column names [U]. The first column is "#" (row number) when asked.
+    /// </summary>
+    private static DataTable BuildTable(IEnumerable<string> columns, IEnumerable<IReadOnlyList<string>> rows, bool rowNumbers)
+    {
+        var table = new DataTable();
+        if (rowNumbers)
+        {
+            table.Columns.Add("#", typeof(int));
+        }
+
+        foreach (var column in columns)
+        {
+            var name = column;
+            for (var n = 2; table.Columns.Contains(name); n++)
+            {
+                name = $"{column} ({n})";
+            }
+
+            table.Columns.Add(name, typeof(string));
+        }
+
+        var offset = rowNumbers ? 1 : 0;
+        var number = 1;
+        foreach (var row in rows)
+        {
+            var values = new object[table.Columns.Count];
+            if (rowNumbers)
+            {
+                values[0] = number;
+            }
+
+            for (var i = offset; i < values.Length; i++)
+            {
+                values[i] = i - offset < row.Count ? row[i - offset] : string.Empty;
+            }
+
+            table.Rows.Add(values);
+            number++;
+        }
+
+        return table;
+    }
+
+    private void RebuildChoices(ObservableCollection<ColumnChoice> choices, ObservableCollection<string> target)
+    {
+        var chosen = target.ToHashSet(StringComparer.Ordinal);
+        choices.Clear();
+        foreach (var column in Columns)
+        {
+            choices.Add(new ColumnChoice(column, chosen.Contains(column), () => ApplyChoices(choices, target)));
+        }
+    }
+
+    private static void SyncChoices(IEnumerable<ColumnChoice> choices, IEnumerable<string> target)
+    {
+        var chosen = target.ToHashSet(StringComparer.Ordinal);
+        foreach (var choice in choices)
+        {
+            choice.SetQuietly(chosen.Contains(choice.Name));
+        }
+    }
+
+    /// <summary>Ticked columns in file order, then any names the list does not show (kept as they are).</summary>
+    private static void ApplyChoices(IReadOnlyCollection<ColumnChoice> choices, ObservableCollection<string> target)
+    {
+        var listed = choices.Select(c => c.Name).ToHashSet(StringComparer.Ordinal);
+        var names = choices.Where(c => c.IsChecked).Select(c => c.Name)
+            .Concat(target.Where(n => !listed.Contains(n)))
+            .ToList();
+
+        target.Clear();
+        foreach (var name in names)
+        {
+            target.Add(name);
+        }
+    }
+
+    private void Close(Window? window, bool saved)
+    {
+        if (window is null)
+        {
+            CloseRequested?.Invoke(this, saved);
+            return;
+        }
+
+        if (saved)
+        {
+            window.DialogResult = true;
+        }
+
+        window.Close();
+    }
+
+    private int LevelIndex(object? parameter)
+        => parameter is DelimiterLevelItem level ? DelimiterLevels.IndexOf(level) : ToIndex(parameter);
 
     private void UpdateSelectedCell()
     {
@@ -789,6 +1224,7 @@ public class ParseStudioViewModel : ObservableObject
     private void RefreshComponents()
     {
         Components.Clear();
+        ComponentRows.Clear();
         ComponentsError = null;
 
         if (SelectedRowIndex < 0 || IndexOf(Columns, SourceColumn) < 0)
@@ -808,6 +1244,7 @@ public class ParseStudioViewModel : ObservableObject
             foreach (var component in cell.Components)
             {
                 Components.Add(component);
+                ComponentRows.Add(new ComponentRow(Components.Count, component.Name, string.Join(" · ", component.SubParts)));
             }
         }
         catch (ArgumentException ex)
@@ -847,17 +1284,27 @@ public class ParseStudioViewModel : ObservableObject
     private void AddSlotItem(SlotItem item)
     {
         item.Columns.CollectionChanged += OnSlotColumnsChanged;
+        RebuildChoices(item.Choices, item.Columns);
         Slots.Add(item);
     }
 
     private void OnLevelChanged(object? sender, PropertyChangedEventArgs e) => OnParsingInputChanged();
 
-    private void OnSlotColumnsChanged(object? sender, NotifyCollectionChangedEventArgs e) => RefreshOutputColumns();
+    private void OnSlotColumnsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (Slots.FirstOrDefault(s => ReferenceEquals(s.Columns, sender)) is { } slot)
+        {
+            SyncChoices(slot.Choices, slot.Columns);
+        }
+
+        RefreshOutputColumns();
+    }
 
     private void OnParsingInputChanged()
     {
         RefreshComponents();
         RefreshOutputColumns();
+        UpdateDisplayedCell();
     }
 
     private void EndCancelledLoad(CancellationTokenSource load)
