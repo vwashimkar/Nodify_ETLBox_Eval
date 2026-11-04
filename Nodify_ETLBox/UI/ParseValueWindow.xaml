@@ -161,7 +161,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="480" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="400" MinWidth="320" />
+                <ColumnDefinition Width="440" MinWidth="380" />
             </Grid.ColumnDefinitions>
 
             <!-- ===== Centre: Data and Result tabs ===== -->
