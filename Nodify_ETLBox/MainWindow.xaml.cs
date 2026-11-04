@@ -13,6 +13,11 @@ public partial class MainWindow : Window
 
     private Point _dragStart;
 
+    // True from the start of a palette drag until the next mouse-down. The button keeps
+    // the mouse capture during DoDragDrop, so the mouse-up that ends the drop also raises
+    // Click; without this flag one drag added two nodes (one at the drop, one at the centre).
+    private bool _paletteDragged;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -56,13 +61,22 @@ public partial class MainWindow : Window
             !Enum.TryParse<NodeType>(tag, out var nodeType))
             return;
 
+        if (_paletteDragged)
+        {
+            _paletteDragged = false;
+            return;
+        }
+
         // Add at the centre of the visible editor area.
         var center = new Point(EditorControl.ActualWidth / 2, EditorControl.ActualHeight / 2);
         _mainViewModel.Editor.AddNode(nodeType, ToGraphLocation(center));
     }
 
     private void PaletteButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        => _dragStart = e.GetPosition(null);
+    {
+        _dragStart = e.GetPosition(null);
+        _paletteDragged = false;
+    }
 
     private void PaletteButton_PreviewMouseMove(object sender, MouseEventArgs e)
     {
@@ -72,7 +86,9 @@ public partial class MainWindow : Window
         if (Math.Abs(d.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(d.Y) < SystemParameters.MinimumVerticalDragDistance) return;
 
+        _paletteDragged = true;
         DragDrop.DoDragDrop(button, tag, DragDropEffects.Copy);
+        button.ReleaseMouseCapture();
     }
 
     private void EditorControl_Drop(object sender, DragEventArgs e)
