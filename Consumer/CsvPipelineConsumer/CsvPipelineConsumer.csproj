@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A separate console app that uses a DLL made by "Generate DLL" (CsvFile -> ParseValue -> DotNetObject).
+    It is NOT in Nodify_ETLBox_Eval.slnx, so the normal build and tests do not see it.
+    Pass the DLL with -p:PipelineDll=<full path>; the default is Consumer/out/CsvPipeline.dll.
+    The DLL must have been generated with the default namespace "Generated" and class "CsvPipeline".
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PipelineDll Condition="'$(PipelineDll)' == ''">$(MSBuildThisFileDirectory)..\out\CsvPipeline.dll</PipelineDll>
+  </PropertyGroup>
+
+  <!-- The same ETLBox versions as the designer app. No licence file is copied: this app does its own licensing. -->
+  <ItemGroup>
+    <PackageReference Include="ETLBox" Version="3.11.1" />
+    <PackageReference Include="ETLBox.Csv" Version="3.11.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="CsvPipeline">
+      <HintPath>$(PipelineDll)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

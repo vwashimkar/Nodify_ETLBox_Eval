@@ -364,3 +364,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 reports/
+
+# Task E consumer: generated DLL and its sources
+Consumer/out/
