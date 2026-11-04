@@ -339,23 +339,29 @@
                             <ItemsControl ItemsSource="{Binding DelimiterLevels}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:DelimiterLevelItem}">
-                                        <WrapPanel>
-                                            <TextBox Width="48" Margin="{DynamicResource Thickness4}" FontFamily="{DynamicResource font-data}"
-                                                     Text="{Binding Delimiter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Delimiter text" />
-                                            <ComboBox Width="80" Margin="{DynamicResource Thickness4}" ItemsSource="{StaticResource SplitModes}"
-                                                      SelectedItem="{Binding Mode, Mode=TwoWay}" ToolTip="Once, All or Each" />
-                                            <TextBox x:Name="SubPart" Width="96" Margin="{DynamicResource Thickness4}" Visibility="Collapsed"
-                                                     Text="{Binding SubPartColumn, UpdateSourceTrigger=PropertyChanged}" ToolTip="Column name for the sub-part" />
-                                            <Button Content="Up" Style="{StaticResource SmallButton}" CommandParameter="{Binding}"
-                                                    Command="{Binding DataContext.MoveLevelUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                            <Button Content="Down" Style="{StaticResource SmallButton}" CommandParameter="{Binding}"
-                                                    Command="{Binding DataContext.MoveLevelDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                            <Button Content="Remove" Style="{StaticResource SmallButton}" CommandParameter="{Binding}"
-                                                    Command="{Binding DataContext.RemoveLevelCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                        </WrapPanel>
+                                        <!-- Line 1: delimiter, mode, Up, Down, Remove. Line 2 (Each only): the sub-part column. -->
+                                        <StackPanel x:Name="DelimiterRow">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBox Width="88" Margin="{DynamicResource Thickness4}" FontFamily="{DynamicResource font-data}"
+                                                         Text="{Binding Delimiter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Delimiter text" />
+                                                <ComboBox Width="80" Margin="{DynamicResource Thickness4}" ItemsSource="{StaticResource SplitModes}"
+                                                          SelectedItem="{Binding Mode, Mode=TwoWay}" ToolTip="Once, All or Each" />
+                                                <Button Content="Up" Style="{StaticResource SmallButton}" CommandParameter="{Binding}"
+                                                        Command="{Binding DataContext.MoveLevelUpCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                <Button Content="Down" Style="{StaticResource SmallButton}" CommandParameter="{Binding}"
+                                                        Command="{Binding DataContext.MoveLevelDownCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                <Button Content="Remove" Style="{StaticResource SmallButton}" CommandParameter="{Binding}"
+                                                        Command="{Binding DataContext.RemoveLevelCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            </StackPanel>
+                                            <StackPanel x:Name="SubPartLine" Orientation="Horizontal" Visibility="Collapsed">
+                                                <TextBlock Text="Sub-part column" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                                                <TextBox Width="160" Margin="{DynamicResource Thickness4}" FontFamily="{DynamicResource font-data}"
+                                                         Text="{Binding SubPartColumn, UpdateSourceTrigger=PropertyChanged}" ToolTip="Column name for the sub-part" />
+                                            </StackPanel>
+                                        </StackPanel>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding Mode}" Value="Each">
-                                                <Setter TargetName="SubPart" Property="Visibility" Value="Visible" />
+                                                <Setter TargetName="SubPartLine" Property="Visibility" Value="Visible" />
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
