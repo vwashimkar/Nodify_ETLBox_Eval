@@ -1,3 +1,4 @@
+using EtlDesigner.Engine.Pipeline;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
@@ -146,9 +147,11 @@ public class EditorViewModel : ObservableObject
             NodeType.ParseJson => NodeFactory.CreateParseJson(location),
             NodeType.ResultJson => NodeFactory.CreateResultJson(location),
             NodeType.ParseValue => NodeFactory.CreateParseValue(location),
+            NodeType.DotNetObject => NodeFactory.CreateDotNetObject(location),
             _ => throw new ArgumentException($"Unknown node type: {nodeType}")
         };
 
+        EtlDesigner.UI.PaletteTrace.Write($"AddNode type={nodeType} at=({location.X:0},{location.Y:0}) stack={EtlDesigner.UI.PaletteTrace.Stack()}");
         Nodes.Add(node);
     }
 
@@ -358,6 +361,7 @@ public class EditorViewModel : ObservableObject
 
         ValidateCsvFileNodes();
         ValidateParseValueNodes();
+        ValidateDotNetObjectNodes();
 
         if (Issues.Count == 0)
         {
@@ -534,6 +538,16 @@ public class EditorViewModel : ObservableObject
                 return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input already has a connection. Remove it before connecting another node." };
         }
 
+        // DotNetObject takes the rows of one ParseValue node.
+        if (target.ParentNode.NodeType == NodeType.DotNetObject)
+        {
+            if (source.ParentNode.NodeType != NodeType.ParseValue)
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input accepts only a ParseValue node. Connect the output of a ParseValue node." };
+
+            if (target.IsConnected || Connections.Any(c => c.Target == target))
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input already has a connection. Remove it before connecting another node." };
+        }
+
         if (source.Kind != target.Kind)
             return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"Port kind mismatch: {source.Kind} → {target.Kind}." };
 
@@ -556,9 +570,10 @@ public class EditorViewModel : ObservableObject
         return new ConnectionValidationResult { IsValid = true };
     }
 
+    /// <summary>True when a new-workflow node (ParseValue, DotNetObject) is at either end; their state depends on the connection.</summary>
     private static bool InvolvesParseValue(ConnectionViewModel connection)
-        => connection.Source.ParentNode.NodeType == NodeType.ParseValue
-           || connection.Target.ParentNode.NodeType == NodeType.ParseValue;
+        => connection.Source.ParentNode.NodeType is NodeType.ParseValue or NodeType.DotNetObject
+           || connection.Target.ParentNode.NodeType is NodeType.ParseValue or NodeType.DotNetObject;
 
     /// <summary>
     /// Checks if nodeA is downstream of nodeB (i.e., nodeB → ... → nodeA).
@@ -791,6 +806,31 @@ public class EditorViewModel : ObservableObject
             {
                 messages.AddRange(ParseValueValidator.Validate(node.ParseValueSettings, upstream.KeptColumns));
             }
+
+            foreach (var message in messages.Distinct())
+            {
+                Issues.Add($"{node.Title}: {message}");
+            }
+
+            node.ConfigurationStatus = messages.Count == 0 ? "Configured" : "Not configured";
+        }
+    }
+
+    public const string DotNetObjectNotConnected = "Connect a ParseValue node to the input of this node.";
+
+    /// <summary>Each problem once, with the node title in front. Configured = connected to a ParseValue node and a supported output type.</summary>
+    private void ValidateDotNetObjectNodes()
+    {
+        foreach (var node in Nodes.Where(n => n.NodeType == NodeType.DotNetObject))
+        {
+            var messages = new List<string>();
+            var connected = Connections.Any(c => c.Target.ParentNode == node && c.Source.ParentNode.NodeType == NodeType.ParseValue);
+            if (!connected)
+            {
+                messages.Add(DotNetObjectNotConnected);
+            }
+
+            messages.AddRange(OutputSettings.Validate(node.GetOutputSettings()));
 
             foreach (var message in messages.Distinct())
             {

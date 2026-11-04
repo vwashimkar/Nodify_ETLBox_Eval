@@ -44,6 +44,23 @@
 	  <EmbeddedResource Include="Engine\CountryListResult.cs" />
 	</ItemGroup>
 
+	<!-- Engine files embedded in a CsvFile -> ParseValue -> DotNetObject DLL (CsvPipelineDllGenerator.SourceFiles). -->
+	<ItemGroup>
+	  <EmbeddedResource Include="Engine\Csv\CsvFileSettings.cs" />
+	  <EmbeddedResource Include="Engine\Csv\CsvColumnSelection.cs" />
+	  <EmbeddedResource Include="Engine\Csv\CsvErrorText.cs" />
+	  <EmbeddedResource Include="Engine\Csv\CsvRecordReader.cs" />
+	  <EmbeddedResource Include="Engine\Csv\CsvFileValidator.cs" />
+	  <EmbeddedResource Include="Engine\Parsing\ParseValueSettings.cs" />
+	  <EmbeddedResource Include="Engine\Parsing\CompositeCellParser.cs" />
+	  <EmbeddedResource Include="Engine\Parsing\ParseValueTransform.cs" />
+	  <EmbeddedResource Include="Engine\Parsing\ParseValueValidator.cs" />
+	  <EmbeddedResource Include="Engine\Pipeline\SettingsJson.cs" />
+	  <EmbeddedResource Include="Engine\Pipeline\OutputSettings.cs" />
+	  <EmbeddedResource Include="Engine\Pipeline\PipelineDefinition.cs" />
+	  <EmbeddedResource Include="Engine\Pipeline\PipelineRunner.cs" />
+	</ItemGroup>
+
 	<ItemGroup>
 	  <InternalsVisibleTo Include="Nodify_ETLBox.Tests" />
 	</ItemGroup>

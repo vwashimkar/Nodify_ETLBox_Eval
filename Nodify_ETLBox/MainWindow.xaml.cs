@@ -13,6 +13,11 @@ public partial class MainWindow : Window
 
     private Point _dragStart;
 
+    // True from the start of a palette drag until the next mouse-down. The button keeps
+    // the mouse capture during DoDragDrop, so the mouse-up that ends the drop also raises
+    // Click; without this flag one drag added two nodes (one at the drop, one at the centre).
+    private bool _paletteDragged;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -22,6 +27,13 @@ public partial class MainWindow : Window
         // field stayed null and every click handler returned silently.
         _mainViewModel = new MainViewModel();
         DataContext = _mainViewModel;
+
+        // TEMPORARY palette trace: see every drop the window receives, handled or not. Trace only.
+        AddHandler(PreviewDropEvent, new DragEventHandler((s, e) => EtlDesigner.UI.PaletteTrace.Write($"Window.PreviewDrop {EtlDesigner.UI.PaletteTrace.Describe(s, e)} effects={e.Effects}")), true);
+        AddHandler(DropEvent, new DragEventHandler((s, e) => EtlDesigner.UI.PaletteTrace.Write($"Window.Drop(bubbled) {EtlDesigner.UI.PaletteTrace.Describe(s, e)}")), true);
+        AddHandler(Button.ClickEvent, new RoutedEventHandler((s, e) => EtlDesigner.UI.PaletteTrace.Write($"Window.Click(bubbled) {EtlDesigner.UI.PaletteTrace.Describe(s, e)}")), true);
+        _mainViewModel.Editor.Nodes.CollectionChanged += (_, e) => EtlDesigner.UI.PaletteTrace.Write($"Nodes.CollectionChanged action={e.Action} count={_mainViewModel.Editor.Nodes.Count}");
+        EtlDesigner.UI.PaletteTrace.Write("---- MainWindow created ----");
     }
 
     private void ThemeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -56,13 +68,24 @@ public partial class MainWindow : Window
             !Enum.TryParse<NodeType>(tag, out var nodeType))
             return;
 
+        EtlDesigner.UI.PaletteTrace.Write($"PaletteButton_Click {EtlDesigner.UI.PaletteTrace.Describe(sender, e)} paletteDragged={_paletteDragged}");
+        if (_paletteDragged)
+        {
+            _paletteDragged = false;
+            return;
+        }
+
         // Add at the centre of the visible editor area.
         var center = new Point(EditorControl.ActualWidth / 2, EditorControl.ActualHeight / 2);
         _mainViewModel.Editor.AddNode(nodeType, ToGraphLocation(center));
     }
 
     private void PaletteButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        => _dragStart = e.GetPosition(null);
+    {
+        EtlDesigner.UI.PaletteTrace.Write($"PaletteButton_PreviewMouseLeftButtonDown {EtlDesigner.UI.PaletteTrace.Describe(sender, e)}");
+        _dragStart = e.GetPosition(null);
+        _paletteDragged = false;
+    }
 
     private void PaletteButton_PreviewMouseMove(object sender, MouseEventArgs e)
     {
@@ -72,11 +95,16 @@ public partial class MainWindow : Window
         if (Math.Abs(d.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(d.Y) < SystemParameters.MinimumVerticalDragDistance) return;
 
-        DragDrop.DoDragDrop(button, tag, DragDropEffects.Copy);
+        _paletteDragged = true;
+        EtlDesigner.UI.PaletteTrace.Write($"PaletteButton_PreviewMouseMove DoDragDrop START {EtlDesigner.UI.PaletteTrace.Describe(sender, e)} captured={button.IsMouseCaptured}");
+        var dragResult = DragDrop.DoDragDrop(button, tag, DragDropEffects.Copy);
+        EtlDesigner.UI.PaletteTrace.Write($"PaletteButton_PreviewMouseMove DoDragDrop END result={dragResult} captured={button.IsMouseCaptured} leftButton={Mouse.LeftButton}");
+        button.ReleaseMouseCapture();
     }
 
     private void EditorControl_Drop(object sender, DragEventArgs e)
     {
+        EtlDesigner.UI.PaletteTrace.Write($"EditorControl_Drop {EtlDesigner.UI.PaletteTrace.Describe(sender, e)} data={e.Data.GetData(typeof(string))}");
         // The drag payload is the node type name as a plain string (see PreviewMouseMove).
         if (e.Data.GetData(typeof(string)) is not string tag ||
             !Enum.TryParse<NodeType>(tag, out var nodeType))

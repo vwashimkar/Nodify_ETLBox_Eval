@@ -53,6 +53,20 @@
                       Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
         </DataTemplate>
 
+        <!-- A drop-down whose disabled entries show but cannot be picked (SettingKind.Choice) -->
+        <DataTemplate x:Key="ChoiceSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
+            <ComboBox ItemsSource="{Binding Choices, Mode=OneWay}"
+                      DisplayMemberPath="Label"
+                      SelectedValuePath="Value"
+                      SelectedValue="{Binding Value, Mode=TwoWay}">
+                <ComboBox.ItemContainerStyle>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="IsEnabled" Value="{Binding IsEnabled, Mode=OneWay}" />
+                    </Style>
+                </ComboBox.ItemContainerStyle>
+            </ComboBox>
+        </DataTemplate>
+
         <!-- One row in the settings panel: label, red * when required and empty, editor -->
         <DataTemplate x:Key="SettingRowTemplate" DataType="{x:Type vm:SettingViewModel}">
             <StackPanel Margin="0,0,0,8">
@@ -79,6 +93,9 @@
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Kind}" Value="Number">
                                     <Setter Property="ContentTemplate" Value="{StaticResource NumberSettingTemplate}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="Choice">
+                                    <Setter Property="ContentTemplate" Value="{StaticResource ChoiceSettingTemplate}" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Kind}" Value="Summary">
                                     <Setter Property="ContentTemplate" Value="{StaticResource SummarySettingTemplate}" />
@@ -134,8 +151,13 @@
         <!-- ===== Toolbar ===== -->
         <ToolBar DockPanel.Dock="Top">
             <Button Content="Run" Width="60" Command="{Binding RunCommand}" />
+            <Button Content="Execute" Width="70" Command="{Binding ExecuteCommand}"
+                    ToolTip="{Binding ExecuteHint, Mode=OneWay}"
+                    ToolTipService.ShowOnDisabled="True" />
             <Separator />
-            <Button Content="Generate DLL" Width="100" Command="{Binding GenerateDllCommand}" />
+            <Button Content="Generate DLL" Width="100" Command="{Binding GenerateDllCommand}"
+                    ToolTip="{Binding GenerateDllHint, Mode=OneWay}"
+                    ToolTipService.ShowOnDisabled="True" />
             <Separator />
             <Button Content="Delete" Width="60" Command="{Binding Editor.DeleteSelectedCommand}" />
             <Separator />
@@ -194,6 +216,10 @@
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
                 <Button Content="ParseValue" Tag="ParseValue" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="DotNetObject" Tag="DotNetObject" Margin="0,2" Padding="4"
                         Click="PaletteButton_Click"
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />

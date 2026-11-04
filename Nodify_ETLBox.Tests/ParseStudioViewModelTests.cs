@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Nodify_ETLBox.Tests;
 
-public class ParseStudioViewModelTests
+public partial class ParseStudioViewModelTests
 {
     private static readonly string[] R01ToR18 = Enumerable.Range(1, 18).Select(i => $"r{i:00}").ToArray();
 

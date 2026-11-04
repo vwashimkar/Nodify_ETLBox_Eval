@@ -22,9 +22,57 @@ public static class SettingsJson
     };
 
     public static string Serialize(CsvFileSettings settings)
+        => JsonSerializer.Serialize(ToJson(settings), Options);
+
+    public static CsvFileSettings DeserializeCsvFileSettings(string json)
+        => FromJson(Read<CsvFileJson>(json));
+
+    public static string Serialize(CsvColumnSelection selection)
+        => JsonSerializer.Serialize(ToJson(selection), Options);
+
+    public static CsvColumnSelection DeserializeColumnSelection(string json)
+        => FromJson(Read<ColumnSelectionJson>(json));
+
+    public static string Serialize(ParseValueSettings settings)
+        => JsonSerializer.Serialize(ToJson(settings), Options);
+
+    public static ParseValueSettings DeserializeParseValueSettings(string json)
+        => FromJson(Read<ParseValueJson>(json));
+
+    public static string Serialize(OutputSettings settings)
+        => JsonSerializer.Serialize(ToJson(settings), Options);
+
+    public static OutputSettings DeserializeOutputSettings(string json)
+        => FromJson(Read<OutputJson>(json));
+
+    /// <summary>The whole pipeline: one object with a version and one property per node.</summary>
+    public static string Serialize(PipelineDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        return JsonSerializer.Serialize(new PipelineJson
+        {
+            Version = PipelineJson.CurrentVersion,
+            CsvFile = ToJson(definition.CsvFile),
+            Columns = ToJson(definition.Columns),
+            ParseValue = ToJson(definition.ParseValue),
+            Output = ToJson(definition.Output)
+        }, Options);
+    }
+
+    public static PipelineDefinition DeserializePipelineDefinition(string json)
+    {
+        var dto = Read<PipelineJson>(json);
+        return new PipelineDefinition(
+            FromJson(dto.CsvFile ?? throw new JsonException("The pipeline has no csvFile settings.")),
+            FromJson(dto.Columns ?? new ColumnSelectionJson()),
+            FromJson(dto.ParseValue ?? throw new JsonException("The pipeline has no parseValue settings.")),
+            FromJson(dto.Output ?? new OutputJson()));
+    }
+
+    private static CsvFileJson ToJson(CsvFileSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return JsonSerializer.Serialize(new CsvFileJson
+        return new CsvFileJson
         {
             Path = settings.Path,
             Separator = settings.Separator,
@@ -32,43 +80,35 @@ public static class SettingsJson
             SkipLines = settings.SkipLines,
             EncodingName = settings.EncodingName,
             PreviewRows = settings.PreviewRows
-        }, Options);
+        };
     }
 
-    public static CsvFileSettings DeserializeCsvFileSettings(string json)
-    {
-        var dto = Read<CsvFileJson>(json);
-        return new CsvFileSettings(
+    private static CsvFileSettings FromJson(CsvFileJson dto)
+        => new(
             dto.Path ?? string.Empty,
             dto.Separator ?? ",",
             dto.HasHeader,
             dto.SkipLines,
             dto.EncodingName ?? "utf-8",
             dto.PreviewRows);
-    }
 
-    public static string Serialize(CsvColumnSelection selection)
+    private static ColumnSelectionJson ToJson(CsvColumnSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
-        return JsonSerializer.Serialize(new ColumnSelectionJson
-        {
-            Mode = selection.Mode,
-            Names = selection.Names.ToList()
-        }, Options);
+        return new ColumnSelectionJson { Mode = selection.Mode, Names = selection.Names.ToList() };
     }
 
-    public static CsvColumnSelection DeserializeColumnSelection(string json)
+    private static CsvColumnSelection FromJson(ColumnSelectionJson dto)
     {
-        var dto = Read<ColumnSelectionJson>(json);
         var selection = new CsvColumnSelection { Mode = dto.Mode };
         selection.Names.AddRange(dto.Names ?? []);
         return selection;
     }
 
-    public static string Serialize(ParseValueSettings settings)
+    private static ParseValueJson ToJson(ParseValueSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return JsonSerializer.Serialize(new ParseValueJson
+        return new ParseValueJson
         {
             SourceColumn = settings.SourceColumn,
             DelimiterLevels = settings.DelimiterLevels
@@ -87,12 +127,11 @@ public static class SettingsJson
                 Names = settings.CarryColumns.AllOtherColumns ? [] : settings.CarryColumns.Names.ToList()
             },
             OutputShape = settings.OutputShape
-        }, Options);
+        };
     }
 
-    public static ParseValueSettings DeserializeParseValueSettings(string json)
+    private static ParseValueSettings FromJson(ParseValueJson dto)
     {
-        var dto = Read<ParseValueJson>(json);
         var carry = dto.CarryColumns?.Mode switch
         {
             CarryMode.All => CarryColumns.All,
@@ -115,6 +154,14 @@ public static class SettingsJson
             OutputShape = dto.OutputShape
         };
     }
+
+    private static OutputJson ToJson(OutputSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return new OutputJson { Kind = settings.Kind };
+    }
+
+    private static OutputSettings FromJson(OutputJson dto) => new(dto.Kind);
 
     private static T Read<T>(string json)
     {
@@ -180,5 +227,21 @@ public static class SettingsJson
         public DuplicatePolicy DuplicatePolicy { get; set; }
         public CarryColumnsJson? CarryColumns { get; set; }
         public OutputShape OutputShape { get; set; }
+    }
+
+    private sealed class OutputJson
+    {
+        public ObjectKind Kind { get; set; } = ObjectKind.ListOfStringDictionary;
+    }
+
+    private sealed class PipelineJson
+    {
+        public const int CurrentVersion = 1;
+
+        public int Version { get; set; }
+        public CsvFileJson? CsvFile { get; set; }
+        public ColumnSelectionJson? Columns { get; set; }
+        public ParseValueJson? ParseValue { get; set; }
+        public OutputJson? Output { get; set; }
     }
 }

@@ -54,12 +54,7 @@ public static class ParseValueUpstreamResolver
     /// Data Studio.
     /// </summary>
     public static IReadOnlyList<string> KeptColumns(IReadOnlyList<string> columns, CsvColumnSelection selection)
-    {
-        var names = selection.Names.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return selection.Mode == CsvColumnSelectionMode.Ignore
-            ? columns.Where(c => !names.Contains(c)).ToList()
-            : columns.Where(c => names.Contains(c)).ToList();
-    }
+        => selection.KeptColumns(columns);
 
     /// <summary>
     /// Reads one row through <see cref="CsvPreviewReader"/> (the same path as the preview) and

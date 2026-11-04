@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Parsing;
+using EtlDesigner.Engine.Pipeline;
 using EtlDesigner.UI.Mvvm;
 using EtlDesigner.UI.ViewModels;
 
@@ -227,6 +228,35 @@ public static class NodeFactory
         Slots = Enumerable.Range(1, 6).Select(i => new Slot($"S{i}", Array.Empty<string>())).ToList(),
         CarryColumns = CarryColumns.All
     };
+
+    /// <summary>
+    /// Creates a DotNetObject node: the end of CsvFile -> ParseValue -> DotNetObject.
+    /// Input: "Parsed" (PortKind.ParsedRows), from a ParseValue node only. No output.
+    /// Settings: "Output type", a Choice of <see cref="ObjectKinds.All"/>; kinds not built yet are
+    /// shown disabled with "(comes later)".
+    /// </summary>
+    public static NodeViewModel CreateDotNetObject(Point location)
+    {
+        var node = new NodeViewModel(Guid.NewGuid(), "DotNetObject", NodeType.DotNetObject)
+        {
+            Location = location,
+            ConfigurationStatus = "Not configured"
+        };
+
+        node.Inputs.Add(new ConnectorViewModel("Parsed", PortKind.ParsedRows, isInput: true, node));
+
+        var outputType = new SettingViewModel("OutputType", "Output type", SettingKind.Choice, required: true, OutputSettings.Default.Kind.ToString());
+        foreach (var kind in ObjectKinds.All)
+        {
+            outputType.Choices.Add(new SettingChoice(
+                kind.Kind.ToString(),
+                kind.IsSupported ? kind.DisplayName : $"{kind.DisplayName} (comes later)",
+                kind.IsSupported));
+        }
+
+        node.Settings.Add(outputType);
+        return node;
+    }
 
     /// <summary>
     /// Creates a ToJson node.
