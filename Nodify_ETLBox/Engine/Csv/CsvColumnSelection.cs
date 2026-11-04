@@ -18,4 +18,17 @@ public sealed class CsvColumnSelection
         copy.Names.AddRange(Names);
         return copy;
     }
+
+    /// <summary>
+    /// The columns that leave the CsvFile node, in file order. Names match without case, as in
+    /// Data Studio.
+    /// </summary>
+    public IReadOnlyList<string> KeptColumns(IReadOnlyList<string> columns)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        var names = Names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Mode == CsvColumnSelectionMode.Ignore
+            ? columns.Where(c => !names.Contains(c)).ToList()
+            : columns.Where(c => names.Contains(c)).ToList();
+    }
 }

@@ -74,12 +74,12 @@ public class CompositeManifestTests
         Assert.Equal(await ReadIssuesAsync(row["expected_flagged"]), result.Flagged);
     }
 
-    [Fact(Skip = "needs a valid ETLBox licence and a full-file reader")]
+    [Fact(Skip = "needs a valid ETLBox licence")]
     public void ManifestRow_C10()
     {
     }
 
-    private static ParseValueSettings BuildSettings(IReadOnlyDictionary<string, string> row, IReadOnlyList<string> fileColumns)
+    internal static ParseValueSettings BuildSettings(IReadOnlyDictionary<string, string> row, IReadOnlyList<string> fileColumns)
     {
         return new ParseValueSettings
         {
@@ -150,7 +150,7 @@ public class CompositeManifestTests
         }).ToList();
     }
 
-    private static async Task<IReadOnlyList<RecordIssue>> ReadIssuesAsync(string relativePath)
+    internal static async Task<IReadOnlyList<RecordIssue>> ReadIssuesAsync(string relativePath)
     {
         if (string.IsNullOrEmpty(relativePath))
         {
@@ -163,7 +163,7 @@ public class CompositeManifestTests
         return csv.Rows.Select(r => new RecordIssue(int.Parse(r[number]), r[reason])).ToList();
     }
 
-    private static async Task<List<Dictionary<string, string>>> ReadManifestAsync()
+    internal static async Task<List<Dictionary<string, string>>> ReadManifestAsync()
     {
         var csv = await ReadCsvAsync("expected_results.csv", ",", true, 0);
         return csv.Rows
@@ -171,7 +171,7 @@ public class CompositeManifestTests
             .ToList();
     }
 
-    private static async Task<CsvPreview> ReadCsvAsync(string relativePath, string separator, bool header, int skipLines)
+    internal static async Task<CsvPreview> ReadCsvAsync(string relativePath, string separator, bool header, int skipLines)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "SampleData", "TestData", "composite", relativePath);
         var settings = new CsvFileSettings(path, separator, header, skipLines, "utf-8", 1000);

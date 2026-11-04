@@ -39,6 +39,7 @@ public class DataStudioViewModel : ObservableObject
     private readonly CsvColumnSelection _workingSelection;
 
     private DataTable? _allRowsTable;
+    private readonly object _applyLock = new();
     private CancellationTokenSource? _loadCts;
     private CancellationTokenSource? _reloadDebounceCts;
     private Task<CsvPreview>? _currentLoadTask;
@@ -352,11 +353,15 @@ public class DataStudioViewModel : ObservableObject
 
     public async Task ReloadNowAsync(CancellationToken token = default)
     {
-        _loadCts?.Cancel();
-        _loadCts?.Dispose();
-        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        CancellationTokenSource thisLoad;
+        lock (_applyLock)
+        {
+            _loadCts?.Cancel();
+            _loadCts?.Dispose();
+            _loadCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            thisLoad = _loadCts;
+        }
 
-        var thisLoad = _loadCts;
         var requestToken = thisLoad.Token;
         IsLoading = true;
         ShowCancelLoad = false;
@@ -396,7 +401,17 @@ public class DataStudioViewModel : ObservableObject
             return;
         }
 
-        ApplyPreview(preview);
+        // Without a UI thread (tests) an older load can finish while a newer one starts; only the
+        // newest load may fill the table, and never two at once.
+        lock (_applyLock)
+        {
+            if (!ReferenceEquals(thisLoad, _loadCts))
+            {
+                return;
+            }
+
+            ApplyPreview(preview);
+        }
 
         IsLoading = false;
         ShowCancelLoad = false;

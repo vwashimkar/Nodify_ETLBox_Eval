@@ -41,13 +41,13 @@ public static class ParseValueTransform
     public static string ExcessPairedReason(int componentCount, int slotCount)
         => ExcessReason(componentCount, slotCount) + " (paired what fits)";
 
-    public static ParseValueResult Run(
-        IReadOnlyList<string> inputColumns,
-        IEnumerable<ParseValueRecord> records,
-        ParseValueSettings settings)
+    /// <summary>
+    /// Checks the settings against the input columns and returns the per-record step. Throws
+    /// <see cref="ArgumentException"/> with a message for the user when a column is missing.
+    /// </summary>
+    public static ParseValueStep Prepare(IReadOnlyList<string> inputColumns, ParseValueSettings settings)
     {
         ArgumentNullException.ThrowIfNull(inputColumns);
-        ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(settings);
 
         if (settings.OutputShape != OutputShape.Long)
@@ -56,15 +56,18 @@ public static class ParseValueTransform
         }
 
         ValidateColumns(inputColumns, settings);
+        return new ParseValueStep(CarriedColumns(inputColumns, settings), settings);
+    }
 
-        var carried = CarriedColumns(inputColumns, settings);
-        var subPartColumns = settings.DelimiterLevels.Skip(2).Select(l => l.SubPartColumn!).ToList();
-        var valueWidth = settings.Slots.Count == 0 ? 0 : settings.Slots.Max(s => s.Columns.Count);
+    /// <summary>The whole batch: <see cref="Prepare"/> once, then <see cref="ParseValueStep.Process"/> per record.</summary>
+    public static ParseValueResult Run(
+        IReadOnlyList<string> inputColumns,
+        IEnumerable<ParseValueRecord> records,
+        ParseValueSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(records);
 
-        var outputColumns = new List<string>(carried) { KeyColumn, ComponentColumn };
-        outputColumns.AddRange(subPartColumns);
-        outputColumns.AddRange(Enumerable.Range(0, valueWidth).Select(ParseValueSettings.ValueColumnName));
-
+        var step = Prepare(inputColumns, settings);
         var rows = new List<IReadOnlyList<string>>();
         var rejects = new List<RecordIssue>();
         var flagged = new List<RecordIssue>();
@@ -73,63 +76,17 @@ public static class ParseValueTransform
         foreach (var record in records)
         {
             rowsIn++;
-
-            var cell = CompositeCellParser.Parse(
-                Value(record, settings.SourceColumn), settings.DelimiterLevels, settings.Trim, settings.DropEmpty);
-            if (!cell.IsValid)
+            var outcome = step.Process(record);
+            rows.AddRange(outcome.Rows);
+            if (outcome.Reject is not null)
             {
-                rejects.Add(new RecordIssue(record.RecordNumber, cell.Error!));
-                continue;
+                rejects.Add(outcome.Reject);
             }
 
-            var components = cell.Components;
-            var slotCount = settings.Slots.Count;
-            if (components.Count > slotCount)
-            {
-                if (settings.ExcessPolicy == ExcessPolicy.Reject)
-                {
-                    rejects.Add(new RecordIssue(record.RecordNumber, ExcessReason(components.Count, slotCount)));
-                    continue;
-                }
-
-                flagged.Add(new RecordIssue(record.RecordNumber, ExcessPairedReason(components.Count, slotCount)));
-                components = components.Take(slotCount).ToList();
-            }
-
-            var hasDuplicates = components.Select(c => c.Name).Distinct(StringComparer.Ordinal).Count() < components.Count;
-            if (hasDuplicates && settings.DuplicatePolicy == DuplicatePolicy.Reject)
-            {
-                rejects.Add(new RecordIssue(record.RecordNumber, DuplicateComponentIds));
-                continue;
-            }
-
-            if (hasDuplicates && settings.DuplicatePolicy == DuplicatePolicy.Flag)
-            {
-                flagged.Add(new RecordIssue(record.RecordNumber, DuplicateComponentIds));
-            }
-
-            var carriedValues = carried.Select(c => Value(record, c)).ToList();
-
-            // Component k uses slot k; a smaller slot leaves the remaining value columns empty.
-            for (var k = 0; k < components.Count; k++)
-            {
-                var row = new List<string>(outputColumns.Count);
-                row.AddRange(carriedValues);
-                row.Add(cell.Key!);
-                row.Add(components[k].Name);
-                row.AddRange(components[k].SubParts);
-
-                var slotColumns = settings.Slots[k].Columns;
-                for (var v = 0; v < valueWidth; v++)
-                {
-                    row.Add(v < slotColumns.Count ? Value(record, slotColumns[v]) : string.Empty);
-                }
-
-                rows.Add(row);
-            }
+            flagged.AddRange(outcome.Flags);
         }
 
-        return new ParseValueResult(outputColumns, rows, rejects, flagged, rowsIn);
+        return new ParseValueResult(step.OutputColumns, rows, rejects, flagged, rowsIn);
     }
 
     private static IReadOnlyList<string> CarriedColumns(IReadOnlyList<string> inputColumns, ParseValueSettings settings)
@@ -170,6 +127,100 @@ public static class ParseValueTransform
         }
     }
 
-    private static string Value(ParseValueRecord record, string column)
+    internal static string Value(ParseValueRecord record, string column)
         => record.Values.TryGetValue(column, out var value) ? value ?? string.Empty : string.Empty;
+}
+
+/// <summary>What one record gives: output rows, or a reject; and zero, one or two flags.</summary>
+public sealed record RecordOutcome(
+    IReadOnlyList<IReadOnlyList<string>> Rows,
+    RecordIssue? Reject,
+    IReadOnlyList<RecordIssue> Flags);
+
+/// <summary>
+/// The ParseValue step for one record at a time, made by <see cref="ParseValueTransform.Prepare"/>.
+/// The batch <see cref="ParseValueTransform.Run"/> and the full-file run both use it.
+/// </summary>
+public sealed class ParseValueStep
+{
+    private readonly IReadOnlyList<string> _carried;
+    private readonly ParseValueSettings _settings;
+    private readonly int _valueWidth;
+
+    internal ParseValueStep(IReadOnlyList<string> carried, ParseValueSettings settings)
+    {
+        _carried = carried;
+        _settings = settings;
+        _valueWidth = settings.Slots.Count == 0 ? 0 : settings.Slots.Max(s => s.Columns.Count);
+
+        var outputColumns = new List<string>(carried) { ParseValueTransform.KeyColumn, ParseValueTransform.ComponentColumn };
+        outputColumns.AddRange(settings.DelimiterLevels.Skip(2).Select(l => l.SubPartColumn!));
+        outputColumns.AddRange(Enumerable.Range(0, _valueWidth).Select(ParseValueSettings.ValueColumnName));
+        OutputColumns = outputColumns;
+    }
+
+    public IReadOnlyList<string> OutputColumns { get; }
+
+    public RecordOutcome Process(ParseValueRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        var settings = _settings;
+        var noRows = Array.Empty<IReadOnlyList<string>>();
+        var flags = new List<RecordIssue>();
+
+        var cell = CompositeCellParser.Parse(
+            ParseValueTransform.Value(record, settings.SourceColumn), settings.DelimiterLevels, settings.Trim, settings.DropEmpty);
+        if (!cell.IsValid)
+        {
+            return new RecordOutcome(noRows, new RecordIssue(record.RecordNumber, cell.Error!), flags);
+        }
+
+        var components = cell.Components;
+        var slotCount = settings.Slots.Count;
+        if (components.Count > slotCount)
+        {
+            if (settings.ExcessPolicy == ExcessPolicy.Reject)
+            {
+                return new RecordOutcome(noRows, new RecordIssue(record.RecordNumber, ParseValueTransform.ExcessReason(components.Count, slotCount)), flags);
+            }
+
+            flags.Add(new RecordIssue(record.RecordNumber, ParseValueTransform.ExcessPairedReason(components.Count, slotCount)));
+            components = components.Take(slotCount).ToList();
+        }
+
+        var hasDuplicates = components.Select(c => c.Name).Distinct(StringComparer.Ordinal).Count() < components.Count;
+        if (hasDuplicates && settings.DuplicatePolicy == DuplicatePolicy.Reject)
+        {
+            // An excess flag added above stays, as in the batch run before the split.
+            return new RecordOutcome(noRows, new RecordIssue(record.RecordNumber, ParseValueTransform.DuplicateComponentIds), flags);
+        }
+
+        if (hasDuplicates && settings.DuplicatePolicy == DuplicatePolicy.Flag)
+        {
+            flags.Add(new RecordIssue(record.RecordNumber, ParseValueTransform.DuplicateComponentIds));
+        }
+
+        var carriedValues = _carried.Select(c => ParseValueTransform.Value(record, c)).ToList();
+        var rows = new List<IReadOnlyList<string>>(components.Count);
+
+        // Component k uses slot k; a smaller slot leaves the remaining value columns empty.
+        for (var k = 0; k < components.Count; k++)
+        {
+            var row = new List<string>(OutputColumns.Count);
+            row.AddRange(carriedValues);
+            row.Add(cell.Key!);
+            row.Add(components[k].Name);
+            row.AddRange(components[k].SubParts);
+
+            var slotColumns = settings.Slots[k].Columns;
+            for (var v = 0; v < _valueWidth; v++)
+            {
+                row.Add(v < slotColumns.Count ? ParseValueTransform.Value(record, slotColumns[v]) : string.Empty);
+            }
+
+            rows.Add(row);
+        }
+
+        return new RecordOutcome(rows, null, flags);
+    }
 }

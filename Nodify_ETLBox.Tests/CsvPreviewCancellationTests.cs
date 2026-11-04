@@ -9,6 +9,7 @@ namespace Nodify_ETLBox.Tests;
 /// A caller's cancel must end ReadAsync promptly, as a cancel and not as an error.
 /// Before the fix a cancel that landed while ETLBox started the network hung for ever.
 /// </summary>
+[Collection(LargeFileCollection.Name)]
 public class CsvPreviewCancellationTests
 {
     private const int StressRepeats = 50;
