@@ -20,8 +20,11 @@ public static class ParseValueValidator
     public static string EachWithoutColumn(int level)
         => $"Delimiter level {level} splits each component but has no column name. Enter the name of the column for the sub-part.";
 
-    public static string SlotWithoutColumns(string slot)
-        => $"Slot {slot} has no columns. Mark its columns in the grid, or remove the slot.";
+    /// <summary>
+    /// One message for all empty slots. An empty slot is allowed while another slot has columns,
+    /// because a record may have fewer components than slots.
+    /// </summary>
+    public const string NoSlotHasColumns = "no slot has any columns yet. Open Configure and assign columns, or use Auto-fill.";
 
     public static string SlotColumnNotKept(string slot, string column)
         => $"Slot {slot} uses the column '{column}', which is not among the kept columns. Edit the slot, or keep the column in Data Studio.";
@@ -76,15 +79,14 @@ public static class ParseValueValidator
             messages.Add(NoSlots);
         }
 
-        foreach (var slot in settings.Slots)
+        else if (settings.Slots.All(s => s.Columns.Count == 0))
         {
-            if (slot.Columns.Count == 0)
-            {
-                messages.Add(SlotWithoutColumns(slot.Name));
-                continue;
-            }
+            messages.Add(NoSlotHasColumns);
+        }
 
-            if (kept is not null)
+        if (kept is not null)
+        {
+            foreach (var slot in settings.Slots)
             {
                 messages.AddRange(slot.Columns.Where(c => !kept.Contains(c)).Distinct().Select(c => SlotColumnNotKept(slot.Name, c)));
             }

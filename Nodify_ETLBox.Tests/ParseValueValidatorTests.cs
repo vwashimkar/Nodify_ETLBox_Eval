@@ -63,10 +63,17 @@ public class ParseValueValidatorTests
         => Assert.Equal([V.NoSlots], V.Validate(Valid() with { Slots = [] }, Kept));
 
     [Fact]
-    public void SlotWithoutColumns()
+    public void OneEmptySlot_IsAllowed_WhenAnotherSlotHasColumns()
     {
         var settings = Valid() with { Slots = [new Slot("S1", ["r01"]), new Slot("S2", [])] };
-        Assert.Equal([V.SlotWithoutColumns("S2")], V.Validate(settings, Kept));
+        Assert.Empty(V.Validate(settings, Kept));
+    }
+
+    [Fact]
+    public void AllSlotsEmpty_GivesOneMessage()
+    {
+        var settings = Valid() with { Slots = [new Slot("S1", []), new Slot("S2", []), new Slot("S3", [])] };
+        Assert.Equal([V.NoSlotHasColumns], V.Validate(settings, Kept));
     }
 
     [Fact]
@@ -91,7 +98,7 @@ public class ParseValueValidatorTests
     public void ColumnsUnknown_SkipsColumnChecksOnly()
     {
         var settings = Valid() with { SourceColumn = "nowhere", Slots = [new Slot("S1", [])] };
-        Assert.Equal([V.SlotWithoutColumns("S1")], V.Validate(settings, keptColumns: null));
+        Assert.Equal([V.NoSlotHasColumns], V.Validate(settings, keptColumns: null));
     }
 
     [Fact]
@@ -106,9 +113,9 @@ public class ParseValueValidatorTests
         var expected = new List<string>
         {
             "ParseValue: " + ParseValueUpstreamResolver.NotConnectedMessage,
-            "ParseValue: " + V.NoSourceColumn
+            "ParseValue: " + V.NoSourceColumn,
+            "ParseValue: no slot has any columns yet. Open Configure and assign columns, or use Auto-fill."
         };
-        expected.AddRange(Enumerable.Range(1, 6).Select(i => "ParseValue: " + V.SlotWithoutColumns($"S{i}")));
         Assert.Equal(expected, editor.Issues);
         Assert.Equal("Not configured", parse.ConfigurationStatus);
     }

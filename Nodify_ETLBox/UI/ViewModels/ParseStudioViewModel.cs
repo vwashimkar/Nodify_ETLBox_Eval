@@ -74,6 +74,20 @@ public sealed class SlotItem : ObservableObject
 
 public sealed record OutputShapeOption(OutputShape Shape, string Label, bool IsAvailable);
 
+/// <summary>What a piece of the selected cell's text is, for colouring it in the dialog.</summary>
+public enum SegmentKind
+{
+    Key,
+    Level1Delimiter,
+    Level2Delimiter,
+    Level3Delimiter,
+    Component,
+    SubPart
+}
+
+/// <summary>One piece of a cell's text. The segments of a cell join back to the exact text.</summary>
+public sealed record HighlightSegment(string Text, SegmentKind Kind);
+
 /// <summary>
 /// View model of the ParseValue dialog. Works on its own copy of the node's settings: Save writes
 /// them back, Cancel leaves the node unchanged. Preview rows come from the upstream CsvFile node
@@ -453,6 +467,84 @@ public class ParseStudioViewModel : ObservableObject
 
         IsLoading = false;
         ShowCancelLoad = false;
+    }
+
+    // ----- Highlighting -----
+
+    /// <summary>Splits <paramref name="cellText"/> with the delimiter levels as currently edited.</summary>
+    public IReadOnlyList<HighlightSegment> HighlightSegments(string? cellText)
+        => HighlightSegments(cellText, DelimiterLevels.Select(l => l.ToLevel()).ToList());
+
+    /// <summary>
+    /// Splits a cell into coloured segments, following the same rules as CompositeCellParser but
+    /// keeping every character (nothing trimmed or dropped), so the pieces join back to the text.
+    /// Level 1 splits once (key), level 2 splits all (components), each later level splits what
+    /// is left of a component at its first delimiter (sub-parts; all shown as Level3Delimiter).
+    /// A level with no delimiter text is skipped. Without the key delimiter the whole text is Key.
+    /// Pure: no state.
+    /// </summary>
+    public static IReadOnlyList<HighlightSegment> HighlightSegments(string? cellText, IReadOnlyList<DelimiterLevel> levels)
+    {
+        ArgumentNullException.ThrowIfNull(levels);
+
+        var segments = new List<HighlightSegment>();
+        var text = cellText ?? string.Empty;
+        if (text.Length == 0)
+        {
+            return segments;
+        }
+
+        var keyDelimiter = levels.Count > 0 ? levels[0].Delimiter : string.Empty;
+        var keyEnd = keyDelimiter.Length > 0 ? text.IndexOf(keyDelimiter, StringComparison.Ordinal) : -1;
+        if (keyEnd < 0)
+        {
+            Add(segments, text, SegmentKind.Key);
+            return segments;
+        }
+
+        Add(segments, text[..keyEnd], SegmentKind.Key);
+        Add(segments, keyDelimiter, SegmentKind.Level1Delimiter);
+        var rest = text[(keyEnd + keyDelimiter.Length)..];
+
+        var itemDelimiter = levels.Count > 1 ? levels[1].Delimiter : string.Empty;
+        var items = itemDelimiter.Length > 0 ? rest.Split(itemDelimiter) : [rest];
+        var subLevels = levels.Skip(2).Where(l => l.Delimiter.Length > 0).ToList();
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            if (i > 0)
+            {
+                Add(segments, itemDelimiter, SegmentKind.Level2Delimiter);
+            }
+
+            var current = items[i];
+            var kind = SegmentKind.Component;
+            foreach (var level in subLevels)
+            {
+                var at = current.IndexOf(level.Delimiter, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    break;
+                }
+
+                Add(segments, current[..at], kind);
+                Add(segments, level.Delimiter, SegmentKind.Level3Delimiter);
+                current = current[(at + level.Delimiter.Length)..];
+                kind = SegmentKind.SubPart;
+            }
+
+            Add(segments, current, kind);
+        }
+
+        return segments;
+    }
+
+    private static void Add(List<HighlightSegment> segments, string text, SegmentKind kind)
+    {
+        if (text.Length > 0)
+        {
+            segments.Add(new HighlightSegment(text, kind));
+        }
     }
 
     // ----- Delimiter levels -----
