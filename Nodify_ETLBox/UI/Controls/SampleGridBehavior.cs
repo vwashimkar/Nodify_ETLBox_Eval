@@ -105,7 +105,16 @@ public static class SampleGridBehavior
         var style = grid.TryFindResource("SourceColumnHeaderStyle") as Style;
         foreach (var column in grid.Columns)
         {
-            column.HeaderStyle = style is not null && !string.IsNullOrEmpty(source) && ColumnName(column) == source ? style : null;
+            if (style is not null && !string.IsNullOrEmpty(source) && ColumnName(column) == source)
+            {
+                column.HeaderStyle = style;
+            }
+            else
+            {
+                // Clear, never set null: a local null is passed on to the header and hides the
+                // implicit DataGridColumnHeader style (token colours), leaving the Windows default.
+                column.ClearValue(DataGridColumn.HeaderStyleProperty);
+            }
         }
     }
 
