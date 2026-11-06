@@ -1,0 +1,24 @@
+Header text
+##### BEGIN csv | only-name #####
+a,b
+1,2
+##### END #####
+##### BEGIN json #####
+{"k": 1}
+##### END #####
+##### BEGIN csv | empty-one | nothing inside #####
+##### END #####
+##### BEGIN weird | odd format | unknown format name #####
+hello
+##### END #####
+  ##### BEGIN csv | indented | must stay text #####
+##### begin csv | lowercase | must stay text #####
+101	Widget	4.99	
+##### BEGIN csv | spaces-kept | trailing spaces and a tab must be preserved #####
+x ,y	
+  leading,spaces  
+##### END #####   
+
+
+   
+Final text

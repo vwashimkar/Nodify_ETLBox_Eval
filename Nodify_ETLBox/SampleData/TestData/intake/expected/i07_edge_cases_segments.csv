@@ -1,0 +1,9 @@
+order,kind,format,name,notes,marker_begin_line,marker_end_line,content_first_line,content_last_line,content_line_count,content_start_byte,content_end_byte,status,message
+1,gap_text,text,,,,,1,1,1,0,11,Ok,
+2,marker,csv,only-name,,2,5,3,4,2,46,53,Ok,
+3,marker,json,json-1,,6,8,7,7,1,93,101,Ok,
+4,marker,csv,empty-one,nothing inside,9,10,,,0,,,Warning,empty segment
+5,marker,text,odd format,unknown format name,11,13,12,12,1,244,249,Warning,unknown format 'weird'; treated as text
+6,gap_text,text,,,,,14,16,3,266,385,Ok,
+7,marker,csv,spaces-kept,trailing spaces and a tab must be preserved,17,20,18,19,2,468,492,Ok,
+8,gap_text,text,,,,,24,24,1,518,528,Ok,

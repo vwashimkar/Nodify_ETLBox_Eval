@@ -1,0 +1,141 @@
+{
+  "formatVersion": 1,
+  "savedUtc": "2026-11-06T12:01:32Z",
+  "toolVersion": "1.0.0.0",
+  "projectName": "test_pipeline2",
+  "nodes": [
+    {
+      "id": "0eda38fc-7fe3-4c0f-859d-cc4ded4fc01b",
+      "type": "DotNetObject",
+      "name": "DotNetObject",
+      "x": 606,
+      "y": 77,
+      "settings": {
+        "kind": "ListOfStringDictionary"
+      }
+    },
+    {
+      "id": "364dcaf0-7658-48b2-b5e6-94d1de92b507",
+      "type": "CsvFile",
+      "name": "CsvFile",
+      "x": 55,
+      "y": 84,
+      "settings": {
+        "path": "C:\\codes\\Nodify_ETLBox_Eval\\Nodify_ETLBox\\SampleData\\TestData\\composite\\c06_semicolon.csv",
+        "relativePath": "../TestData/composite/c06_semicolon.csv",
+        "separator": ",",
+        "hasHeader": true,
+        "skipLines": 0,
+        "encodingName": "utf-8",
+        "previewRows": 5,
+        "columns": {
+          "mode": "Ignore",
+          "names": [
+            "extra_01",
+            "extra_02",
+            "extra_03",
+            "extra_04"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ddb06542-1f1d-4627-a08a-2a0852929397",
+      "type": "ParseValue",
+      "name": "ParseValue",
+      "x": 267,
+      "y": 89,
+      "settings": {
+        "sourceColumn": "sample",
+        "delimiterLevels": [
+          {
+            "delimiter": ":",
+            "mode": "Once"
+          },
+          {
+            "delimiter": "|",
+            "mode": "All"
+          }
+        ],
+        "trim": true,
+        "dropEmpty": true,
+        "slots": [
+          {
+            "name": "S1",
+            "columns": [
+              "r01",
+              "r02",
+              "r03"
+            ]
+          },
+          {
+            "name": "S2",
+            "columns": [
+              "r04",
+              "r05",
+              "r06"
+            ]
+          },
+          {
+            "name": "S3",
+            "columns": [
+              "r07",
+              "r08",
+              "r09"
+            ]
+          },
+          {
+            "name": "S4",
+            "columns": [
+              "r10",
+              "r11",
+              "r12"
+            ]
+          },
+          {
+            "name": "S5",
+            "columns": [
+              "r13",
+              "r14",
+              "r15"
+            ]
+          },
+          {
+            "name": "S6",
+            "columns": [
+              "r16",
+              "r17",
+              "r18"
+            ]
+          }
+        ],
+        "excessPolicy": "Reject",
+        "duplicatePolicy": "Allow",
+        "carryColumns": {
+          "mode": "All",
+          "names": []
+        },
+        "outputShape": "Long"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "fromNode": "364dcaf0-7658-48b2-b5e6-94d1de92b507",
+      "fromConnector": "Rows",
+      "toNode": "ddb06542-1f1d-4627-a08a-2a0852929397",
+      "toConnector": "Rows"
+    },
+    {
+      "fromNode": "ddb06542-1f1d-4627-a08a-2a0852929397",
+      "fromConnector": "Parsed",
+      "toNode": "0eda38fc-7fe3-4c0f-859d-cc4ded4fc01b",
+      "toConnector": "Parsed"
+    }
+  ],
+  "view": {
+    "zoom": 1,
+    "offsetX": 0,
+    "offsetY": 3.759999999999991
+  }
+}
