@@ -16,7 +16,7 @@ public sealed record BakedSetting(string Name, string Value);
 /// </summary>
 public sealed class GenerateDllViewModel : ObservableObject
 {
-    public const string ProjectFolderMessage = "This folder is inside a project. The generated .cs files would be compiled into it. Choose a folder outside any project.";
+    public const string ProjectFolderMessage = OutputFolderCheck.ProjectFolderMessage;
 
     private readonly PipelineDefinition _definition;
     private readonly IReadOnlyList<string> _outputColumns;
@@ -27,6 +27,8 @@ public sealed class GenerateDllViewModel : ObservableObject
     private string _assemblyName = CsvPipelineDllGenerator.DefaultClassName;
     private string _namespace = CsvPipelineDllGenerator.DefaultNamespace;
     private string _outputFolder;
+    private string? _checkedFolder;
+    private string? _checkedFolderError;
     private bool _isGenerating;
     private bool _succeeded;
     private string? _dllPath;
@@ -50,7 +52,7 @@ public sealed class GenerateDllViewModel : ObservableObject
         _generate = generate ?? CsvPipelineDllGenerator.Generate;
         _pickFolder = pickFolder;
         _copyText = copyText;
-        _isInsideProject = isInsideProject ?? MainViewModel.IsInsideProjectFolder;
+        _isInsideProject = isInsideProject ?? OutputFolderCheck.IsInsideProject;
         _outputFolder = outputFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CsvPipeline");
         Summary = BuildSummary(definition);
 
@@ -107,23 +109,18 @@ public sealed class GenerateDllViewModel : ObservableObject
 
     public string? NamespaceError => CsvPipelineDllGenerator.CheckNamespace(Namespace.Trim());
 
+    /// <summary>The check writes a small test file, so it runs once per folder text, not on every read.</summary>
     public string? OutputFolderError
     {
         get
         {
-            if (string.IsNullOrWhiteSpace(OutputFolder))
+            if (_checkedFolder != OutputFolder)
             {
-                return "Choose an output folder.";
+                _checkedFolder = OutputFolder;
+                _checkedFolderError = OutputFolderCheck.Check(OutputFolder, _isInsideProject);
             }
 
-            try
-            {
-                return _isInsideProject(OutputFolder.Trim()) ? ProjectFolderMessage : null;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                return $"The folder cannot be used. Choose another one. Details: {ex.Message}";
-            }
+            return _checkedFolderError;
         }
     }
 

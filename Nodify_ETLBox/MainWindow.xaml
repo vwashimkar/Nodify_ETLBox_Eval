@@ -5,7 +5,7 @@
         xmlns:vm="clr-namespace:EtlDesigner.UI.ViewModels"
         xmlns:conv="clr-namespace:EtlDesigner.UI.Converters"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="Data Flow ETL Designer"
+        Title="{Binding WindowTitle, Mode=OneWay}"
         Height="700"
         Width="1200"
         Background="{DynamicResource surface-brush}"
@@ -146,10 +146,65 @@
         </DataTemplate>
     </Window.Resources>
 
+    <Window.InputBindings>
+        <KeyBinding Key="N" Modifiers="Control" Command="{Binding NewProjectCommand}" />
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenProjectCommand}" />
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveProjectCommand}" />
+        <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveProjectAsCommand}" />
+    </Window.InputBindings>
+
     <DockPanel>
 
         <!-- ===== Toolbar ===== -->
         <ToolBar DockPanel.Dock="Top">
+            <Button Content="New" Width="50" Command="{Binding NewProjectCommand}" ToolTip="New project (Ctrl+N)" />
+            <Button Content="Open" Width="50" Command="{Binding OpenProjectCommand}" ToolTip="Open a project (Ctrl+O)" />
+            <Button Content="Save" Width="50" Command="{Binding SaveProjectCommand}" ToolTip="Save the project (Ctrl+S)" />
+            <Button Content="Save As" Width="60" Command="{Binding SaveProjectAsCommand}" ToolTip="Save the project under a new name (Ctrl+Shift+S)" />
+            <ToggleButton x:Name="RecentToggle" Content="Recent" Width="60"
+                          IsChecked="{Binding IsRecentOpen, Mode=TwoWay}"
+                          ToolTip="The last five projects" />
+            <Popup IsOpen="{Binding IsRecentOpen, Mode=TwoWay}"
+                   StaysOpen="False"
+                   Placement="Bottom"
+                   PlacementTarget="{Binding ElementName=RecentToggle}">
+                <Border Background="{DynamicResource surface-brush}"
+                        BorderBrush="{DynamicResource border-brush}"
+                        BorderThickness="1"
+                        Padding="{DynamicResource Thickness8}"
+                        MinWidth="360">
+                    <StackPanel>
+                        <TextBlock Text="No recent projects."
+                                   Foreground="{DynamicResource text-muted-brush}"
+                                   Visibility="{Binding HasNoRecentProjects, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        <ItemsControl ItemsSource="{Binding RecentProjects, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:RecentProjectViewModel}">
+                                    <DockPanel Margin="{DynamicResource Thickness4}">
+                                        <Button DockPanel.Dock="Right" Content="Remove"
+                                                Margin="{DynamicResource Thickness4}"
+                                                Padding="{DynamicResource Thickness4}"
+                                                Command="{Binding RemoveCommand, Mode=OneWay}" />
+                                        <TextBlock DockPanel.Dock="Right" Text="not found"
+                                                   VerticalAlignment="Center"
+                                                   Margin="{DynamicResource Thickness4}"
+                                                   Foreground="{DynamicResource text-muted-brush}"
+                                                   Visibility="{Binding IsMissing, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                                        <Button Content="{Binding DisplayName, Mode=OneWay}"
+                                                ToolTip="{Binding Path, Mode=OneWay}"
+                                                ToolTipService.ShowOnDisabled="True"
+                                                HorizontalContentAlignment="Left"
+                                                Margin="{DynamicResource Thickness4}"
+                                                Padding="{DynamicResource Thickness4}"
+                                                Command="{Binding OpenCommand, Mode=OneWay}" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Popup>
+            <Separator />
             <Button Content="Run" Width="60" Command="{Binding RunCommand}" />
             <Button Content="Execute" Width="70" Command="{Binding ExecuteCommand}"
                     ToolTip="{Binding ExecuteHint, Mode=OneWay}"
@@ -238,7 +293,9 @@
                                  PendingConnection="{Binding Editor.PendingConnection}"
                                  ConnectionStartedCommand="{Binding Editor.StartConnectionCommand}"
                                  ConnectionCompletedCommand="{Binding Editor.CreateConnectionCommand}"
-                                 DisconnectConnectorCommand="{Binding Editor.DisconnectConnectorCommand}">
+                                 DisconnectConnectorCommand="{Binding Editor.DisconnectConnectorCommand}"
+                                 ViewportZoom="{Binding Editor.ViewportZoom, Mode=TwoWay}"
+                                 ViewportLocation="{Binding Editor.ViewportLocation, Mode=TwoWay}">
 
                 <nodify:NodifyEditor.InputBindings>
                     <KeyBinding Key="Delete" Command="{Binding Editor.DeleteSelectedCommand}" />
@@ -348,6 +405,11 @@
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-muted-brush}"
                                                Margin="0,2,0,0" />
+                                    <ProgressBar IsIndeterminate="True"
+                                                 Height="{DynamicResource spacing-4}"
+                                                 Margin="0,2,0,0"
+                                                 ToolTip="Reading the columns of the file"
+                                                 Visibility="{Binding IsRefreshing, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                                     <TextBlock Text="{Binding ErrorMessage}"
                                                ToolTip="{Binding ErrorDetail}"
                                                FontSize="{DynamicResource font-caption}"

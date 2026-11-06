@@ -437,8 +437,9 @@
                             <Border BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Padding="{DynamicResource Thickness8}" Margin="{DynamicResource Thickness4}">
                                 <StackPanel>
                                     <TextBlock Text="Auto-fill" Style="{StaticResource SectionTitle}" />
-                                    <TextBlock Text="Cuts the columns selected in the grid (or all kept columns except the source when none are selected) into slots of this size. Every slot stays editable."
+                                    <TextBlock Text="Cuts the columns selected in the grid into slots of this size. Every slot stays editable."
                                                TextWrapping="Wrap" Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
+                                    <TextBlock Text="{Binding AutoFillHint, Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
                                     <WrapPanel>
                                         <TextBlock Text="Group size" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
                                         <TextBox Width="48" Margin="{DynamicResource Thickness4}" Text="{Binding AutoFillGroupSize, UpdateSourceTrigger=PropertyChanged}" />

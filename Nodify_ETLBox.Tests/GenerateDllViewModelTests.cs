@@ -167,6 +167,10 @@ public class GenerateDllEnablingTests
         public string? PickCsvFile(string? currentPath) => null;
         public void ShowGenerateDll(GenerateDllViewModel viewModel) => Shown = viewModel;
         public string? PickFolder(string? currentFolder) => null;
+        public string? PickProjectToOpen(string? currentPath) => null;
+        public string? PickProjectToSave(string? currentPath, string projectName) => null;
+        public UnsavedChangesChoice AskUnsavedChanges(string projectName) => UnsavedChangesChoice.Cancel;
+        public void ShowError(string title, string message) { }
     }
 
     private static (MainViewModel Main, NodeViewModel Csv, NoDialogs Dialogs, PipelineDefinition Definition) Graph()

@@ -72,7 +72,7 @@ public partial class ParseStudioViewModelTests
     }
 
     [Fact]
-    public async Task AutoFill_UsesGridSelection_ElseAllKeptColumnsButTheSource()
+    public async Task AutoFill_UsesGridSelection()
     {
         var (vm, _, _) = await LoadedC01();
         vm.SourceColumn = "sample";
@@ -83,13 +83,30 @@ public partial class ParseStudioViewModelTests
         Assert.Equal(2, vm.Slots.Count);
         Assert.Equal(["r01", "r02"], vm.Slots[0].Columns);
         Assert.Equal(["r04"], vm.Slots[1].Columns);
+    }
+
+    [Fact]
+    public async Task AutoFill_WithNoGridSelection_IsDisabled_ShowsTheHint_AndChangesNoSlot()
+    {
+        var (vm, _, _) = await LoadedC01();
+        vm.SourceColumn = "sample";
+        var slotsBefore = vm.Slots.Select(s => s.Columns.ToList()).ToList();
+
+        Assert.False(vm.AutoFillCommand.CanExecute(null));
+        Assert.Equal(
+            "Select the value columns in the grid first (for example by Shift-clicking from the first to the last), then press Auto-fill.",
+            vm.AutoFillHint);
+
+        vm.AutoFillFromSelection();
+        Assert.Equal(slotsBefore, vm.Slots.Select(s => s.Columns.ToList()).ToList());
+
+        vm.SetGridSelection(Cells((0, "r01")));
+        Assert.True(vm.AutoFillCommand.CanExecute(null));
+        Assert.Null(vm.AutoFillHint);
 
         vm.SetGridSelection(Cells());
-        vm.AutoFillGroupSize = 100;
-        vm.AutoFillCommand.Execute(null);
-        Assert.Single(vm.Slots);
-        Assert.DoesNotContain("sample", vm.Slots[0].Columns);
-        Assert.Equal(vm.Columns.Count - 1, vm.Slots[0].Columns.Count);
+        Assert.False(vm.AutoFillCommand.CanExecute(null));
+        Assert.NotNull(vm.AutoFillHint);
     }
 
     [Fact]

@@ -156,6 +156,10 @@ public class ExecuteEnablingTests
         public GenerateDllViewModel? ShownGenerateDll { get; private set; }
         public void ShowGenerateDll(GenerateDllViewModel viewModel) => ShownGenerateDll = viewModel;
         public string? PickFolder(string? currentFolder) => null;
+        public string? PickProjectToOpen(string? currentPath) => null;
+        public string? PickProjectToSave(string? currentPath, string projectName) => null;
+        public UnsavedChangesChoice AskUnsavedChanges(string projectName) => UnsavedChangesChoice.Cancel;
+        public void ShowError(string title, string message) { }
     }
 
     private static (MainViewModel Main, NodeViewModel Csv, NodeViewModel Parse, NodeViewModel Output, NoDialogs Dialogs) BuildGraph(bool connectOutput = true)

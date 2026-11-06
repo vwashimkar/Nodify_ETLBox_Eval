@@ -42,6 +42,7 @@
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
                 <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding PreviewRows, UpdateSourceTrigger=PropertyChanged}" />
                 <Button Content="Reload" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding ReloadCommand}" />
+                <TextBlock Text="{Binding PreviewRowsMessage, Mode=OneWay}" VerticalAlignment="Center" Foreground="{DynamicResource warning-brush}" Margin="{DynamicResource Thickness4}" />
             </WrapPanel>
         </Border>
 
@@ -71,7 +72,8 @@
                             </Border.Style>
                             <StackPanel>
                                 <TextBlock Text="{Binding PreviewError}" TextWrapping="Wrap" Foreground="{DynamicResource error-brush}" />
-                                <TextBlock Text="Check the separator, the header setting and the encoding." Margin="{DynamicResource Thickness4}" FontWeight="SemiBold" />
+                                <TextBlock Text="Check the separator, the header setting and the encoding." Margin="{DynamicResource Thickness4}" FontWeight="SemiBold"
+                                           Visibility="{Binding ShowFormatHint, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
                         </Border>
 

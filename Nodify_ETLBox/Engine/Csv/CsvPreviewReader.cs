@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace EtlDesigner.Engine.Csv;
 
 public sealed record CsvPreview(
@@ -6,7 +8,8 @@ public sealed record CsvPreview(
     bool HasMoreRows,
     string? Error,
     long ElapsedMs,
-    bool Cancelled = false);
+    bool Cancelled = false,
+    bool IsFormatError = false);
 
 /// <summary>
 /// Reads the first rows of a file for the preview, through <see cref="CsvRecordReader"/> (the
@@ -14,6 +17,9 @@ public sealed record CsvPreview(
 /// </summary>
 public sealed class CsvPreviewReader
 {
+    /// <summary>A preview never reads more rows than this, so it stays under the free edition's limit.</summary>
+    public const int MaxPreviewRows = 1000;
+
     /// <summary>Called with the running row count after each row is collected. Used by tests.</summary>
     internal Action<int>? RowCollected { get; set; }
 
@@ -21,7 +27,7 @@ public sealed class CsvPreviewReader
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        var previewRows = settings.PreviewRows < 1 ? 1 : settings.PreviewRows;
+        var previewRows = Math.Clamp(settings.PreviewRows, 1, MaxPreviewRows);
         var rowsToRead = previewRows + 1;
         var collectedRows = new List<IReadOnlyList<string>>(rowsToRead);
         IReadOnlyList<string> columns = Array.Empty<string>();
@@ -39,25 +45,9 @@ public sealed class CsvPreviewReader
             return CreateCancelled(outcome.ElapsedMs);
         }
 
-        if (outcome.SettingsError is not null)
+        if (ErrorPreview(outcome) is { } failed)
         {
-            return CreateError(outcome.SettingsError, outcome.ElapsedMs);
-        }
-
-        if (outcome.LicenceLimitReached)
-        {
-            return CreateError("The ETLBox licence stopped the preview. A valid licence is needed to read this file.", outcome.ElapsedMs);
-        }
-
-        if (outcome.Failure is not null)
-        {
-            return CreateError($"Could not read the CSV preview. Check separator/header/encoding and try again. Details: {outcome.Failure.Message}", outcome.ElapsedMs);
-        }
-
-        if (outcome.StructuralErrors.Count > 0)
-        {
-            var message = BuildStructuralErrorMessage(outcome.StructuralErrors[0].ErrorText);
-            return new CsvPreview(Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>(), false, message, outcome.ElapsedMs);
+            return failed;
         }
 
         if (collectedRows.Count == 0)
@@ -70,8 +60,39 @@ public sealed class CsvPreviewReader
         return new CsvPreview(columns, rows, hasMoreRows, null, outcome.ElapsedMs);
     }
 
-    private static CsvPreview CreateError(string error, long elapsedMs)
-        => new(Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>(), false, error, elapsedMs);
+    /// <summary>The preview for a read that failed, or null. Only a fault in the file's CSV format is an <see cref="CsvPreview.IsFormatError"/>.</summary>
+    internal static CsvPreview? ErrorPreview(CsvReadOutcome outcome)
+    {
+        if (outcome.SettingsError is not null)
+        {
+            return CreateError(outcome.SettingsError, outcome.ElapsedMs);
+        }
+
+        if (outcome.LicenceLimitReached)
+        {
+            return CreateError("The ETLBox licence stopped the preview. A valid licence is needed to read this file.", outcome.ElapsedMs);
+        }
+
+        if (outcome.Failure is IOException or UnauthorizedAccessException)
+        {
+            return CreateError($"Could not open the file. Check that it exists and that no other program has it open. Details: {outcome.Failure.Message}", outcome.ElapsedMs);
+        }
+
+        if (outcome.Failure is not null)
+        {
+            return CreateError($"Could not read the CSV preview. Check separator/header/encoding and try again. Details: {outcome.Failure.Message}", outcome.ElapsedMs, isFormatError: true);
+        }
+
+        if (outcome.StructuralErrors.Count > 0)
+        {
+            return CreateError(BuildStructuralErrorMessage(outcome.StructuralErrors[0].ErrorText), outcome.ElapsedMs, isFormatError: true);
+        }
+
+        return null;
+    }
+
+    private static CsvPreview CreateError(string error, long elapsedMs, bool isFormatError = false)
+        => new(Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>(), false, error, elapsedMs, IsFormatError: isFormatError);
 
     private static CsvPreview CreateCancelled(long elapsedMs)
         => new(Array.Empty<string>(), Array.Empty<IReadOnlyList<string>>(), false, null, elapsedMs, Cancelled: true);

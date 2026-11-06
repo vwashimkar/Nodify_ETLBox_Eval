@@ -1,0 +1,7 @@
+file,expected_detected_format
+i08a_nomarkers_csv.txt,csv
+i08b_nomarkers_json.txt,json
+i08c_nomarkers_xml.txt,xml
+i08d_nomarkers_tsv.txt,tsv
+i08e_nomarkers_jsonlines.txt,json-lines
+i08f_nomarkers_plain.txt,text

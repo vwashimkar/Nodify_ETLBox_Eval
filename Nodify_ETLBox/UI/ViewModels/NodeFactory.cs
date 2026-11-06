@@ -3,6 +3,7 @@ using System.Windows;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Parsing;
 using EtlDesigner.Engine.Pipeline;
+using EtlDesigner.Engine.Project;
 using EtlDesigner.UI.Mvvm;
 using EtlDesigner.UI.ViewModels;
 
@@ -19,6 +20,43 @@ public static class NodeFactory
 
     /// <summary>Opens the ParseValue dialog for a node. Set by MainViewModel.</summary>
     public static Func<NodeViewModel, bool>? ParseValueConfigureHandler { get; set; }
+
+    /// <summary>Creates a node of a type. A loaded node keeps its id, so it is otherwise a new node of that type.</summary>
+    public static NodeViewModel Create(NodeType nodeType, Point location, Guid? id = null)
+    {
+        var node = nodeType switch
+        {
+            NodeType.CsvSource => CreateCsvSource(location),
+            NodeType.CsvFile => CreateCsvFile(location),
+            NodeType.FilterByCountry => CreateFilterByCountry(location),
+            NodeType.ToJson => CreateToJson(location),
+            NodeType.ParseJson => CreateParseJson(location),
+            NodeType.ResultJson => CreateResultJson(location),
+            NodeType.ParseValue => CreateParseValue(location),
+            NodeType.DotNetObject => CreateDotNetObject(location),
+            _ => throw new ArgumentException($"Unknown node type: {nodeType}")
+        };
+
+        if (id is { } savedId)
+        {
+            node.Id = savedId;
+        }
+
+        return node;
+    }
+
+    /// <summary>
+    /// The placeholder for a node this version cannot use. It has no connectors or settings; its
+    /// JSON stays in <see cref="NodeViewModel.LoadedFrom"/> and is written back on save.
+    /// </summary>
+    public static NodeViewModel CreateUnknown(ProjectNode saved, string issue) => new(saved.Id, $"Unknown node ({saved.Type})", NodeType.Unknown)
+    {
+        Location = new Point(saved.X, saved.Y),
+        ConfigurationStatus = "Not configured",
+        LoadedFrom = saved,
+        UnknownNodeMessage = issue
+    };
+
     /// <summary>
     /// Creates a CsvSource node.
     /// Output: "Rows" (PortKind.Rows)
@@ -115,6 +153,13 @@ public static class NodeFactory
         var hasGuessedFromFirstFile = false;
         filePath.ValueChanged += (_, _) =>
         {
+            // A saved node has its settings already; they are not suggestions.
+            if (node.IsRestoring)
+            {
+                hasGuessedFromFirstFile = !string.IsNullOrWhiteSpace(filePath.Value);
+                return;
+            }
+
             if (hasGuessedFromFirstFile)
             {
                 return;

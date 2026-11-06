@@ -3,6 +3,7 @@ using System.Windows;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Parsing;
 using EtlDesigner.Engine.Pipeline;
+using EtlDesigner.Engine.Project;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -16,7 +17,10 @@ public enum NodeType
     ParseJson,
     ResultJson,
     ParseValue,
-    DotNetObject
+    DotNetObject,
+
+    /// <summary>A placeholder for a node in a project file that this version cannot use. Never in the palette.</summary>
+    Unknown
 }
 
 public enum NodeState
@@ -42,11 +46,13 @@ public class NodeViewModel : ObservableObject
     private System.Windows.Size _size;
     private string _configurationStatus;
     private ParseValueSettings? _parseValueSettings;
+    private string _title;
+    private bool _isRefreshing;
 
     public NodeViewModel(Guid id, string title, NodeType nodeType, Func<CsvFileSettings, bool>? loadPreviewAction = null)
     {
         Id = id;
-        Title = title ?? throw new ArgumentNullException(nameof(title));
+        _title = title ?? throw new ArgumentNullException(nameof(title));
         NodeType = nodeType;
         _loadPreviewAction = loadPreviewAction;
         _location = new Point();
@@ -66,9 +72,13 @@ public class NodeViewModel : ObservableObject
         LoadPreviewCommand = new RelayCommand(_ => LoadPreview(), _ => CanLoadPreview());
     }
 
-    public Guid Id { get; }
+    public Guid Id { get; internal set; }
 
-    public string Title { get; }
+    public string Title
+    {
+        get => _title;
+        set => SetProperty(ref _title, value ?? string.Empty);
+    }
 
     public NodeType NodeType { get; }
 
@@ -132,6 +142,22 @@ public class NodeViewModel : ObservableObject
         }
     }
 
+    /// <summary>True while the node reads from the file system in the background; shows a spinner.</summary>
+    public bool IsRefreshing
+    {
+        get => _isRefreshing;
+        set => SetProperty(ref _isRefreshing, value);
+    }
+
+    /// <summary>The node as it came from the project file, kept for what this version does not read.</summary>
+    internal ProjectNode? LoadedFrom { get; set; }
+
+    /// <summary>Unknown nodes only: the Issues line.</summary>
+    internal string? UnknownNodeMessage { get; set; }
+
+    /// <summary>True while saved values are written to the setting rows, so that nothing is suggested from the file.</summary>
+    internal bool IsRestoring { get; set; }
+
     public RelayCommand LoadPreviewCommand { get; }
 
     public ObservableCollection<ConnectorViewModel> Inputs { get; }
@@ -141,6 +167,9 @@ public class NodeViewModel : ObservableObject
     public ObservableCollection<SettingViewModel> Settings { get; }
 
     public CsvColumnSelection ColumnSelection { get; } = new();
+
+    /// <summary><see cref="ColumnSelection"/> is changed in place; this tells the listeners that it was.</summary>
+    public void NotifyColumnSelectionChanged() => OnPropertyChanged(nameof(ColumnSelection));
 
     /// <summary>
     /// CsvFile only: the column names of the file as last read with the current settings, or

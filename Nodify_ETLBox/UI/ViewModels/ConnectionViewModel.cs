@@ -1,3 +1,4 @@
+using EtlDesigner.Engine.Project;
 using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -13,4 +14,7 @@ public class ConnectionViewModel : ObservableObject
     public ConnectorViewModel Source { get; }
 
     public ConnectorViewModel Target { get; }
+
+    /// <summary>The connection as it came from the project file, kept for what this version does not read.</summary>
+    internal ProjectConnection? LoadedFrom { get; set; }
 }

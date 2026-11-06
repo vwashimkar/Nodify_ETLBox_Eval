@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Project;
 using EtlDesigner.UI.ViewModels;
 using Nodify_ETLBox.UI;
 
@@ -109,6 +110,69 @@ public class DialogService : IDialogService
         }
 
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
+
+    public string? PickProjectToOpen(string? currentPath)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Open project",
+            CheckFileExists = true,
+            CheckPathExists = true,
+            Multiselect = false,
+            Filter = ProjectFileFilter
+        };
+
+        SetInitialFolder(dialog, currentPath);
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    public string? PickProjectToSave(string? currentPath, string projectName)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save project",
+            AddExtension = true,
+            DefaultExt = ProjectSerializer.FileExtension,
+            FileName = projectName + ProjectSerializer.FileExtension,
+            OverwritePrompt = true,
+            Filter = ProjectFileFilter
+        };
+
+        SetInitialFolder(dialog, currentPath);
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    public UnsavedChangesChoice AskUnsavedChanges(string projectName)
+    {
+        var owner = Application.Current.MainWindow;
+        var viewModel = new UnsavedChangesViewModel(projectName);
+
+        var window = new UnsavedChangesWindow
+        {
+            Owner = owner,
+            DataContext = viewModel,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.ShowDialog();
+        return viewModel.Choice;
+    }
+
+    public void ShowError(string title, string message)
+        => MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+
+    private const string ProjectFileFilter = "ETL projects (*.etlproj)|*.etlproj|All files (*.*)|*.*";
+
+    private static void SetInitialFolder(FileDialog dialog, string? currentPath)
+    {
+        var folder = string.IsNullOrWhiteSpace(currentPath) ? null : Path.GetDirectoryName(currentPath);
+        if (folder is not null && Directory.Exists(folder))
+        {
+            dialog.InitialDirectory = folder;
+        }
     }
 
     public string? PickCsvFile(string? currentPath)
