@@ -223,6 +223,189 @@ public class DataStudioViewModelTests
         Assert.Equal(4, vm.LoadedRowCount);
     }
 
+    [Theory]
+    [InlineData(1001)]
+    [InlineData(5001)]
+    [InlineData(6000)]
+    public async Task PreviewRowsAboveTheLimit_IsClampedTo1000_WithTheInlineMessage(int typed)
+    {
+        var (vm, _, requests) = await FakeLoaded(Good);
+
+        vm.PreviewRows = typed;
+
+        Assert.Equal(1000, vm.PreviewRows);
+        Assert.Equal("Preview rows is limited to 1,000. Use Execute to read the whole file.", vm.PreviewRowsMessage);
+
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+        Assert.Equal(1000, requests[^1].PreviewRows);
+    }
+
+    [Fact]
+    public async Task PreviewRowsAtTheLimit_HasNoMessage_AndALowerValueClearsIt()
+    {
+        var (vm, _, _) = await FakeLoaded(Good);
+
+        vm.PreviewRows = 1000;
+        Assert.Null(vm.PreviewRowsMessage);
+
+        vm.PreviewRows = 6000;
+        Assert.NotNull(vm.PreviewRowsMessage);
+
+        vm.PreviewRows = 20;
+        Assert.Null(vm.PreviewRowsMessage);
+        Assert.Equal(20, vm.PreviewRows);
+    }
+
+    [Fact]
+    public async Task PreviewRowsAlreadyAtTheLimit_RefreshesTheBox_WhenALargerValueIsTyped()
+    {
+        var (vm, _, _) = await FakeLoaded(Good);
+        vm.PreviewRows = 1000;
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.PreviewRows = 6000;
+
+        Assert.Contains(nameof(DataStudioViewModel.PreviewRows), changed);
+    }
+
+    [Fact]
+    public async Task NodeSavedAbove1000_OpensClamped_AndSaveWrites1000()
+    {
+        var (vm, node, requests) = await FakeLoaded(Good, previewRows: "6000");
+
+        Assert.Equal(1000, vm.PreviewRows);
+        Assert.NotNull(vm.PreviewRowsMessage);
+        Assert.Equal(1000, requests[0].PreviewRows);
+
+        vm.SaveCommand.Execute(null);
+        Assert.Equal("1000", node.Settings.First(s => s.Key == "PreviewRows").Value);
+    }
+
+    [Fact]
+    public async Task C10_WithPreviewRows6000_ShowsTheFirst1000Rows_WithoutALicenceStop()
+    {
+        var node = CreateCsvNode(CompositePath("c10_large.csv"), "Comma", true, "0", "utf-8", "5");
+        var vm = new DataStudioViewModel(node, BuildSettings(node)) { PreviewRows = 6000 };
+
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+
+        Assert.Null(vm.PreviewError);
+        Assert.Equal(1000, vm.LoadedRowCount);
+    }
+
+    [Fact]
+    public async Task LicenceStop_HasNoFormatHint_AndClearsTheOldData()
+    {
+        CsvPreview next = Good;
+        var (vm, _, _) = await FakeLoaded(() => next);
+        Assert.Equal(1, vm.LoadedRowCount);
+        Assert.False(vm.ShowFormatHint);
+        Assert.Contains("Showing 1 rows", vm.StatusText);
+
+        next = new CsvPreview([], [], false, "The ETLBox licence stopped the preview. A valid licence is needed to read this file.", 3);
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+
+        Assert.NotNull(vm.PreviewError);
+        Assert.False(vm.ShowFormatHint);
+        Assert.Null(vm.DataRowsView);
+        Assert.Null(vm.ResultRowsView);
+        Assert.Empty(vm.Columns);
+        Assert.Empty(vm.FilteredColumns);
+        Assert.Equal(0, vm.LoadedRowCount);
+        Assert.Equal(0, vm.TotalColumnCount);
+        Assert.Equal(string.Empty, vm.StatusText);
+        Assert.Equal(string.Empty, vm.EmptyStateMessage);
+    }
+
+    [Fact]
+    public async Task MissingFile_HasNoFormatHint_AndClearsTheOldData()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"studio-{Guid.NewGuid():N}.csv");
+        File.Copy(CompositePath("c01_basic.csv"), path);
+        var node = CreateCsvNode(path, "Comma", true, "0", "utf-8", "5");
+        var vm = new DataStudioViewModel(node, BuildSettings(node));
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+        Assert.Equal(4, vm.LoadedRowCount);
+
+        File.Delete(path);
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+
+        Assert.NotNull(vm.PreviewError);
+        Assert.False(vm.ShowFormatHint);
+        Assert.Equal(0, vm.LoadedRowCount);
+        Assert.Equal(string.Empty, vm.StatusText);
+    }
+
+    [Fact]
+    public async Task UnclosedQuote_ShowsTheFormatHint_AndAFixedLoadHidesIt()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"studio-{Guid.NewGuid():N}.csv");
+        File.WriteAllLines(path, ["id,name", "1,Good", "2,\"Broken"]);
+        try
+        {
+            var node = CreateCsvNode(path, "Comma", true, "0", "utf-8", "5");
+            var vm = new DataStudioViewModel(node, BuildSettings(node));
+            await TestTimeout.Run(() => vm.ReloadNowAsync());
+
+            Assert.NotNull(vm.PreviewError);
+            Assert.True(vm.ShowFormatHint);
+            Assert.Equal(0, vm.LoadedRowCount);
+
+            File.WriteAllLines(path, ["id,name", "1,Good"]);
+            await TestTimeout.Run(() => vm.ReloadNowAsync());
+
+            Assert.Null(vm.PreviewError);
+            Assert.False(vm.ShowFormatHint);
+            Assert.Equal(1, vm.LoadedRowCount);
+            Assert.Contains("Showing 1 rows", vm.StatusText);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task FailedLoad_KeepsTheColumnSelection_ForTheNextGoodLoadAndForSave()
+    {
+        CsvPreview next = Good;
+        var (vm, node, _) = await FakeLoaded(() => next);
+        vm.Columns.Single(c => c.Name == "a").IsSelected = true;
+
+        next = new CsvPreview([], [], false, "File was not found. Check the path and try again.", 3);
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+        vm.SaveCommand.Execute(null);
+
+        Assert.Equal(["a"], node.ColumnSelection.Names);
+        Assert.Null(node.KnownColumns);
+
+        next = Good;
+        await TestTimeout.Run(() => vm.ReloadNowAsync());
+
+        Assert.True(vm.Columns.Single(c => c.Name == "a").IsSelected);
+        Assert.False(vm.Columns.Single(c => c.Name == "b").IsSelected);
+    }
+
+    private static readonly CsvPreview Good = new(["a", "b"], [["1", "2"]], false, null, 3);
+
+    private static Task<(DataStudioViewModel Vm, NodeViewModel Node, List<CsvFileSettings> Requests)> FakeLoaded(CsvPreview preview, string previewRows = "5")
+        => FakeLoaded(() => preview, previewRows);
+
+    private static async Task<(DataStudioViewModel Vm, NodeViewModel Node, List<CsvFileSettings> Requests)> FakeLoaded(Func<CsvPreview> preview, string previewRows = "5")
+    {
+        var node = CreateCsvNode("fake.csv", "Comma", true, "0", "utf-8", previewRows);
+        var requests = new List<CsvFileSettings>();
+        var vm = new DataStudioViewModel(node, BuildSettings(node), read: (settings, _) =>
+        {
+            requests.Add(settings);
+            return Task.FromResult(preview());
+        });
+
+        await TestTimeout.Run(() => vm.WaitForCurrentLoadAsync());
+        return (vm, node, requests);
+    }
+
     private static NodeViewModel CreateCsvNode(string filePath, string separator, bool hasHeader, string skipLines, string encodingName, string previewRows)
     {
         var node = new NodeViewModel(Guid.NewGuid(), "CsvFile", NodeType.CsvFile, _ => true);

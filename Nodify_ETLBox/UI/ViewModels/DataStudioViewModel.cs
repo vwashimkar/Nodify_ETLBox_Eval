@@ -33,8 +33,10 @@ public sealed class DataStudioColumnItem : ObservableObject
 
 public class DataStudioViewModel : ObservableObject
 {
+    public const string PreviewRowsLimitMessage = "Preview rows is limited to 1,000. Use Execute to read the whole file.";
+
     private readonly NodeViewModel _node;
-    private readonly CsvPreviewReader _reader;
+    private readonly Func<CsvFileSettings, CancellationToken, Task<CsvPreview>> _read;
     private readonly CsvFileSettings _initialSettings;
     private readonly CsvColumnSelection _workingSelection;
 
@@ -46,6 +48,8 @@ public class DataStudioViewModel : ObservableObject
     private bool _isLoading;
     private bool _showCancelLoad;
     private string? _previewError;
+    private bool _showFormatHint;
+    private string? _previewRowsMessage;
     private string _separator;
     private bool _hasHeader;
     private int _skipLines;
@@ -61,10 +65,12 @@ public class DataStudioViewModel : ObservableObject
     private int _missingSelectedNamesCount;
     private bool _isIgnoreMode;
 
-    public DataStudioViewModel(NodeViewModel node, CsvFileSettings settings, CsvPreviewReader? reader = null)
+    /// <param name="read">Reads the preview; a <see cref="CsvPreviewReader"/> by default (tests pass a fake).</param>
+    public DataStudioViewModel(NodeViewModel node, CsvFileSettings settings, CsvPreviewReader? reader = null,
+        Func<CsvFileSettings, CancellationToken, Task<CsvPreview>>? read = null)
     {
         _node = node ?? throw new ArgumentNullException(nameof(node));
-        _reader = reader ?? new CsvPreviewReader();
+        _read = read ?? (reader ?? new CsvPreviewReader()).ReadAsync;
         _initialSettings = settings ?? throw new ArgumentNullException(nameof(settings));
         _workingSelection = node.ColumnSelection.Clone();
 
@@ -73,7 +79,8 @@ public class DataStudioViewModel : ObservableObject
         _hasHeader = settings.HasHeader;
         _skipLines = settings.SkipLines;
         _encodingName = settings.EncodingName;
-        _previewRows = settings.PreviewRows;
+        _previewRows = ClampPreviewRows(settings.PreviewRows);
+        _previewRowsMessage = PreviewRowsMessageFor(settings.PreviewRows);
         _hideIgnoredColumnsInGrid = false;
         _columnFilter = string.Empty;
         _selectedCellValue = string.Empty;
@@ -173,12 +180,25 @@ public class DataStudioViewModel : ObservableObject
         get => _previewRows;
         set
         {
-            var normalized = value < 1 ? 1 : value;
+            var normalized = ClampPreviewRows(value);
+            PreviewRowsMessage = PreviewRowsMessageFor(value);
             if (SetProperty(ref _previewRows, normalized))
             {
                 ScheduleReload();
             }
+            else if (value != normalized)
+            {
+                // The number did not change, but the box still shows what was typed.
+                OnPropertyChanged(nameof(PreviewRows));
+            }
         }
+    }
+
+    /// <summary>Shown next to the box when a larger value was cut to the limit.</summary>
+    public string? PreviewRowsMessage
+    {
+        get => _previewRowsMessage;
+        private set => SetProperty(ref _previewRowsMessage, value);
     }
 
     public bool HideIgnoredColumnsInGrid
@@ -264,8 +284,15 @@ public class DataStudioViewModel : ObservableObject
         private set => SetProperty(ref _previewError, value);
     }
 
+    /// <summary>True when the last load failed on the file's CSV format, so its settings are worth checking.</summary>
+    public bool ShowFormatHint
+    {
+        get => _showFormatHint;
+        private set => SetProperty(ref _showFormatHint, value);
+    }
+
     public string EmptyStateMessage
-        => DataRowsView is null || DataRowsView.Count == 0 ? "This file has no data rows." : string.Empty;
+        => PreviewError is null && (DataRowsView is null || DataRowsView.Count == 0) ? "This file has no data rows." : string.Empty;
 
     public int LoadedRowCount => DataRowsView?.Count ?? 0;
 
@@ -287,6 +314,11 @@ public class DataStudioViewModel : ObservableObject
     {
         get
         {
+            if (PreviewError is not null)
+            {
+                return string.Empty;
+            }
+
             var more = HasMoreRows ? " of more in the file" : string.Empty;
             var missing = MissingSelectedNamesCount > 0 ? $" · {MissingSelectedNamesCount} saved names missing" : string.Empty;
             return $"Showing {LoadedRowCount} rows{more} · Columns {DisplayedColumnCount}/{TotalColumnCount} · {ElapsedMs} ms · {FileName}{missing}";
@@ -370,7 +402,7 @@ public class DataStudioViewModel : ObservableObject
 
         var request = BuildSettingsRequest();
 
-        _currentLoadTask = _reader.ReadAsync(request, requestToken);
+        _currentLoadTask = _read(request, requestToken);
         CsvPreview preview;
 
         try
@@ -392,12 +424,22 @@ public class DataStudioViewModel : ObservableObject
         ElapsedMs = preview.ElapsedMs;
         HasMoreRows = preview.HasMoreRows;
         PreviewError = preview.Error;
+        ShowFormatHint = preview.IsFormatError;
 
         if (preview.Error != null)
         {
+            lock (_applyLock)
+            {
+                if (!ReferenceEquals(thisLoad, _loadCts))
+                {
+                    return;
+                }
+
+                ClearPreview();
+            }
+
             IsLoading = false;
             ShowCancelLoad = false;
-            OnPropertyChanged(nameof(StatusText));
             return;
         }
 
@@ -415,6 +457,24 @@ public class DataStudioViewModel : ObservableObject
 
         IsLoading = false;
         ShowCancelLoad = false;
+    }
+
+    /// <summary>
+    /// A failed load shows no rows, so old data cannot pass for the result of the new settings.
+    /// The saved column selection stays: <see cref="RefreshSelectionCacheFromItems"/> is not called.
+    /// </summary>
+    private void ClearPreview()
+    {
+        _allRowsTable = null;
+        MissingSelectedNamesCount = 0;
+        CurrentCell = default;
+        Columns.Clear();
+        RebuildFilteredColumns();
+        RefreshDataGridView();
+        RefreshResultView();
+
+        OnPropertyChanged(nameof(LoadedRowCount));
+        OnPropertyChanged(nameof(TotalColumnCount));
     }
 
     private void ApplyPreview(CsvPreview preview)
@@ -473,6 +533,11 @@ public class DataStudioViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(ResultSummary));
     }
+
+    private static int ClampPreviewRows(int value) => Math.Clamp(value, 1, CsvPreviewReader.MaxPreviewRows);
+
+    private static string? PreviewRowsMessageFor(int value)
+        => value > CsvPreviewReader.MaxPreviewRows ? PreviewRowsLimitMessage : null;
 
     private void RefreshDataGridView()
     {

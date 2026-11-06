@@ -137,6 +137,37 @@ public class CsvPreviewReaderTests
         var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
         Assert.NotNull(preview.Error);
+        Assert.False(preview.IsFormatError);
+    }
+
+    [Fact]
+    public async Task ReadAsync_MoreThanTheLimitAsked_ReadsAtMost1000Rows()
+    {
+        var reader = new CsvPreviewReader();
+        var settings = CreateSettings(CompositePath("c10_large.csv"), ",", true, 0, "utf-8", 6000);
+
+        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
+
+        Assert.Null(preview.Error);
+        Assert.Equal(CsvPreviewReader.MaxPreviewRows, preview.Rows.Count);
+        Assert.True(preview.HasMoreRows);
+    }
+
+    private static CsvReadOutcome Outcome(string? settingsError = null, Exception? failure = null, bool licence = false, string? structuralError = null)
+        => new([], 0, structuralError is null ? [] : [new CsvStructuralError(2, structuralError)], settingsError, failure, licence, false, 1);
+
+    [Fact]
+    public void ErrorPreview_OnlyAFormatFaultIsAFormatError()
+    {
+        Assert.Null(CsvPreviewReader.ErrorPreview(Outcome()));
+
+        Assert.False(CsvPreviewReader.ErrorPreview(Outcome(licence: true))!.IsFormatError);
+        Assert.False(CsvPreviewReader.ErrorPreview(Outcome(settingsError: "File was not found. Check the path and try again."))!.IsFormatError);
+        Assert.False(CsvPreviewReader.ErrorPreview(Outcome(failure: new FileNotFoundException("gone")))!.IsFormatError);
+        Assert.False(CsvPreviewReader.ErrorPreview(Outcome(failure: new UnauthorizedAccessException("denied")))!.IsFormatError);
+
+        Assert.True(CsvPreviewReader.ErrorPreview(Outcome(failure: new InvalidOperationException("bad record")))!.IsFormatError);
+        Assert.True(CsvPreviewReader.ErrorPreview(Outcome(structuralError: "Row: 3 - unclosed quote"))!.IsFormatError);
     }
 
     [Fact]
