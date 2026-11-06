@@ -706,23 +706,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(GenerateDllHint));
     }
 
-    internal static bool IsInsideProjectFolder(string folderPath)
-    {
-        var current = new DirectoryInfo(folderPath);
-
-        while (current != null)
-        {
-            if (current.EnumerateFiles("*.csproj", SearchOption.TopDirectoryOnly).Any()
-                || current.EnumerateFiles("*.sln", SearchOption.TopDirectoryOnly).Any())
-            {
-                return true;
-            }
-
-            current = current.Parent;
-        }
-
-        return false;
-    }
+    internal static bool IsInsideProjectFolder(string folderPath) => OutputFolderCheck.IsInsideProject(folderPath);
 
     private static string SanitizeAssemblyName(string selectedName)
     {
