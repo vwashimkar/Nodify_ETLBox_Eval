@@ -367,3 +367,6 @@ reports/
 
 # Task E consumer: generated DLL and its sources
 Consumer/out/
+
+*.etlproj
+*.etlproj.bak  
