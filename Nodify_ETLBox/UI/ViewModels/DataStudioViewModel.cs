@@ -697,6 +697,7 @@ public class DataStudioViewModel : ObservableObject
         _node.ColumnSelection.Mode = _workingSelection.Mode;
         _node.ColumnSelection.Names.Clear();
         _node.ColumnSelection.Names.AddRange(_workingSelection.Names);
+        _node.NotifyColumnSelectionChanged();
 
         // The setting writes above clear the node's known columns; the preview shows the columns
         // for exactly these settings, so store them for the nodes downstream.

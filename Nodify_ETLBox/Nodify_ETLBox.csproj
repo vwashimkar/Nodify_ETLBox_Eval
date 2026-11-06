@@ -70,6 +70,7 @@
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
 		<None Update="SampleData\TestData\**" CopyToOutputDirectory="PreserveNewest" />
+		<None Update="SampleData\Projects\**" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<ItemGroup Condition="Exists('etlbox.lic')">
 		<None Update="etlbox.lic" CopyToOutputDirectory="PreserveNewest" />

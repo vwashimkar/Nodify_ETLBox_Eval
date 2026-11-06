@@ -7,6 +7,7 @@ using Microsoft.Win32;
 using EtlDesigner.Engine;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Generation;
+using EtlDesigner.Engine.Project;
 using PipelineDefinition = EtlDesigner.Engine.Pipeline.PipelineDefinition;
 using PipelineDefinitionValidator = EtlDesigner.Engine.Pipeline.PipelineDefinitionValidator;
 using PipelineResult = EtlDesigner.Engine.Pipeline.PipelineResult;
@@ -16,7 +17,7 @@ using EtlDesigner.UI.Services;
 
 namespace EtlDesigner.UI.ViewModels;
 
-public class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject
 {
     private static readonly HashSet<string> ForbiddenAssemblyNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -37,9 +38,10 @@ public class MainViewModel : ObservableObject
     private readonly IDialogService _dialogService;
     private readonly HashSet<(Guid NodeId, CsvFileSettings Settings)> _columnReadsTried = new();
 
-    public MainViewModel(IDialogService? dialogService = null)
+    public MainViewModel(IDialogService? dialogService = null, IRecentProjects? recentProjects = null)
     {
         _dialogService = dialogService ?? new DialogService();
+        _recentProjects = recentProjects ?? new JsonRecentProjects();
         Editor = new EditorViewModel();
         _filteredJsonOutput = "";
         _parsedJsonOutput = "";
@@ -47,6 +49,7 @@ public class MainViewModel : ObservableObject
         RunCommand = new AsyncRelayCommand(async _ => await RunAsync(), _ => !_isGenerating);
         GenerateDllCommand = new AsyncRelayCommand(async _ => await GenerateDllAsync(), _ => CanGenerateDll());
         ExecuteCommand = new RelayCommand(_ => Execute(), _ => !_isRunInProgress && !_isGenerating && ExecuteBlockedReason is null);
+        CreateProjectCommands();
         Editor.Nodes.CollectionChanged += (_, _) => UpdateCommandStates();
         Editor.Connections.CollectionChanged += (_, _) => UpdateCommandStates();
         Editor.Nodes.CollectionChanged += (_, _) => { ClearSuccessfulPipelineRun(); HookPipelineChangeListeners(); };
@@ -135,7 +138,9 @@ public class MainViewModel : ObservableObject
     public bool TryBuildExecuteDefinition(out PipelineDefinition? definition, out string? reason)
     {
         definition = null;
-        var nodes = Editor.Nodes;
+
+        // An unknown node from a project file is ignored.
+        var nodes = Editor.Nodes.Where(n => n.NodeType != NodeType.Unknown).ToList();
         var csv = nodes.FirstOrDefault(n => n.NodeType == NodeType.CsvFile);
         var parse = nodes.FirstOrDefault(n => n.NodeType == NodeType.ParseValue);
         var output = nodes.FirstOrDefault(n => n.NodeType == NodeType.DotNetObject);
@@ -398,6 +403,12 @@ public class MainViewModel : ObservableObject
     /// </summary>
     private async Task RefreshParseValueUpstreamColumnsAsync()
     {
+        // Opening a project reads the columns of all its CsvFile nodes at once.
+        if (_isOpeningProject)
+        {
+            return;
+        }
+
         try
         {
             foreach (var node in Editor.Nodes.Where(n => n.NodeType == NodeType.ParseValue).ToList())
@@ -690,6 +701,7 @@ public class MainViewModel : ObservableObject
         RunCommand.RaiseCanExecuteChanged();
         GenerateDllCommand.RaiseCanExecuteChanged();
         ExecuteCommand?.RaiseCanExecuteChanged();
+        RaiseProjectCommandStates();
         OnPropertyChanged(nameof(ExecuteHint));
         OnPropertyChanged(nameof(GenerateDllHint));
     }

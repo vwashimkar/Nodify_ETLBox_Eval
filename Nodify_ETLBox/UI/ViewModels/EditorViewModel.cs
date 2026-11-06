@@ -10,7 +10,7 @@ using EtlDesigner.UI.Mvvm;
 
 namespace EtlDesigner.UI.ViewModels;
 
-public class EditorViewModel : ObservableObject
+public partial class EditorViewModel : ObservableObject
 {
     private PendingConnectionViewModel? _pendingConnection;
     private ObservableCollection<NodeViewModel> _selectedNodes;
@@ -23,6 +23,7 @@ public class EditorViewModel : ObservableObject
         _selectedNodes = new ObservableCollection<NodeViewModel>();
         _selectedNodes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(SelectedNode));
         _pendingConnection = null;
+        HookDirtyTracking();
 
         AddNodeCommand = new RelayCommand(param =>
         {
@@ -138,18 +139,7 @@ public class EditorViewModel : ObservableObject
     /// </summary>
     public void AddNode(NodeType nodeType, Point location)
     {
-        var node = nodeType switch
-        {
-            NodeType.CsvSource => NodeFactory.CreateCsvSource(location),
-            NodeType.CsvFile => NodeFactory.CreateCsvFile(location),
-            NodeType.FilterByCountry => NodeFactory.CreateFilterByCountry(location),
-            NodeType.ToJson => NodeFactory.CreateToJson(location),
-            NodeType.ParseJson => NodeFactory.CreateParseJson(location),
-            NodeType.ResultJson => NodeFactory.CreateResultJson(location),
-            NodeType.ParseValue => NodeFactory.CreateParseValue(location),
-            NodeType.DotNetObject => NodeFactory.CreateDotNetObject(location),
-            _ => throw new ArgumentException($"Unknown node type: {nodeType}")
-        };
+        var node = NodeFactory.Create(nodeType, location);
 
         EtlDesigner.UI.PaletteTrace.Write($"AddNode type={nodeType} at=({location.X:0},{location.Y:0}) stack={EtlDesigner.UI.PaletteTrace.Stack()}");
         Nodes.Add(node);
@@ -184,7 +174,8 @@ public class EditorViewModel : ObservableObject
             _selectedNodes.Remove(node);
         }
 
-        if (connectionsToRemove.Any(InvolvesParseValue))
+        var hadProjectIssues = ForgetKeptConnections(selectedNodes) || selectedNodes.Any(n => n.NodeType == NodeType.Unknown);
+        if (hadProjectIssues || connectionsToRemove.Any(InvolvesParseValue))
         {
             Validate();
         }
@@ -224,13 +215,9 @@ public class EditorViewModel : ObservableObject
         }
 
         // Validate connection
-        var validationResult = ValidateConnection(sourceConnector, targetConnector);
-        if (validationResult.IsValid)
+        var connection = TryConnect(sourceConnector, targetConnector, out var errorMessage);
+        if (connection is not null)
         {
-            var connection = new ConnectionViewModel(sourceConnector, targetConnector);
-            Connections.Add(connection);
-            sourceConnector.IsConnected = true;
-            targetConnector.IsConnected = true;
             Issues.Clear();
 
             // A ParseValue node's state depends on its upstream CsvFile node.
@@ -242,11 +229,30 @@ public class EditorViewModel : ObservableObject
         else
         {
             Issues.Clear();
-            var message = validationResult.ErrorMessage ?? "Connection is invalid.";
-            Issues.Add(message);
+            Issues.Add(errorMessage ?? "Connection is invalid.");
         }
 
         PendingConnection = null;
+    }
+
+    /// <summary>
+    /// Applies the connection rules and adds the connection when they allow it. The mouse and a
+    /// loaded project both come through here.
+    /// </summary>
+    private ConnectionViewModel? TryConnect(ConnectorViewModel source, ConnectorViewModel target, out string? errorMessage)
+    {
+        var validationResult = ValidateConnection(source, target);
+        errorMessage = validationResult.ErrorMessage;
+        if (!validationResult.IsValid)
+        {
+            return null;
+        }
+
+        var connection = new ConnectionViewModel(source, target);
+        Connections.Add(connection);
+        source.IsConnected = true;
+        target.IsConnected = true;
+        return connection;
     }
 
     /// <summary>
@@ -269,6 +275,7 @@ public class EditorViewModel : ObservableObject
     /// </summary>
     public void LoadSampleGraph()
     {
+        ForgetLoadedProject();
         Nodes.Clear();
         Connections.Clear();
         Issues.Clear();
@@ -362,6 +369,7 @@ public class EditorViewModel : ObservableObject
         ValidateCsvFileNodes();
         ValidateParseValueNodes();
         ValidateDotNetObjectNodes();
+        AddProjectIssues();
 
         if (Issues.Count == 0)
         {
@@ -394,9 +402,11 @@ public class EditorViewModel : ObservableObject
             NodeType.ResultJson
         };
 
-        if (Nodes.Count != expectedOrder.Length)
+        // An unknown node from a project file is ignored.
+        var nodeCount = Nodes.Count(n => n.NodeType != NodeType.Unknown);
+        if (nodeCount != expectedOrder.Length)
         {
-            issues.Add($"Graph supports only a linear 5-node chain (CsvSource -> FilterByCountry -> ToJson -> ParseJson -> ResultJson). Found {Nodes.Count} nodes.");
+            issues.Add($"Graph supports only a linear 5-node chain (CsvSource -> FilterByCountry -> ToJson -> ParseJson -> ResultJson). Found {nodeCount} nodes.");
         }
 
         foreach (var nodeType in expectedOrder)
@@ -623,6 +633,7 @@ public class EditorViewModel : ObservableObject
         // too, and without the clear it appended the same lines again on each call.
         Issues.Clear();
         ValidateCsvFileNodes();
+        AddProjectIssues();
 
         if (TryBuildLinearChain(out var chain, out var chainIssues) == false)
         {

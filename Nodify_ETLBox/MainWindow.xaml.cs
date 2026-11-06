@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         // field stayed null and every click handler returned silently.
         _mainViewModel = new MainViewModel();
         DataContext = _mainViewModel;
+        Closing += (_, e) => e.Cancel = !_mainViewModel.ConfirmClose();
 
         // TEMPORARY palette trace: see every drop the window receives, handled or not. Trace only.
         AddHandler(PreviewDropEvent, new DragEventHandler((s, e) => EtlDesigner.UI.PaletteTrace.Write($"Window.PreviewDrop {EtlDesigner.UI.PaletteTrace.Describe(s, e)} effects={e.Effects}")), true);

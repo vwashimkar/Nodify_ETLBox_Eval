@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using EtlDesigner.Engine;
 using EtlDesigner.Engine.Generation;
 using EtlDesigner.Spike;
+using EtlDesigner.UI.Services;
 using EtlDesigner.UI.ViewModels;
 
 namespace Nodify_ETLBox;
@@ -87,20 +88,7 @@ public partial class App : Application
         e.SetObserved();
     }
 
-    private static void WriteUnhandledExceptionLog(string source, Exception ex)
-    {
-        var logPath = Path.Combine(AppContext.BaseDirectory, "unhandled-exception.log");
-        var text = new StringBuilder()
-            .AppendLine($"[{DateTime.UtcNow:O}] {source}")
-            .AppendLine($"Type: {ex.GetType().FullName}")
-            .AppendLine($"Message: {ex.Message}")
-            .AppendLine("StackTrace:")
-            .AppendLine(ex.ToString())
-            .AppendLine(new string('-', 80))
-            .ToString();
-
-        File.AppendAllText(logPath, text);
-    }
+    private static void WriteUnhandledExceptionLog(string source, Exception ex) => ErrorLog.Write(source, ex);
 
     private static void ShowUnhandledExceptionMessageBox(string title, Exception ex)
     {
