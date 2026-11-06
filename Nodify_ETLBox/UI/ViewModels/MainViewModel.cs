@@ -74,7 +74,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Runs CsvFile -> ParseValue -> DotNetObject over a whole file in the Execute dialog. The legacy Run is separate.</summary>
     public RelayCommand ExecuteCommand { get; }
 
-    public const string ExecuteReadyHint = "Run CsvFile -> ParseValue -> DotNetObject over the whole file.";
+    public const string RunIsForLegacyChainMessage = "Run is for the old five-node chain. Use Execute for this pipeline.";
+
+    public const string ExecuteReadyHint ="Run CsvFile -> ParseValue -> DotNetObject over the whole file.";
 
     public const string GenerateDllNotTestedHint = "Run Execute successfully first. The DLL is generated only from a pipeline that has been tested.";
 
@@ -270,6 +272,13 @@ public partial class MainViewModel : ObservableObject
 
     private async Task RunAsync()
     {
+        if (Editor.HasOnlyNewStyleNodes)
+        {
+            Editor.Issues.Clear();
+            Editor.Issues.Add(RunIsForLegacyChainMessage);
+            return;
+        }
+
         _isRunInProgress = true;
         ClearSuccessfulRunSnapshot();
         UpdateCommandStates();

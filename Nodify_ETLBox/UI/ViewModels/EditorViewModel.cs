@@ -379,6 +379,10 @@ public partial class EditorViewModel : ObservableObject
         ValidationStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>True when the canvas has a CsvFile, ParseValue or DotNetObject node and no legacy node.</summary>
+    public bool HasOnlyNewStyleNodes
+        => !HasAnyLegacyNode() && Nodes.Any(n => n.NodeType is NodeType.CsvFile or NodeType.ParseValue or NodeType.DotNetObject);
+
     private bool HasAnyLegacyNode()
     {
         return Nodes.Any(n => n.NodeType is NodeType.CsvSource
