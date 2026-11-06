@@ -62,3 +62,7 @@
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
 *.etlproj text eol=lf
+
+# Intake test data: the expected byte offsets depend on the exact line ends.
+Nodify_ETLBox/SampleData/TestData/intake/i*.txt text eol=lf
+Nodify_ETLBox/SampleData/TestData/intake/i02_crlf.txt text eol=crlf
