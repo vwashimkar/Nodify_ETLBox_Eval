@@ -186,6 +186,7 @@ public partial class ParseStudioViewModel : ObservableObject
     private DataView? _resultRowsView;
 
     public const string NothingSelectedText = "Click a cell in the grid to see its full text here.";
+    public const string AutoFillNoSelectionHint = "Select the value columns in the grid first (for example by Shift-clicking from the first to the last), then press Auto-fill.";
 
     public ParseStudioViewModel(NodeViewModel node, ParseValueUpstream upstream, CsvPreviewReader? reader = null)
     {
@@ -255,7 +256,7 @@ public partial class ParseStudioViewModel : ObservableObject
         MoveLevelDownCommand = new RelayCommand(p => MoveLevelDown(LevelIndex(p)));
         AddSlotCommand = new RelayCommand(_ => AddSlot());
         RemoveSlotCommand = new RelayCommand(p => RemoveSlot(p is SlotItem slot ? Slots.IndexOf(slot) : ToIndex(p)));
-        AutoFillCommand = new RelayCommand(_ => AutoFillFromSelection());
+        AutoFillCommand = new RelayCommand(_ => AutoFillFromSelection(), _ => SelectedGridColumns.Count > 0);
         TestParsingCommand = new RelayCommand(_ =>
         {
             TestParsing();
@@ -553,6 +554,9 @@ public partial class ParseStudioViewModel : ObservableObject
         get => _autoFillGroupSize;
         set => SetProperty(ref _autoFillGroupSize, value);
     }
+
+    /// <summary>Tells the user what to do while no grid columns are selected and Auto-fill is disabled.</summary>
+    public string? AutoFillHint => SelectedGridColumns.Count == 0 ? AutoFillNoSelectionHint : null;
 
     public string? AutoFillError
     {
@@ -936,16 +940,10 @@ public partial class ParseStudioViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Auto-fill from the columns selected in the grid; when none are selected, from
-    /// <see cref="AutoFillColumns"/> if set, else from all kept columns except the source column [U].
+    /// Auto-fill from the columns selected in the grid. There is no fallback: guessing the value
+    /// columns once turned id, batch and name into slots instead of carrying them.
     /// </summary>
-    public void AutoFillFromSelection()
-    {
-        IReadOnlyList<string> columns = SelectedGridColumns.Count > 0 ? SelectedGridColumns
-            : AutoFillColumns.Count > 0 ? AutoFillColumns.ToList()
-            : Columns.Where(c => c != SourceColumn).ToList();
-        AutoFill(columns, AutoFillGroupSize);
-    }
+    public void AutoFillFromSelection() => AutoFill(SelectedGridColumns, AutoFillGroupSize);
 
     // ----- Grid selection -----
 
@@ -969,6 +967,8 @@ public partial class ParseStudioViewModel : ObservableObject
         UpdateDisplayedCell();
         UseAsSourceCommand.RaiseCanExecuteChanged();
         UseGridSelectionCommand.RaiseCanExecuteChanged();
+        AutoFillCommand.RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(AutoFillHint));
     }
 
     /// <summary>Selects record <paramref name="recordNumber"/> (1-based) in the grid when it is in the preview.</summary>
