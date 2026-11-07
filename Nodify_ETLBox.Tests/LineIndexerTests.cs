@@ -221,11 +221,11 @@ public class LineIndexerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("no-such-encoding", "Encoding name is unknown")]
-    [InlineData("utf-16", "UTF-16")]
+    [InlineData("no-such-encoding", "not known")]
+    [InlineData("utf-16", "utf-16le")]
     public void BadEncodingSetting_GivesAMessage(string encoding, string message)
     {
-        var settings = IntakeTestData.Markers with { EncodingName = encoding };
+        var settings = IntakeTestData.Markers with { Encoding = encoding };
 
         var result = IntakeReader.Read(IntakeTestData.Item("i01_sample"), settings, null, CancellationToken.None);
 

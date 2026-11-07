@@ -17,7 +17,7 @@ public sealed class AutoDetector
 
     private readonly IntakeItem _item;
     private readonly DetectorSettings _settings;
-    private readonly Encoding _settingsEncoding;
+    private readonly Func<Encoding> _currentEncoding;
     private readonly char[] _delimiters;
     private readonly int _windowSize;
     private readonly List<ContainerInfo> _containers = [];
@@ -26,8 +26,8 @@ public sealed class AutoDetector
     private readonly List<Row> _window = [];
     private readonly List<(long Number, long Start, long End, string Text, bool Cut)> _quoted = [];
 
-    private Encoding? _headEncoding;
     private Encoding? _fileEncoding;
+    private bool _noBom;
     private Candidate? _candidate;
     private Region? _open;
     private int _blankRun;
@@ -38,10 +38,16 @@ public sealed class AutoDetector
     private readonly ValidationSettings _limits;
 
     public AutoDetector(IntakeItem item, DetectorSettings settings, Encoding settingsEncoding, ValidationSettings? limits = null)
+        : this(item, settings, () => settingsEncoding, limits)
+    {
+    }
+
+    /// <summary>With the encoding of the bytes read so far, which an Auto read can change while it runs.</summary>
+    public AutoDetector(IntakeItem item, DetectorSettings settings, Func<Encoding> currentEncoding, ValidationSettings? limits = null)
     {
         _item = item;
         _settings = settings;
-        _settingsEncoding = settingsEncoding;
+        _currentEncoding = currentEncoding;
         _limits = limits ?? new ValidationSettings();
         _delimiters = settings.DelimiterCandidates.Where(d => d.Length == 1).Select(d => d[0]).ToArray();
         // Title lines and weak lines between them can both precede a table, so room for both.
@@ -385,12 +391,17 @@ public sealed class AutoDetector
         }
     }
 
-    /// <summary>The encoding of the file's bytes: its BOM decides, else the setting.</summary>
+    /// <summary>The encoding of the file's bytes: its BOM decides, else the encoding of the read so far.</summary>
     private Encoding FileEncoding()
     {
         if (_fileEncoding is not null)
         {
             return _fileEncoding;
+        }
+
+        if (_noBom)
+        {
+            return _currentEncoding();
         }
 
         var bom = new byte[3];
@@ -407,13 +418,17 @@ public sealed class AutoDetector
         _fileEncoding = length >= 2 && bom[0] == 0xFF && bom[1] == 0xFE ? new UnicodeEncoding(false, false)
             : length >= 2 && bom[0] == 0xFE && bom[1] == 0xFF ? new UnicodeEncoding(true, false)
             : length == 3 && bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF ? Encoding.UTF8
-            : _settingsEncoding;
-        return _fileEncoding;
+            : null;
+        _noBom = _fileEncoding is null;
+        return _fileEncoding ?? _currentEncoding();
     }
 
-    /// <summary>The indexer gives UTF-8 heads for a file with a BOM (UTF-16 lines are converted); else the setting's bytes.</summary>
+    /// <summary>The indexer gives UTF-8 heads for a UTF-8 or UTF-16 file (UTF-16 lines are converted); else the file's bytes.</summary>
     private Encoding HeadEncoding()
-        => _headEncoding ??= FileEncoding() is UnicodeEncoding || FileEncoding().CodePage == Encoding.UTF8.CodePage ? Encoding.UTF8 : _settingsEncoding;
+    {
+        var encoding = FileEncoding();
+        return encoding is UnicodeEncoding || encoding.CodePage == Encoding.UTF8.CodePage ? Encoding.UTF8 : encoding;
+    }
 
     // ---- Rows -----------------------------------------------------------------------------
 

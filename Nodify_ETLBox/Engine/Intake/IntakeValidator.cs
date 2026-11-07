@@ -39,7 +39,7 @@ public static class IntakeValidator
         var fileSize = result.File?.Size ?? item.Size;
         var total = result.Containers.Count;
 
-        var encoding = IntakeReader.ResolveEncoding(result.File?.Encoding ?? settings.EncodingName, out var encodingError, allowUtf16: true);
+        var encoding = IntakeReader.ResolveEncoding(result.EncodingUsed ?? result.File?.Encoding ?? settings.Encoding, out var encodingError);
         if (encoding is null)
         {
             error = encodingError;

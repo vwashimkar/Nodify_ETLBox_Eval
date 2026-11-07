@@ -99,11 +99,11 @@ public class Utf16IntakeTests
     [Theory]
     [InlineData("utf-16")]
     [InlineData("utf-32")]
-    public void Utf16AsASetting_IsRefused(string name)
+    public void Utf16WithoutAByteOrder_OrUtf32_AsASetting_IsAnUnknownName(string name)
     {
-        var settings = IntakeTestData.Markers with { EncodingName = name };
+        var settings = IntakeTestData.Markers with { Encoding = name };
 
-        Assert.Equal(IntakeReader.Utf16SettingMessage, IntakeReader.Read(IntakeTestData.MemoryItem("a"), settings, null, CancellationToken.None).Error);
+        Assert.Equal(IntakeEncodings.UnknownMessage, IntakeReader.Read(IntakeTestData.MemoryItem("a"), settings, null, CancellationToken.None).Error);
     }
 
     [Fact]

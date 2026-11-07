@@ -42,13 +42,21 @@ public class IntakeLargeFileTests : IDisposable
 
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
-    private string WriteStressFile(int copies)
+    /// <summary>With <paramref name="invalidUtf8AtTheEnd"/> the first byte of the last copy (a text line) is 0xB5, so the UTF-8 check runs over the whole file and Auto guesses windows-1252.</summary>
+    private string WriteStressFile(int copies, bool invalidUtf8AtTheEnd = false)
     {
         var sample = File.ReadAllBytes(IntakeTestData.PathOf("i01_sample"));
-        var path = Path.Combine(_folder, $"stress_{copies}.txt");
+        var path = Path.Combine(_folder, $"stress_{copies}{(invalidUtf8AtTheEnd ? "_1252" : "")}.txt");
         using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20);
         for (var i = 0; i < copies; i++)
         {
+            if (invalidUtf8AtTheEnd && i == copies - 1)
+            {
+                output.WriteByte(0xB5);
+                output.Write(sample, 1, sample.Length - 1);
+                continue;
+            }
+
             output.Write(sample);
         }
 
@@ -71,7 +79,7 @@ public class IntakeLargeFileTests : IDisposable
     /// list's share so far is taken off; MaxExcessBytes is what is left: everything else the scan
     /// keeps in memory, which is what must not grow.
     /// </summary>
-    private MemoryNumbers MeasureScan(string path, int copies)
+    private MemoryNumbers MeasureScan(string path, int copies, bool guessed = false)
     {
         var size = new FileInfo(path).Length;
         var samples = new List<(long Bytes, long Live)>();
@@ -99,6 +107,7 @@ public class IntakeLargeFileTests : IDisposable
 
         Assert.Null(result.Error);
         Assert.Equal(ExpectedContainers(copies), result.Containers.Count);
+        Assert.Equal((guessed, guessed ? "windows-1252" : "utf-8"), (result.EncodingGuessed, result.EncodingUsed));
 
         var numbers = new MemoryNumbers(result.Containers.Count, size, retained, samples.Max(s => s.Live), excess, clock.ElapsedMilliseconds);
         _output.WriteLine(numbers.ToString());
@@ -132,6 +141,18 @@ public class IntakeLargeFileTests : IDisposable
         Assert.True(large.MaxExcessBytes < 2 * 1024 * 1024, $"the scan keeps {large.MaxExcessBytes:N0} bytes beyond the container list");
         Assert.True(large.MaxExcessBytes - small.MaxExcessBytes < 1024 * 1024, $"excess grew from {small.MaxExcessBytes:N0} to {large.MaxExcessBytes:N0} bytes");
         Assert.True(bytesPerContainer < 1024, $"a container takes {bytesPerContainer:F0} bytes");
+    }
+
+    [Fact]
+    public void Memory_StaysFlat_WithTheUtf8Check_AndAGuessAtTheEnd()
+    {
+        var small = MeasureScan(WriteStressFile(200, invalidUtf8AtTheEnd: true), 200, guessed: true);
+        var large = MeasureScan(WriteStressFile(2000, invalidUtf8AtTheEnd: true), 2000, guessed: true);
+
+        File.AppendAllText(Path.Combine(Path.GetDirectoryName(AutoDetectTruthTests.ReportPath())!, "g4a-large-file.txt"),
+            $"{DateTime.Now:HH:mm:ss} encoding check, invalid byte in the last copy: N=200 {small}; N=2000 {large}{Environment.NewLine}");
+        Assert.True(large.MaxExcessBytes < 2 * 1024 * 1024, $"the scan keeps {large.MaxExcessBytes:N0} bytes beyond the container list");
+        Assert.True(large.MaxExcessBytes - small.MaxExcessBytes < 1024 * 1024, $"excess grew from {small.MaxExcessBytes:N0} to {large.MaxExcessBytes:N0} bytes");
     }
 
     [SlowFact]

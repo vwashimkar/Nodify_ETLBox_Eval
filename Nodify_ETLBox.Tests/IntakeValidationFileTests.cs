@@ -61,7 +61,7 @@ public class IntakeValidationFileTests
 
             text.AppendLine($"## {Path.GetFileName(path)} ({mode})");
             text.AppendLine();
-            text.AppendLine($"Errors {validation.Errors}, warnings {validation.Warnings}, infos {validation.Infos}, {validation.ElapsedMs} ms.");
+            text.AppendLine($"Encoding {result.EncodingUsed}{(result.EncodingGuessed ? " (guessed)" : "")}, invalid UTF-8 seen: {(result.InvalidUtf8Seen ? "yes" : "no")}. Errors {validation.Errors}, warnings {validation.Warnings}, infos {validation.Infos}, {validation.ElapsedMs} ms.");
             text.AppendLine();
             text.AppendLine("| # | Format | Lines | Status | Checked | Issues |");
             text.AppendLine("|---|---|---|---|---|---|");
