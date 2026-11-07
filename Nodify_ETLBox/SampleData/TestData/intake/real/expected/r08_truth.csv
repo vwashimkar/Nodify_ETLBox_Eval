@@ -1,0 +1,11 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,csv,results grid,3,14,12,Medium,B,3,yes,",",,"Title (3), blank (4), a line of 3 ""Key: value"" pairs (5), header with empty first cell (6), 8 rows A to H; the title and pairs contain non-breaking spaces"
+2,text,analysis result title,16,16,1,Weak,B,0,n/a,,,"""Analysis Result"" with trailing non-breaking spaces"
+3,keyvalue,measurement basic information,18,32,15,Weak,B,1,no,",",csv,"Title (18), rows of the form ""Key:,,value"" (3 fields); single blank lines at 20, 27 and 30 belong to the section"
+4,keyvalue,plate type,34,45,12,Weak,B,1,no,",",csv,"Title (34), rows ""Key:,,value""; one blank line (44) inside; line 45 ""Optical index"" belongs here"
+5,csv,platemap,46,56,11,Medium,B,2,yes,",",,"Titles ""Platemap"" (46) and ""Plate"" (47) directly after the key-value block, header 48 with empty first cell, 8 rows of ""-"" cells"
+6,text,operations title,62,62,1,Weak,B,0,n/a,,,Preceded by 5 blank lines
+7,keyvalue,measurements,65,75,11,Weak,B,2,no,",",csv,"Title (65), blank (66), 9 rows of 5 fields ""Key,,,,value"""
+8,text,analysis title,77,77,1,Weak,B,0,n/a,,,
+9,csv,comments,79,82,4,Weak,B,1,yes,",",,"Title (79), header (80), 2 rows; row 81 has an unquoted comma inside the text so its field count differs"
+10,text,exported with,90,90,1,Weak,B,0,n/a,,,Preceded by 7 blank lines

@@ -1,0 +1,2 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,csv,results,1,50,50,Strong,B,1,yes,",",,"Title ""Plate_TEST001"" (1 field) then header (16 fields) and 48 rows; many empty cells and NaN; no blank lines"

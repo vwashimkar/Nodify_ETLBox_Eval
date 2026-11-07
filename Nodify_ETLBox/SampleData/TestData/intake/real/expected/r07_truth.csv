@@ -1,0 +1,10 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,keyvalue,run info,1,5,5,Weak,B,0,no,:,text,"Mixed lines: ""Key: value"", two pairs separated by ; on one line, and a bare file path (line 4)"
+2,keyvalue,counting settings,8,26,19,Weak,B,0,no,:,text,"About 13 of 19 lines are ""Key: value""; the rest are sentences (""Fill Holes was Off"") and one indented continuation line; line 8 uses a tab"
+3,text,stray character line,28,28,1,Weak,B,0,n/a,,,A line holding one odd character (U+FFFD)
+4,fixedwidth,unprocessed counts,31,43,13,Medium,B,3,yes,space,,"Whitespace-aligned grid (runs of spaces, no delimiter): title with tabs (31), blank (32), plate code line (33), header 1..12 (34), a blank line INSIDE the table (35), rows A to H (36-43)"
+5,text,footnote,44,44,1,Weak,B,0,n/a,,,"""TNTC: Too numerous to count"" directly under the grid"
+6,fixedwidth,mean spot sizes,46,56,11,Medium,B,1,yes,space,,"Title (46), header (47), blank (48), 8 rows"
+7,fixedwidth,well areas,59,69,11,Medium,B,1,yes,space,,"Preceded by two blank lines; title, header, blank, 8 rows"
+8,fixedwidth,total intensity foreground,72,82,11,Medium,B,1,yes,space,,
+9,fixedwidth,total intensity spots,85,95,11,Medium,B,1,yes,space,,

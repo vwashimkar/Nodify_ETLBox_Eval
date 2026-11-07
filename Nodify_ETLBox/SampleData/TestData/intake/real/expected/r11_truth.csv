@@ -1,0 +1,2 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,tsv,records,1,17,17,Medium,B,0,no,TAB,,"17 records of 26 tab-separated fields with no header line; the first record is a file header record (""#ARC-FILE#"") with different content; trailing tabs give equal counts; padded values"
