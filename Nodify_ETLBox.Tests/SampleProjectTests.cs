@@ -16,7 +16,7 @@ public sealed class SampleProjectTests : IDisposable
 
     private readonly string _folder = Directory.CreateTempSubdirectory("etlproj-").FullName;
 
-    public void Dispose() => Directory.Delete(_folder, recursive: true);
+    public void Dispose() => ProjectEditorTests.DeleteTempFolder(_folder);
 
     private static string SamplePath => Path.Combine(AppContext.BaseDirectory, "SampleData", "Projects", "c01_pipeline.etlproj");
 

@@ -1,0 +1,7 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,text,file header,1,1,1,Weak,B,0,n/a,,,"""##BLOCKS= 2"" (decoded from UTF-16 first; line numbers count decoded lines)"
+2,tsv,plate block,2,12,11,Weak,B,1,yes,TAB,,"Line 2 is a 24-field ""Plate:"" descriptor, line 3 the header (99 fields), then data rows separated by single blank lines (5,7,9), a second header at 10 and ""~End"" at 12. One block per the vendor format; a ""blank line ends a table"" rule splits it"
+3,tsv,group data,13,35,23,Medium,B,1,yes,TAB,,"""Group:"" title, header 14, 21 rows; every 2nd and 3rd row has an empty first cell"
+4,tsv,group formulas,37,47,11,Medium,B,0,yes,TAB,,"Header 37 and 10 rows, 5 fields"
+5,tsv,group summaries,49,52,4,Weak,B,1,no,TAB,,"Title, 2 rows of 6 fields, and the ""~End "" line"
+6,text,trailer,53,53,1,Weak,B,0,n/a,,keyvalue,"""Original Filename: ...; Date Last Saved: ..."" one line; the file may end with an empty line"

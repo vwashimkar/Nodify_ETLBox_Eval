@@ -49,6 +49,12 @@ public partial class App : Application
             return;
         }
 
+        if (e.Args.Contains("--probe-intake"))
+        {
+            RunIntakeProbeAndExit();
+            return;
+        }
+
         // Manually compose ViewModels
         var mainViewModel = new MainViewModel();
 
@@ -220,6 +226,31 @@ public partial class App : Application
                 CsvProbe.WriteMarkdown(outputPath, rows);
 
                 Console.WriteLine($"CSV probe results written to: {outputPath}");
+                Environment.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"FAILED: {ex.Message}");
+                Console.Error.WriteLine(ex.ToString());
+                Environment.Exit(1);
+            }
+        }).Wait();
+    }
+
+    private void RunIntakeProbeAndExit()
+    {
+        Task.Run(async () =>
+        {
+            try
+            {
+                var samplePath = Path.Combine(AppContext.BaseDirectory, "SampleData", "TestData", "intake", "i01_sample.txt");
+                var outputPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "reports", "probe-intake.md"));
+
+                var text = await IntakeProbe.RunAsync(samplePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                File.WriteAllText(outputPath, text, Encoding.UTF8);
+
+                Console.WriteLine($"Intake probe results written to: {outputPath}");
                 Environment.Exit(0);
             }
             catch (Exception ex)

@@ -1,0 +1,8 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,text,software version,2,2,1,Weak,B,0,n/a,,keyvalue,File begins with an empty line 1
+2,text,file paths,6,7,2,Weak,B,0,n/a,,keyvalue,"Two ""Name:"" lines with empty values"
+3,keyvalue,plate info,11,16,6,Weak,B,0,no,TAB,,"6 lines ""Key<TAB>value"" or ""Key:<TAB>value"""
+4,text,procedure,18,29,12,Weak,B,0,n/a,,,Free text with one blank line inside; later lines start with a tab
+5,text,spectrum title,31,31,1,Weak,B,0,n/a,,,"""EM Spectrum"""
+6,tsv,spectrum data,33,36,4,Weak,B,0,yes,TAB,,"Header has 97 fields, data rows only 2 (trailing empty cells are cut): field counts differ; value OVRFLW is not a number"
+7,tsv,results grid,38,47,10,Weak,B,1,yes,TAB,,"Title, header with empty first cell, 8 rows; an annotation text in the last column; a blank line separates it from the table above"

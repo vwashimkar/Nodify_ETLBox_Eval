@@ -1,0 +1,185 @@
+This file is a multi-format parser test sample.
+It begins with plain, free-form text (this paragraph), then continues with
+several sections, each wrapped in a marker pair so a parser can split them:
+
+    ##### BEGIN <format> | <name> | <notes> #####
+    ...content...
+    ##### END #####
+
+Anything outside BEGIN/END markers (like this intro) is treated as plain text.
+Formats covered: text, json, json-lines, badgerfish-json, xml, csv (with and
+without header, several delimiters), tsv (with and without header), yaml, soap.
+Line endings: LF. Encoding: UTF-8. Tabs in TSV sections are real tab characters.
+
+Meeting notes - 2026-11-06
+Attendees: Asha, Ravi, Meera
+- Decide on parser delimiter strategy
+- Review sample payloads
+Total action items: 2
+Note: this text contains symbols like { } [ ] < > , ; | that must NOT be parsed.
+
+{
+  "id": 1001,
+  "name": "Asha Verma",
+  "active": true,
+  "balance": 2540.75,
+  "tags": ["vip", "newsletter"],
+  "address": {
+    "city": "Kolkata",
+    "state": "West Bengal",
+    "pin": "700001"
+  },
+  "lastLogin": null
+}
+
+[
+  { "sku": "A-100", "qty": 5,  "price": 12.5 },
+  { "sku": "B-200", "qty": 0,  "price": 99.99 },
+  { "sku": "C-300", "qty": 12, "price": 3.2 }
+]
+
+{"event":"login","user":"asha","ts":"2026-11-06T09:15:00+05:30"}
+{"event":"upload","user":"ravi","ts":"2026-11-06T09:17:42+05:30","bytes":20480}
+{"event":"logout","user":"asha","ts":"2026-11-06T10:01:10+05:30"}
+
+{
+  "order": {
+    "@id": "ORD-5001",
+    "@xmlns": {
+      "$": "http://example.com/orders",
+      "inv": "http://example.com/invoice"
+    },
+    "customer": {
+      "@type": "retail",
+      "name": { "$": "Asha Verma" },
+      "email": { "$": "asha@example.com" }
+    },
+    "items": {
+      "item": [
+        { "@sku": "A-100", "qty": { "$": "5" }, "price": { "@currency": "INR", "$": "12.50" } },
+        { "@sku": "C-300", "qty": { "$": "12" }, "price": { "@currency": "INR", "$": "3.20" } }
+      ]
+    },
+    "inv:total": { "@currency": "INR", "$": "99.50" }
+  }
+}
+
+<?xml version="1.0" encoding="UTF-8"?>
+<library>
+  <!-- a comment the parser should skip -->
+  <book id="b1" available="true">
+    <title>Parsing Made Simple</title>
+    <author>R. Sen</author>
+    <year>2021</year>
+    <summary><![CDATA[Covers <tags> & "quotes" without escaping.]]></summary>
+  </book>
+  <book id="b2" available="false">
+    <title>Data &amp; Pipelines</title>
+    <author>M. Das</author>
+    <year>2024</year>
+    <isbn/>
+  </book>
+</library>
+
+id,name,email,city,balance
+1,Asha Verma,asha@example.com,Kolkata,2540.75
+2,"Ravi, Kumar",ravi@example.com,Delhi,0
+3,"Meera ""MJ"" Joshi",meera@example.com,Pune,-120.5
+4,Tara Singh,,Mumbai,310
+
+1,Asha Verma,asha@example.com,Kolkata,2540.75
+2,Ravi Kumar,ravi@example.com,Delhi,0
+3,Meera Joshi,meera@example.com,Pune,-120.5
+
+produkt;menge;preis
+Apfel;10;1,25
+Birne;4;2,10
+Kirsche;100;0,05
+
+1001|2026-11-01|PAID||online
+1002|2026-11-02|PENDING|note here|store
+1003|2026-11-03|PAID||online
+
+ticket,reporter,description
+T-1,asha,"Login fails.
+Steps: open page, enter password, click submit."
+T-2,ravi,"Export button missing"
+
+# Report: Monthly Sales
+# Generated: 2026-11-06
+region,units,revenue
+East,120,45000
+West,95,38250
+South,140,52000
+TOTAL,355,135250
+
+id	name	dept	salary
+1	Asha Verma	Engineering	85000
+2	Ravi Kumar	Finance	72000
+3	Meera Joshi	Design	68000
+
+101	Widget	4.99	
+102	Gadget	19.50	discontinued
+103	Doohickey	0.75	new
+
+# application config
+defaults: &defaults
+  retries: 3
+  timeout_seconds: 30
+
+service:
+  name: csv-importer
+  enabled: true
+  port: 8080
+  <<: *defaults
+  endpoints:
+    - /health
+    - /import
+    - /status
+  owners:
+    - name: Asha
+      role: lead
+    - name: Ravi
+      role: dev
+  description: |
+    Imports files in many formats.
+    Keeps line breaks as written.
+  summary: >
+    Folded text that is joined
+    into a single line.
+  nullable_value: null
+  version: "3.11.0"
+
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:cus="http://example.com/customer">
+  <soapenv:Header>
+    <cus:AuthToken>abc123-token</cus:AuthToken>
+  </soapenv:Header>
+  <soapenv:Body>
+    <cus:GetCustomerRequest>
+      <cus:CustomerId>1001</cus:CustomerId>
+      <cus:IncludeOrders>true</cus:IncludeOrders>
+    </cus:GetCustomerRequest>
+  </soapenv:Body>
+</soapenv:Envelope>
+
+<?xml version="1.0" encoding="UTF-8"?>
+<env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope">
+  <env:Body>
+    <env:Fault>
+      <env:Code>
+        <env:Value>env:Sender</env:Value>
+      </env:Code>
+      <env:Reason>
+        <env:Text xml:lang="en">Customer not found</env:Text>
+      </env:Reason>
+      <env:Detail>
+        <errorCode>404</errorCode>
+      </env:Detail>
+    </env:Fault>
+  </env:Body>
+</env:Envelope>
+
+Trailing plain text after the last section.
+The parser should return this as a final text block.

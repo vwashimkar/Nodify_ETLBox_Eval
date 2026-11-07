@@ -15,6 +15,14 @@ The expected files were produced by a small reference scanner that implements th
 | i07_edge_cases.txt | Missing name, missing notes, empty segment, unknown format, indented and lowercase marker lines (stay text), a trailing tab and trailing spaces that must be preserved, END with trailing spaces, trailing blank lines. |
 | i08a..f_nomarkers_*.txt | Files without markers: Auto-detect must name one format for the whole file (i08_detected_formats.csv). |
 
+| i09_sample_nomarkers.txt | **Real-instrument case.** The same content as i01 with every BEGIN/END marker line removed (blank lines kept). The auto-detector must find the same blocks. Truth in `expected/i09_sample_nomarkers_truth.csv`. |
+| i10_instrument_header_table_footer.txt | A synthetic instrument export with no markers: 20 `Key: value` header lines, a blank line, a CSV table with a header, a blank line, 2 footer lines. Truth in `expected/i10_instrument_truth.csv`. Real instrument files will replace this when the user supplies them. |
+
+Truth files for i09 and i10 (columns: order, truth_format, truth_name, first_line, last_line, line_count, detectability, tier, note):
+- **Tier A** blocks must be found with the right format and exact first and last line. **Tier B** blocks are best effort: the detector's result is REPORTED (right, wrong, merged, split) but a miss does not fail the build; each B row says why it is hard.
+- detectability (Strong, Medium, Weak) says how clear the content signature is. A format guess below Strong is shown to the user as Guessed.
+- The detector reports `csv`, `tsv`, `json`, `json-lines`, `xml`, `soap`, `yaml`, `keyvalue`, `text`. BadgerFish (a kind of json) and `soap` (a kind of xml) are sub-types and count as correct when the base format is right and the sub-type is a Guessed hint.
+
 Columns of `*_segments.csv`: order (1-based, text blocks count), kind (marker or gap_text), format, name, notes,
 marker_begin_line, marker_end_line (empty when there is none), content_first_line, content_last_line,
 content_line_count, content_start_byte (offset of the first content line, counted from the start of the file

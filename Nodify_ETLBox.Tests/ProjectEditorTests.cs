@@ -18,7 +18,29 @@ public sealed class ProjectEditorTests : IDisposable
 
     private readonly string _folder = Directory.CreateTempSubdirectory("etlproj-").FullName;
 
-    public void Dispose() => Directory.Delete(_folder, recursive: true);
+    public void Dispose() => DeleteTempFolder(_folder);
+
+    /// <summary>
+    /// MainViewModel reads a new graph's CSV columns in the background and no test waits for that
+    /// read, so the file can still be open here. In 400 rounds on 2026-11-06 a delete right after
+    /// building a graph failed 306 times, and right after a plain read 0 times. Five seconds is far
+    /// longer than that read, so a file that stays locked still fails the test.
+    /// </summary>
+    internal static void DeleteTempFolder(string folder)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 100)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
 
     private string InFolder(string name) => Path.Combine(_folder, name);
 

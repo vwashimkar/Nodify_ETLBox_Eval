@@ -15,7 +15,7 @@ public static class OutputFolderCheck
     public const string ProjectFolderMessage = "This folder is inside a project. The generated .cs files would be compiled into it. Choose a folder outside any project.";
     public const string NotWritableMessage = "This location cannot be written to. It may be read-only or need other permissions. Choose another folder.";
 
-    /// <param name="isInsideProject">True when a folder is at or under a .csproj or .sln; <see cref="IsInsideProject"/> by default.</param>
+    /// <param name="isInsideProject">True when a folder is at or under a .csproj, .sln or .slnx; <see cref="IsInsideProject"/> by default.</param>
     /// <returns>Why the folder cannot be used, or null when it can.</returns>
     public static string? Check(string? folder, Func<string, bool>? isInsideProject = null)
     {
@@ -65,7 +65,7 @@ public static class OutputFolderCheck
         }
     }
 
-    /// <summary>True when a .csproj or .sln is at or above the folder, walking up from the nearest folder that exists.</summary>
+    /// <summary>True when a .csproj, .sln or .slnx is at or above the folder, walking up from the nearest folder that exists.</summary>
     public static bool IsInsideProject(string folderPath)
     {
         var existing = NearestExisting(Path.GetFullPath(folderPath));
@@ -74,7 +74,8 @@ public static class OutputFolderCheck
         while (current != null)
         {
             if (current.EnumerateFiles("*.csproj", SearchOption.TopDirectoryOnly).Any()
-                || current.EnumerateFiles("*.sln", SearchOption.TopDirectoryOnly).Any())
+                || current.EnumerateFiles("*.sln", SearchOption.TopDirectoryOnly).Any()
+                || current.EnumerateFiles("*.slnx", SearchOption.TopDirectoryOnly).Any())
             {
                 return true;
             }

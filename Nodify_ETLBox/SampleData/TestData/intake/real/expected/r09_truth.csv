@@ -1,0 +1,2 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,csv,results,1,26,26,Strong,B,1,yes,",",,"""sep=,"" is an Excel hint line (skip 1); header and 24 rows with 16 fully quoted fields; no blank lines; the file has LF line ends and no final line end"

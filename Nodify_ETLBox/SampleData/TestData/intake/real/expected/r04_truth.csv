@@ -1,0 +1,5 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,keyvalue,experiment properties,1,31,31,Medium,B,0,no,=,,"31 lines of ""* Name = value"" (prefix star and = separator, not ""Name: value""); values may contain = or :"
+2,tsv,sample setup,33,35,3,Medium,B,1,yes,TAB,,"""[Sample Setup]"" title, header (11 fields), 1 row with more fields than the header"
+3,tsv,amplification data,38,43,6,Medium,B,1,yes,TAB,,"Title, header (5 fields), 4 rows; preceded by 2 blank lines"
+4,tsv,results,46,48,3,Medium,B,1,yes,TAB,,"Title, header, 1 row; preceded by 2 blank lines"

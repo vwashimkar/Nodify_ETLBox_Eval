@@ -1,0 +1,20 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,note
+1,text,,1,12,12,Weak,B,Plain prose; text is the default when nothing else matches
+2,text,plain-note,14,19,6,Weak,B,Looks like YAML key: value lines ('Attendees: ...'); also contains braces and brackets that must not be parsed
+3,json,json-object,21,33,13,Strong,A,"Balanced braces, blank line before and after"
+4,json,json-array,35,39,5,Strong,A,Balanced brackets
+5,json-lines,ndjson,41,43,3,Strong,A,Every line is a complete JSON object
+6,json,badgerfish,45,65,21,Strong,A,Detected as json; the BadgerFish sub-type is a Guessed hint from '@' and '$' keys
+7,xml,xml-basic,67,82,16,Strong,A,Starts with <?xml; one root element; contains a comment and CDATA
+8,csv,csv-with-header,84,88,5,Strong,A,"5 fields per line, quoted fields with embedded comma and quote"
+9,csv,csv-no-header,90,92,3,Strong,A,"Same delimiter and field count as the table above, split only by the blank line; header-less (all rows are data)"
+10,csv,csv-semicolon-header,94,97,4,Strong,A,Delimiter ; (consistent 3 per line); decimal commas must not win
+11,csv,csv-pipe-no-header,99,101,3,Strong,A,"Delimiter | (4 per line), empty fields"
+12,csv,csv-multiline-quoted,103,106,4,Medium,A,A quoted field spans two lines; the field counter must be quote-aware across lines
+13,csv,csv-preamble-footer,108,114,7,Medium,B,"2 comment lines before the header and a TOTAL footer row; the preamble may come out as a separate text block or as skip lines; both are acceptable, skip lines are better"
+14,tsv,tsv-with-header,116,119,4,Strong,A,"Tabs, 4 per line"
+15,tsv,tsv-no-header,121,123,3,Strong,A,"Tabs, empty last cell kept"
+16,yaml,yaml-config,125,151,27,Weak,B,"Contains a blank line inside the block: a detector that splits at blank lines will cut it in two; anchors, lists, | and > blocks"
+17,soap,soap-1.1-request,153,165,13,Strong,A,xml whose root is an Envelope in the SOAP 1.1 namespace
+18,soap,soap-1.2-fault,167,182,16,Strong,A,"xml whose root is an Envelope in the SOAP 1.2 namespace, with a Fault"
+19,text,,184,185,2,Weak,A,Trailing prose after the last block
