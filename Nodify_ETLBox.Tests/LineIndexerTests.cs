@@ -88,7 +88,7 @@ public class LineIndexerTests : IDisposable
         var chunked = IntakeTestData.ReadMarkers(ChunkedItem(bytes, 1));
 
         Assert.Equal(whole.Containers, chunked.Containers);
-        Assert.Equal(whole.File with { Name = "x" }, chunked.File! with { Name = "x" });
+        Assert.Equal(whole.File! with { Name = "x" }, chunked.File! with { Name = "x" });
     }
 
     [Fact]

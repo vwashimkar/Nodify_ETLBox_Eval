@@ -131,6 +131,16 @@ public sealed class OutputFolderCheckTests : IDisposable
     }
 
     [Fact]
+    public void IsInsideProject_RecognisesAnSlnxFile()
+    {
+        var solution = Directory.CreateDirectory(Path.Combine(_root, "solution")).FullName;
+        File.WriteAllText(Path.Combine(solution, "a.slnx"), string.Empty);
+
+        Assert.True(OutputFolderCheck.IsInsideProject(Path.Combine(solution, "new")));
+        Assert.Equal(OutputFolderCheck.ProjectFolderMessage, OutputFolderCheck.Check(Path.Combine(solution, "new"), OutputFolderCheck.IsInsideProject));
+    }
+
+    [Fact]
     public void Dialog_AcceptsAMissingFolder_AndTheGeneratorCreatesIt()
     {
         var folder = Path.Combine(_root, "new", "CsvPipeline");
