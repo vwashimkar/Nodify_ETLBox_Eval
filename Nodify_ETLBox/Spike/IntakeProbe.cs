@@ -89,6 +89,18 @@ public static class IntakeProbe
 
         sb.AppendLine();
         sb.AppendLine($"Temp file deleted afterwards: {!File.Exists(bigFile)} [P].");
+        sb.AppendLine();
+        sb.AppendLine("## Not proven by this run");
+        sb.AppendLine();
+        sb.AppendLine("- A plain `TextReader` cannot be handed over: the hook takes a `StreamReader`. A `TextReader` subclass was not tried. [U]");
+        sb.AppendLine("- Stream reads above 5,000 rows, with a licence or at the free limit. [U]");
+        sb.AppendLine("- Whether ETLBox closes the stream it was given, and whether a file behind it is released at once after a run or a cancel. [U]");
+        sb.AppendLine("- Cancel while reading from a stream, on a stream that stalls. [U]");
+        sb.AppendLine("- A BOM or a non-UTF-8 encoding through the hook. Here the StreamReader is built by the caller, so `CsvSource.Encoding` may be ignored. [U]");
+        sb.AppendLine("- `SkipLines`, `ShouldSkipRecord` and record numbers on a stream. [U]");
+        sb.AppendLine("- Whether `ExecuteAsync` still works with a stream when several URIs are used. [U]");
+        sb.AppendLine("- Why the second quote-aware run can be much slower than the first. Single runs on a busy machine; not investigated. [U]");
+        sb.AppendLine("- The peak working set column is the whole process since it started, not one scan. The allocated bytes column is the per-scan figure. [P]");
         return sb.ToString();
     }
 
