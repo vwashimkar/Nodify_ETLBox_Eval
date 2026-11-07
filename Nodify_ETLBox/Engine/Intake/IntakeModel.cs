@@ -12,7 +12,35 @@ public enum IntakeMode
 public enum ContainerKind
 {
     Marker,
-    GapText
+    GapText,
+    Detected
+}
+
+/// <summary>Whether the first line of a table after its skip lines is a header. Always a guess.</summary>
+public enum HeaderGuess
+{
+    Yes,
+    No,
+    Unknown
+}
+
+/// <summary>The line form of a key-value container (plan section 4, rule 5).</summary>
+public enum KeyValueForm
+{
+    /// <summary><c>Name: value</c></summary>
+    Colon,
+
+    /// <summary><c>Name = value</c>, also with a leading <c>* </c></summary>
+    EqualsSign,
+
+    /// <summary><c>"Key","value"</c> rows whose field count may vary</summary>
+    Quoted,
+
+    /// <summary><c>Key&lt;TAB&gt;value</c></summary>
+    Tab,
+
+    /// <summary>Several <c>Key: value</c> pairs on one line, separated by commas</summary>
+    Pairs
 }
 
 public enum ContainerStatus
@@ -77,9 +105,60 @@ public sealed record MarkerProfile
     public IReadOnlyList<string> KnownFormats { get; init; } = DefaultKnownFormats;
 }
 
+/// <summary>
+/// The thresholds of the auto-detector (plan section 4). Data, so they can come from configuration
+/// later. Values marked [U] are chosen in G2, not given by the plan.
+/// </summary>
+public sealed record DetectorSettings
+{
+    public static readonly IReadOnlyList<string> DefaultDelimiters = [",", ";", "|", "\t"];
+
+    /// <summary>A table has at least this many lines with the same field count ...</summary>
+    public int MinTableLines { get; init; } = 3;
+
+    /// <summary>... or at least this many lines ...</summary>
+    public int MinShortTableLines { get; init; } = 2;
+
+    /// <summary>... when they have at least this many fields.</summary>
+    public int MinShortTableFields { get; init; } = 3;
+
+    public IReadOnlyList<string> DelimiterCandidates { get; init; } = DefaultDelimiters;
+
+    /// <summary>How far a field count may differ from the table's count; the table is then Likely.</summary>
+    public int FieldCountTolerance { get; init; } = 1;
+
+    /// <summary>Exactly equal field counts over this many lines make a table Sure.</summary>
+    public int SureTableMinLines { get; init; } = 5;
+
+    /// <summary>Title lines directly above a table that become its skip lines, at most.</summary>
+    public int MaxPreambleLines { get; init; } = 3;
+
+    public int MinKeyValueLines { get; init; } = 3;
+
+    /// <summary>A key-value block of this many lines is Likely; a shorter one Guessed.</summary>
+    public int LikelyKeyValueMinLines { get; init; } = 5;
+
+    /// <summary>The longest key of a <c>Name: value</c> or <c>Name = value</c> line [U].</summary>
+    public int MaxKeyLength { get; init; } = 40;
+
+    /// <summary>This many blank lines or more split a text block; fewer stay inside it.</summary>
+    public int TextSplitBlankLines { get; init; } = 2;
+
+    /// <summary>A JSON or XML region larger than this is not parsed and stays Likely.</summary>
+    public int MaxValidationMb { get; init; } = 64;
+
+    /// <summary>A quoted field may span at most this many lines; beyond, the quote is taken as text [U].</summary>
+    public int MaxQuotedLines { get; init; } = 10;
+
+    /// <summary>A table's first skip line names it when it is shorter than this.</summary>
+    public int MaxTitleNameLength { get; init; } = 60;
+}
+
 public sealed record IntakeSettings
 {
     public IntakeMode Mode { get; init; } = IntakeMode.AutoDetect;
+
+    public DetectorSettings Detector { get; init; } = new();
 
     public MarkerProfile Markers { get; init; } = new();
 
@@ -93,7 +172,11 @@ public sealed record IntakeSettings
 /// <see cref="Confidence"/>. Line numbers are 1-based and count every line of the file. Byte
 /// offsets count from the start of the file, including a BOM; <see cref="ContentEndByte"/> is just
 /// after the last content character, before its line ending. An empty segment has no line
-/// numbers and no offsets.
+/// numbers and no offsets. The fields after <see cref="Confidence"/> are filled by the
+/// auto-detector: <see cref="SubType"/> (for example soap), the table's <see cref="Delimiter"/>,
+/// <see cref="HeaderGuess"/> and <see cref="SkipLines"/> (title lines at the top of the region),
+/// the <see cref="KeyValueForm"/>, and <see cref="Reasons"/>, short texts that say why the format
+/// was chosen.
 /// </summary>
 public sealed record ContainerInfo(
     int Order,
@@ -110,7 +193,13 @@ public sealed record ContainerInfo(
     long? ContentEndByte,
     ContainerStatus Status,
     string Message,
-    ContainerConfidence Confidence);
+    ContainerConfidence Confidence,
+    string? SubType = null,
+    string? Delimiter = null,
+    HeaderGuess? HeaderGuess = null,
+    int SkipLines = 0,
+    KeyValueForm? KeyValueForm = null,
+    IReadOnlyList<string>? Reasons = null);
 
 public sealed record IntakeFileInfo(
     string Name,
