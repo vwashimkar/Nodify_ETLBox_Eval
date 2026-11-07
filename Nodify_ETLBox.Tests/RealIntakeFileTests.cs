@@ -15,6 +15,12 @@ public class RealIntakeFileTests
     [InlineData("r04_quantstudio.txt", 2659)]
     [InlineData("r05_agilent_gen5.txt", 1307)]
     [InlineData("r06_bmg_pherastar.csv", 1176)]
+    [InlineData("r07_ctl_immunospot.txt", 4932)]
+    [InlineData("r08_revvity_kaleido.csv", 3790)]
+    [InlineData("r09_qiacuity_dpcr.csv", 3093)]
+    [InlineData("r10_methodical_mind.txt", 3893)]
+    [InlineData("r11_roche_cedex_bioht.txt", 1849)]
+    [InlineData("r12_msd_workbench.csv", 4052)]
     public void RealFile_HasItsOriginalSize(string name, long size)
     {
         var actual = new FileInfo(Path.Combine(Folder, name)).Length;
