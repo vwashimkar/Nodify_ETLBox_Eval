@@ -1,0 +1,4 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,note
+1,keyvalue,metadata header,1,20,20,Medium,A,20 'Key: value' lines. Looks like YAML; the better kind is key-value metadata (a one-row table whose values can be carried onto the table rows)
+2,csv,results table,22,27,6,Strong,A,"Header row plus 5 data rows, comma, 5 fields; no markers"
+3,text,footer,29,30,2,Weak,A,Two lines of prose after a blank line

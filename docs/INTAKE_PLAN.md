@@ -1,6 +1,12 @@
-# Plan: Intake stage (mixed-format files from instruments), v0.2
+# Plan: Intake stage (mixed-format files from instruments), v0.3
 
-Status: draft 0.2 for the user's review. Nothing here is built. When you approve it, copy it to `docs/INTAKE_PLAN.md` and run the stage prompts one at a time, as before.
+Status: draft 0.3 (v0.2 plus the corrections listed in "What changed in v0.3"). The user has approved the direction. Nothing here is built. When you approve it, copy it to `docs/INTAKE_PLAN.md` and run the stage prompts one at a time, as before.
+
+## 0a. What changed in v0.3
+
+- **Count corrected:** `i01_sample.txt` has 17 marker segments (not 18) plus 2 text blocks, so 19 containers. The large file (the text repeated N times) has 18N + 1 containers in marker mode (17 segments and 1 text block per copy, plus one). The earlier "18" counted an indented trap line.
+- **Real files** (six vendor exports, folder `real/`) replace the earlier plan to wait for the user's own files. They are Tier B cases with hand-written truth; `r05` and `r06` are a hold-out. They showed that the key-value rule, the table rule, blank-line handling and the encoding rule below needed to be wider than v0.2 said.
+- **UTF-16 with a BOM is supported** (real SoftMax Pro exports are UTF-16). UTF-32 and UTF-16 without a BOM are refused with a message.
 
 ## 0. What changed since v0.1 (the user's decisions)
 
@@ -21,7 +27,7 @@ Status: draft 0.2 for the user's review. Nothing here is built. When you approve
 
 ## 2. What the video showed
 
-Alteryx One loaded the sample as ONE table: 218 rows, one string column `column1`, text split on commas into `column2`, `column3` ..., JSON, XML, CSV and prose mixed in one grid, and "Data Insights" such as "Number of column1 = 170". Nothing was recognised. That is the baseline to beat: for the sample, 18 typed containers plus 2 text blocks, in order, each with its own preview, found with and without markers.
+Alteryx One loaded the sample as ONE table: 218 rows, one string column `column1`, text split on commas into `column2`, `column3` ..., JSON, XML, CSV and prose mixed in one grid, and "Data Insights" such as "Number of column1 = 170". Nothing was recognised. That is the baseline to beat: for the sample, 17 typed containers plus 2 text blocks, in order, each with its own preview, found with and without markers.
 
 ## 3. Concept
 
@@ -44,8 +50,8 @@ The detector reads the file once as a stream of lines (never the whole file in m
 1. **JSON**: a region starting at a line whose first non-blank character is `{` or `[` runs to the line where the string-aware brace/bracket depth returns to 0. Accepted only if System.Text.Json parses that span. Blank lines inside do not split it.
 2. **JSON lines**: 2 or more consecutive lines that are each a complete JSON object.
 3. **XML**: starts with `<?xml` or `<name`; ends at the closing tag of the root (read with XmlReader, DTD processing prohibited). Sub-type **SOAP** when the root is an Envelope in the SOAP 1.1 or 1.2 namespace. Sub-type **BadgerFish** (for JSON) is only a Guessed hint from `@` and `$` keys.
-4. **Table (csv or tsv)**: consecutive lines that have the same field count, counted quote-aware across lines (a quoted field may span lines), for the best of the candidate delimiters `,` `;` `|` tab (best = most consistent count, fewest ambiguous quotes; decimal commas must not beat a `;` that is consistent). At least 3 lines, or 2 lines with 3 or more fields. A **blank line ends a table**, so two tables with the same layout separated by a blank line are two containers. Header guess: first row has no numeric field while the next rows do (shown as Guessed; the user decides). **Preamble lines** directly before a table (for example `# Report ...`) are offered as skip lines of that table. Footer rows such as `TOTAL` stay inside the table.
-5. **Key-value**: 3 or more consecutive lines of the form `Name: value` with no nesting. This is the common instrument metadata header. It is not YAML; it becomes a one-row table of metadata that can later be carried onto the rows of a table (planned, section 11).
+4. **Table (csv or tsv)**: consecutive lines that have the same field count, counted quote-aware across lines (a quoted field may span lines), for the best of the candidate delimiters `,` `;` `|` tab (best = most consistent count, fewest ambiguous quotes; decimal commas must not beat a `;` that is consistent). At least 3 lines, or 2 lines with 3 or more fields. A **blank line ends a table**, so two tables with the same layout separated by a blank line are two containers. A field count that differs by one (a trailing delimiter in the header, trailing empty cells cut off, a row with extra fields) is tolerated with confidence Likely. A table whose header changes with no blank line before it is split at the change (Guessed). A line made only of delimiters (`,,,,`) or only `""` is not blank: it may sit inside a region but may not start or end one. Header guess: first row has no numeric field while the next rows do (shown as Guessed; the user decides). **Preamble lines** directly before a table (for example `# Report ...`) are offered as skip lines of that table. Footer rows such as `TOTAL` stay inside the table.
+5. **Key-value**: 3 or more consecutive lines of one form: `Name: value`; `Name = value` (also with a leading `* `); quoted `"Key","value"` rows whose field count may vary; `Key<TAB>value`; or several `Key: value` pairs on one line. No nesting. This is the common instrument metadata header. It is not YAML; it becomes a one-row table of metadata that can later be carried onto the rows of a table (planned, section 11).
 6. **YAML**: only when there is real YAML structure (nesting by indentation, `- ` lists, anchors, `|` or `>` blocks) AND YamlDotNet parses the region. Otherwise key-value or text.
 7. **Text**: everything else. Adjacent text lines form one block; a single blank line does not split text, two or more blank lines do [U].
 
@@ -125,12 +131,12 @@ Visible wins first: G1 to G4 give the container map and the progress bar; G6 and
 
 ## 14. Tests
 
-- Ground truth (`intake_test_data.zip`): i01 the stress file (18 marker segments plus 2 text blocks), i02 CRLF, i03 BOM, i04 to i07 marker problems and edge cases, i08 six single-format files without markers, **i09 the stress file with the markers removed** and **i10 an instrument-style file** (20 `Key: value` lines, a CSV table, 2 footer lines), each with an expected file made by a separate reference scanner, not by the code under test.
+- Ground truth (`intake_test_data.zip`): i01 the stress file (17 marker segments plus 2 text blocks), i02 CRLF, i03 BOM, i04 to i07 marker problems and edge cases, i08 six single-format files without markers, **i09 the stress file with the markers removed** and **i10 an instrument-style file** (20 `Key: value` lines, a CSV table, 2 footer lines), each with an expected file made by a separate reference scanner, not by the code under test.
 - **Tiers** for auto-detect: Tier A rows must be right (format and exact lines) and fail the build; Tier B rows are best effort and are REPORTED (right, merged, split, wrong format) without failing, each with the reason it is hard. Report the Tier B scorecard in every detector task.
-- Large file generated at test time (the stress file repeated N times: 19N + 1 containers in marker mode): N = 2,000 (13 MB) and N = 20,000 (130 MB, marked Slow, run once and report time and memory). Memory must not grow with N.
+- Large file generated at test time (the stress file repeated N times: 18N + 1 containers in marker mode): N = 2,000 (13 MB) and N = 20,000 (130 MB, marked Slow, run once and report time and memory). Memory must not grow with N.
 - Property check: joining all containers and markers back in order reproduces the file's lines (nothing lost or duplicated).
 - Cancel tests repeat 20 times on temp copies; everything slow uses `TestTimeout`; ETLBox rules in CLAUDE.md apply to the CSV reads in G6.
-- **Real files**: the user supplies 3 to 5 real instrument exports (private values replaced, and which software makes them). They are added as Tier A cases, and the detector rules are expected to change after seeing them. This is the main risk of the stage, so G2 ends with a review of the detector on those files.
+- **Real files**: six real vendor exports (`real/r01` to `r06`: Luminex, SoftMax Pro (UTF-16), EnVision, QuantStudio, Gen5, PHERAstar) with hand-written truth (`real/expected/`). All rows are Tier B. `r05` and `r06` are a hold-out: no rule is tuned on them and they are run once at the end of G2. The user's own exports (for example Metrohm tiamo) are added later as more cases.
 
 ## 15. Risks
 
@@ -177,7 +183,7 @@ Tasks G0 and G1: probes, then the intake foundation. No UI, no auto-detection ye
    a. Data-driven over SampleData/TestData/intake: for i01 to i07 compare EVERY column of expected/<name>_segments.csv, and for i06 the file-level warning. The expected files are ground truth: never edit them; if a case disagrees with the plan text, stop and report which one.
    b. Property test: rebuild the line list from the containers and prove no line is lost or duplicated.
    c. ReadLines returns exactly the content lines (the trailing tab and spaces in i07 preserved; CRLF and BOM files give the same text with different offsets).
-   d. Large file: the stress text repeated N = 2,000 times in a temp folder gives 19N+1 containers in marker mode; peak memory does not grow with N (compare N = 200 and N = 2,000 and report the numbers). N = 20,000 as a separate test with Trait "Slow", skipped unless an environment variable is set; run it once and report time and memory.
+   d. Large file: the stress text repeated N = 2,000 times in a temp folder gives 18N+1 containers in marker mode; peak memory does not grow with N (compare N = 200 and N = 2,000 and report the numbers). N = 20,000 as a separate test with Trait "Slow", skipped unless an environment variable is set; run it once and report time and memory.
    e. Cancel: after the first containers of the large file, 20 times in a loop, deleting the temp file afterwards (proves the file is released), all under TestTimeout. Progress is reported at least once and the last report equals the final totals. Missing file, empty file, file above the limit: clear messages.
    f. In AutoDetect mode the foundation returns no containers yet and a message "auto-detection comes in the next stage" (placeholder); the i08 and i09 and i10 files are not tested here.
    g. A registry test: the file factory is found by kind, an unknown kind gives a clear message.
