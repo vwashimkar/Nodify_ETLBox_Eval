@@ -7,8 +7,8 @@ namespace Nodify_ETLBox.Tests;
 
 /// <summary>
 /// The auto-detector against the truth files. Tier A rows must match and fail the build; Tier B
-/// rows and the real files are scored and written to reports/g2b-detect-report.md, never failing.
-/// real/r07 to real/r12 are the fresh hold-out of G2b and run only with INTAKE_HOLDOUT=1.
+/// rows and the real files are scored and written to reports/g3-detect-report.md, never failing.
+/// Since G3 all twelve real files are development files; there is no hold-out.
 /// </summary>
 public class AutoDetectTruthTests
 {
@@ -18,25 +18,26 @@ public class AutoDetectTruthTests
     public static readonly string[] DevelopmentRealFiles =
     [
         "r01_luminex_xponent.csv", "r02_moldev_softmax_pro_utf16.txt", "r03_perkinelmer_envision.csv", "r04_quantstudio.txt",
-        "r05_agilent_gen5.txt", "r06_bmg_pherastar.csv"
-    ];
-
-    public static readonly string[] HoldOutRealFiles =
-    [
-        "r07_ctl_immunospot.txt", "r08_revvity_kaleido.csv", "r09_qiacuity_dpcr.csv", "r10_methodical_mind.txt", "r11_roche_cedex_bioht.txt",
+        "r05_agilent_gen5.txt", "r06_bmg_pherastar.csv", "r07_ctl_immunospot.txt", "r08_revvity_kaleido.csv", "r09_qiacuity_dpcr.csv", "r10_methodical_mind.txt", "r11_roche_cedex_bioht.txt",
         "r12_msd_workbench.csv"
     ];
 
-    /// <summary>The G2 results per file (Match, LinesOff, FormatOff, Merged, Split, Missed), from reports/taskG2-report.md; r05 and r06 were G2's hold-out.</summary>
+    /// <summary>The G2b results per file (Match, LinesOff, FormatOff, Merged, Split, Missed), from reports/taskG2b-report.md; r07 to r12 were G2b's hold-out.</summary>
     private static readonly Dictionary<string, int[]> G2Results = new()
     {
         ["i09_sample_nomarkers (tier B rows)"] = [1, 0, 1, 2, 0, 0],
-        ["r01_luminex_xponent.csv"] = [15, 0, 1, 2, 1, 0],
+        ["r01_luminex_xponent.csv"] = [16, 0, 1, 2, 0, 0],
         ["r02_moldev_softmax_pro_utf16.txt"] = [1, 0, 0, 3, 2, 0],
         ["r03_perkinelmer_envision.csv"] = [21, 0, 0, 2, 0, 0],
         ["r04_quantstudio.txt"] = [4, 0, 0, 0, 0, 0],
-        ["r05_agilent_gen5.txt"] = [3, 0, 1, 1, 2, 0],
-        ["r06_bmg_pherastar.csv"] = [0, 0, 0, 2, 0, 0]
+        ["r05_agilent_gen5.txt"] = [6, 0, 0, 0, 1, 0],
+        ["r06_bmg_pherastar.csv"] = [2, 0, 0, 0, 0, 0],
+        ["r07_ctl_immunospot.txt"] = [0, 0, 0, 2, 7, 0],
+        ["r08_revvity_kaleido.csv"] = [4, 0, 0, 2, 4, 0],
+        ["r09_qiacuity_dpcr.csv"] = [1, 0, 0, 0, 0, 0],
+        ["r10_methodical_mind.txt"] = [5, 0, 1, 0, 0, 0],
+        ["r11_roche_cedex_bioht.txt"] = [1, 0, 0, 0, 0, 0],
+        ["r12_msd_workbench.csv"] = [1, 0, 0, 0, 0, 0]
     };
 
     internal sealed record TruthRow(
@@ -185,10 +186,10 @@ public class AutoDetectTruthTests
         var path = ReportPath();
         var holdOut = File.Exists(path) ? ExistingHoldOut(File.ReadAllText(path)) : null;
         var text = new StringBuilder();
-        text.AppendLine("# G2b auto-detect report");
+        text.AppendLine("# G3 auto-detect report");
         text.AppendLine();
         text.AppendLine("Written by `AutoDetectTruthTests`. Tier B rows and the real files never fail the build. Results: Match (format and exact lines), LinesOff, FormatOff, Merged, Split, Missed. "
-                        + "The line G2 under a file gives the G2 result for the same file.");
+                        + "The line \"G2b:\" under a file gives the G2b result for the same file.");
         text.AppendLine();
         AppendSections(text, sections);
         if (holdOut is not null)
@@ -198,29 +199,6 @@ public class AutoDetectTruthTests
 
         File.WriteAllText(path, text.ToString());
         Assert.True(File.Exists(path), $"The report could not be written to {path}.");
-    }
-
-    [HoldOutFact]
-    [Trait("Category", "HoldOut")]
-    public void HoldOut_R07ToR12_AreScoredOnce()
-    {
-        var sections = HoldOutRealFiles.Select(f => (f, Score(ReadTruth(TruthPathOf(f)), Detect(FilePathOf(f)).Containers))).ToList();
-        foreach (var file in HoldOutRealFiles)
-        {
-            AutoDetectPropertyTests.AssertEveryNonBlankLineInExactlyOneContainer(FilePathOf(file));
-        }
-
-        var path = ReportPath();
-        var existing = File.Exists(path) ? File.ReadAllText(path) : "# G2b auto-detect report\n";
-        var at = existing.IndexOf(HoldOutHeading, StringComparison.Ordinal);
-        var text = new StringBuilder(at >= 0 ? existing[..at] : existing.TrimEnd() + Environment.NewLine + Environment.NewLine);
-        text.AppendLine(HoldOutHeading);
-        text.AppendLine();
-        text.AppendLine($"Run once on {DateTime.Now:yyyy-MM-dd HH:mm}, after the rules were committed. No rule was changed afterwards.");
-        text.AppendLine();
-        AppendSections(text, sections);
-
-        File.WriteAllText(path, text.ToString());
     }
 
     private static string? ExistingHoldOut(string report)
@@ -250,7 +228,7 @@ public class AutoDetectTruthTests
             if (G2Results.TryGetValue(file, out var g2))
             {
                 text.AppendLine();
-                text.AppendLine("G2: " + string.Join(", ", results.Select((r, i) => $"{r} {g2[i]}")));
+                text.AppendLine("G2b: " + string.Join(", ", results.Select((r, i) => $"{r} {g2[i]}")));
             }
 
             text.AppendLine();
@@ -263,7 +241,7 @@ public class AutoDetectTruthTests
         if (sections.All(s => G2Results.ContainsKey(s.File)))
         {
             text.AppendLine();
-            text.AppendLine("G2: " + string.Join(", ", results.Select((r, i) => $"{r} {sections.Sum(s => G2Results[s.File][i])}")));
+            text.AppendLine("G2b: " + string.Join(", ", results.Select((r, i) => $"{r} {sections.Sum(s => G2Results[s.File][i])}")));
         }
         if (matches.Count > 0)
         {
@@ -304,19 +282,7 @@ public class AutoDetectTruthTests
 
         var root = folder?.FullName ?? throw new InvalidOperationException("The repository root (with the .slnx file) was not found, so the report cannot be written.");
         Directory.CreateDirectory(Path.Combine(root, "reports"));
-        return Path.Combine(root, "reports", "g2b-detect-report.md");
-    }
-}
-
-/// <summary>Runs only when INTAKE_HOLDOUT=1, so the hold-out files are not used while the rules are tuned.</summary>
-internal sealed class HoldOutFactAttribute : FactAttribute
-{
-    public HoldOutFactAttribute()
-    {
-        if (Environment.GetEnvironmentVariable(AutoDetectTruthTests.HoldOutVariable) != "1")
-        {
-            Skip = $"hold-out: set {AutoDetectTruthTests.HoldOutVariable}=1 to run r07 to r12 once";
-        }
+        return Path.Combine(root, "reports", "g3-detect-report.md");
     }
 }
 
@@ -331,8 +297,7 @@ public class AutoDetectPropertyTests
             data.Add(file);
         }
 
-        // r07 to r12 were scored once as the G2b hold-out; since then they are ordinary test files here.
-        foreach (var file in AutoDetectTruthTests.DevelopmentRealFiles.Concat(AutoDetectTruthTests.HoldOutRealFiles))
+        foreach (var file in AutoDetectTruthTests.DevelopmentRealFiles)
         {
             data.Add(Path.Combine(RealIntakeFileTests.Folder, file));
         }

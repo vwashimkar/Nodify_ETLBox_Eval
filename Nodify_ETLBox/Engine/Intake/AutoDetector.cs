@@ -1050,7 +1050,8 @@ internal sealed class Region
 
         var header = window[skip].Fields[delimiter];
         var next = skip + 1 < window.Count ? window[skip + 1].Fields[delimiter] : (FieldSummary?)null;
-        _header = (!header.HasNumeric && next is { HasNumeric: true }) || (header.FirstEmpty && header.OthersAllText) ? HeaderGuess.Yes
+        _header = (!header.HasNumeric && next is { HasNumeric: true }) || (header.FirstEmpty && header.OthersAllText)
+                  || RowShape.IsColumnNumberHeader(RowShape.Split(window[skip].Text, _delimiterChar), header.Count) ? HeaderGuess.Yes
             : header.HasNumeric ? HeaderGuess.No
             : HeaderGuess.Unknown;
 

@@ -403,6 +403,19 @@ public class AutoDetectorRuleTests
         Assert.Contains("fixedwidth", MarkerProfile.DefaultKnownFormats);
     }
 
+    // ---- G3 step 0: plate grid header ---------------------------------------------------------
+
+    [Theory]
+    [InlineData(",1,2,3,4\nA,5,6,7,8\nB,9,1,2,3\nC,4,5,6,7\n", HeaderGuess.Yes)]
+    [InlineData("\t0\t1\t2\nA\t1.5\t2.5\t3.5\nB\t4.5\t5.5\t6.5\nC\t7.5\t8.5\t9.5\n", HeaderGuess.Yes)]
+    [InlineData(",1,2,3,4,,,\nA,5,6,7,8,,,\nB,9,1,2,3,,,\nC,4,5,6,7,,,\n", HeaderGuess.Yes)]
+    [InlineData(",2,3,4,5\nA,5,6,7,8\nB,9,1,2,3\nC,4,5,6,7\n", HeaderGuess.No)]
+    [InlineData(",1,3,4,5\nA,5,6,7,8\nB,9,1,2,3\nC,4,5,6,7\n", HeaderGuess.No)]
+    public void AnEmptyFirstCell_ThenColumnNumbers_IsAPlateGridHeader(string text, HeaderGuess expected)
+    {
+        Assert.Equal(expected, Assert.Single(Detect(text).Containers).HeaderGuess);
+    }
+
     public static TheoryData<string> I10Variants => new() { "utf-16le", "utf-16be", "crlf" };
 
     [Theory]
