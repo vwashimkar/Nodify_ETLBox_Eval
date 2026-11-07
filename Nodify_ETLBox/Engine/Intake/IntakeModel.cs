@@ -184,6 +184,8 @@ public sealed record IntakeSettings
 
     public DetectorSettings Detector { get; init; } = new();
 
+    public ValidationSettings Validation { get; init; } = new();
+
     public MarkerProfile Markers { get; init; } = new();
 
     public int MaxFileSizeMb { get; init; } = 500;
@@ -223,7 +225,8 @@ public sealed record ContainerInfo(
     HeaderGuess? HeaderGuess = null,
     int SkipLines = 0,
     KeyValueForm? KeyValueForm = null,
-    IReadOnlyList<string>? Reasons = null);
+    IReadOnlyList<string>? Reasons = null,
+    string? SubTypeVersion = null);
 
 public sealed record IntakeFileInfo(
     string Name,
@@ -255,8 +258,12 @@ public sealed record IntakeResult(
     bool Cancelled,
     string? Error);
 
-/// <summary>Where a read is. The last report of a run equals the totals in the result.</summary>
-public sealed record IntakeProgress(long BytesRead, long FileSize, int ContainersFound, IntakePhase Phase);
+/// <summary>
+/// Where a read is. The last report of a run equals the totals in the result. While validating,
+/// <see cref="BytesRead"/> counts the container bytes checked so far and <see cref="ContainersValidated"/>
+/// the containers done ("Validating n of m containers", m being <see cref="ContainersFound"/>).
+/// </summary>
+public sealed record IntakeProgress(long BytesRead, long FileSize, int ContainersFound, IntakePhase Phase, int ContainersValidated = 0);
 
 /// <summary>Lines read back by offsets. <see cref="Error"/> says what went wrong and what to do; the list is then empty.</summary>
 public sealed record IntakeLines(IReadOnlyList<string> Lines, string? Error);

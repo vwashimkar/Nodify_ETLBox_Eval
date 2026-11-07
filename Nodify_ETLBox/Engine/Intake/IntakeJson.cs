@@ -20,6 +20,12 @@ public static class IntakeJson
 
     public static string Serialize(IntakeResult result) => JsonSerializer.Serialize(result, Options);
 
+    public static string Serialize(IntakeValidationResult result) => JsonSerializer.Serialize(result, Options);
+
+    public static IntakeValidationResult DeserializeValidation(string json)
+        => JsonSerializer.Deserialize<IntakeValidationResult>(json, Options)
+           ?? throw new JsonException("The JSON holds no validation result.");
+
     public static IntakeSettings DeserializeSettings(string json)
         => JsonSerializer.Deserialize<IntakeSettings>(json, Options) ?? new IntakeSettings();
 
