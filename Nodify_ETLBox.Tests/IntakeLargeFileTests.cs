@@ -223,7 +223,7 @@ public class IntakeLargeFileTests : IDisposable
     }
 
     /// <summary>Calls back after every read, with the position reached.</summary>
-    private sealed class ObservingStream(Stream inner, Action<long> onRead) : Stream
+    internal sealed class ObservingStream(Stream inner, Action<long> onRead) : Stream
     {
         private long _position;
 
