@@ -10,7 +10,7 @@ namespace EtlDesigner.Engine.Intake;
 /// </summary>
 public static class IntakeReader
 {
-    public const string AutoDetectPendingMessage = "Auto-detection comes in the next stage. Use Markers mode for now.";
+
 
     public const string Utf16SettingMessage = "UTF-16 and UTF-32 cannot be chosen as the encoding: a UTF-16 file is read when it starts with a byte order mark (BOM), which decides. Choose utf-8 or a one-byte encoding such as windows-1252.";
 
@@ -43,19 +43,20 @@ public static class IntakeReader
             return Finish(null, [], cancelled: false, encodingError);
         }
 
-        MarkerScanner? scanner = null;
-        IntakeLineHandler onLine = NoLine;
-        if (settings.Mode != IntakeMode.AutoDetect)
-        {
-            scanner = new MarkerScanner(settings.Markers, encoding);
-            onLine = scanner.OnLine;
-        }
+        // Markers mode: the scanner alone. AutoDetect: the detector alone. MarkersThenAutoDetect: the
+        // scanner hands the lines between marker segments to the detector.
+        var detector = settings.Mode == IntakeMode.Markers ? null : new AutoDetector(item, settings.Detector, encoding);
+        var scanner = settings.Mode == IntakeMode.AutoDetect ? null : new MarkerScanner(settings.Markers, encoding, detector);
+        IntakeLineHandler onLine = scanner is not null ? scanner.OnLine : detector!.OnLine;
+        int Found() => (scanner?.ContainerCount ?? 0) + (detector?.ContainerCount ?? 0);
 
-        var outcome = LineIndexer.Scan(item, settings.MaxFileSizeMb, settings.EncodingName, onLine, () => scanner?.ContainerCount ?? 0, progress, token);
+        var outcome = LineIndexer.Scan(item, settings.MaxFileSizeMb, settings.EncodingName, onLine, Found, progress, token);
 
         if (outcome.File is not null && outcome.Error is null)
         {
             scanner?.Finish();
+            detector?.Finish();
+            progress?.Invoke(new IntakeProgress(outcome.BytesRead, outcome.Size, Found(), IntakePhase.Detecting));
         }
 
         if (outcome.Error is not null)
@@ -63,19 +64,32 @@ public static class IntakeReader
             return Finish(outcome.File, [], cancelled: false, outcome.Error);
         }
 
-        if (settings.Mode != IntakeMode.Markers && !outcome.Cancelled)
-        {
-            warnings.Add(new IntakeWarning(null, AutoDetectPendingMessage));
-        }
+        warnings.AddRange(scanner?.Warnings ?? []);
+        warnings.AddRange(detector?.Warnings ?? []);
+        warnings.Sort((a, b) => (a.Line ?? 0).CompareTo(b.Line ?? 0));
 
-        if (scanner is not null)
-        {
-            warnings.AddRange(scanner.Warnings);
-        }
-
-        IReadOnlyList<ContainerInfo> containers = scanner is null ? [] : scanner.Containers;
+        var containers = Merge(scanner?.Containers ?? [], detector?.Containers ?? []);
         progress?.Invoke(new IntakeProgress(outcome.BytesRead, outcome.Size, containers.Count, IntakePhase.Done));
         return Finish(outcome.File, containers, outcome.Cancelled, null);
+    }
+
+    /// <summary>Marker segments and detected containers in file order, numbered again from 1.</summary>
+    private static IReadOnlyList<ContainerInfo> Merge(IReadOnlyList<ContainerInfo> markers, IReadOnlyList<ContainerInfo> detected)
+    {
+        if (detected.Count == 0)
+        {
+            return markers;
+        }
+
+        if (markers.Count == 0)
+        {
+            return detected;
+        }
+
+        return markers.Concat(detected)
+            .OrderBy(c => c.MarkerBeginLine ?? c.ContentFirstLine ?? 0)
+            .Select((c, i) => c with { Order = i + 1 })
+            .ToList();
     }
 
     /// <summary>
@@ -170,7 +184,7 @@ public static class IntakeReader
         }
     }
 
-    private static void MoveTo(Stream stream, long position)
+    internal static void MoveTo(Stream stream, long position)
     {
         if (stream.CanSeek)
         {
@@ -229,7 +243,5 @@ public static class IntakeReader
         }
     }
 
-    private static void NoLine(in IntakeLine line)
-    {
-    }
+
 }

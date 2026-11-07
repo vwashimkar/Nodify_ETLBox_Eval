@@ -310,24 +310,35 @@ public class MarkerScannerTests
     }
 
     [Fact]
-    public void AutoDetect_FindsNoContainersYet_AndSaysSo()
+    public void AutoDetect_ReadsTheMarkerFile_AsDetectedContainers()
     {
         var result = IntakeReader.Read(IntakeTestData.Item("i01_sample"), new IntakeSettings(), null, CancellationToken.None);
 
-        Assert.Empty(result.Containers);
         Assert.Null(result.Error);
-        Assert.Contains("auto-detection comes in the next stage", Assert.Single(result.Warnings).Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEmpty(result.Containers);
+        Assert.All(result.Containers, c => Assert.Equal(ContainerKind.Detected, c.Kind));
         Assert.Equal(219, result.File!.LineCount);
     }
 
     [Fact]
-    public void MarkersThenAutoDetect_GivesTheMarkers_AndTheSameMessage()
+    public void MarkersThenAutoDetect_GivesTheMarkers_AndDetectsTheGapsOnly()
     {
         var settings = new IntakeSettings { Mode = IntakeMode.MarkersThenAutoDetect };
 
         var result = IntakeReader.Read(IntakeTestData.Item("i01_sample"), settings, null, CancellationToken.None);
+        var markers = IntakeTestData.ReadMarkers("i01_sample").Containers;
 
-        Assert.Equal(19, result.Containers.Count);
-        Assert.Contains(result.Warnings, w => w.Message == IntakeReader.AutoDetectPendingMessage);
+        Assert.Equal(markers.Where(c => c.Kind == ContainerKind.Marker), result.Containers.Where(c => c.Kind == ContainerKind.Marker), new OrderlessComparer());
+        Assert.Equal(markers.Where(c => c.Kind == ContainerKind.GapText).Select(c => (c.ContentFirstLine, c.ContentLastLine)),
+            result.Containers.Where(c => c.Kind == ContainerKind.Detected).Select(c => (c.ContentFirstLine, c.ContentLastLine)));
+        Assert.Equal(Enumerable.Range(1, result.Containers.Count), result.Containers.Select(c => c.Order));
+    }
+
+    /// <summary>Compares containers without their order number, which changes when gap containers are added.</summary>
+    private sealed class OrderlessComparer : IEqualityComparer<ContainerInfo>
+    {
+        public bool Equals(ContainerInfo? x, ContainerInfo? y) => x! with { Order = 0 } == y! with { Order = 0 };
+
+        public int GetHashCode(ContainerInfo obj) => (obj with { Order = 0 }).GetHashCode();
     }
 }

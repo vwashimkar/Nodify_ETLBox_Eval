@@ -7,7 +7,7 @@ namespace EtlDesigner.Engine.Intake;
 /// from <see cref="LineIndexer"/> and builds the containers. A problem in the file never stops the
 /// scan: it becomes a status on the container or a file-level warning.
 /// </summary>
-public sealed class MarkerScanner(MarkerProfile profile, Encoding encoding)
+public sealed class MarkerScanner(MarkerProfile profile, Encoding encoding, AutoDetector? gapDetector = null)
 {
     public const string StrayEndMessage = "END marker without BEGIN (kept as plain text)";
 
@@ -72,6 +72,7 @@ public sealed class MarkerScanner(MarkerProfile profile, Encoding encoding)
         if (begin is not null)
         {
             FlushGap();
+            gapDetector?.Break();
             Open(begin, line.Number);
             return;
         }
@@ -79,6 +80,13 @@ public sealed class MarkerScanner(MarkerProfile profile, Encoding encoding)
         if (isEnd)
         {
             _warnings.Add(new IntakeWarning(line.Number, StrayEndMessage));
+        }
+
+        // MarkersThenAutoDetect: the lines between segments, blank ones too, go to the detector.
+        if (gapDetector is not null)
+        {
+            gapDetector.OnLine(line);
+            return;
         }
 
         // Blank edge lines are dropped from a text block: a block starts and ends on a line with
