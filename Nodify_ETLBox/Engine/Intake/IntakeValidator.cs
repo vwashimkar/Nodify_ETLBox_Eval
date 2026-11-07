@@ -181,6 +181,15 @@ public static class IntakeValidator
     private static void Check(ContainerInfo container, ContainerText text, IntakeSettings settings, IssueCollector issues, CancellationToken token)
     {
         CheckCharacters(text, issues);
+
+        // Skip lines (titles, separators) are not part of the content; tables and key-value skip them themselves.
+        var skip = container.Format is "csv" or "tsv" or "keyvalue" ? 0 : Math.Min(container.SkipLines, text.Lines.Length);
+        if (skip > 0)
+        {
+            var lines = text.Lines[skip..];
+            text = new ContainerText(lines, text.FirstLine + skip, text.Bytes, text.Truncated, Encoding.UTF8.GetBytes(string.Join("\n", lines)), Encoding.UTF8);
+        }
+
         switch (container.Format)
         {
             case "json" or "badgerfish-json":
@@ -425,7 +434,7 @@ public static class IntakeValidator
     /// </summary>
     private static void CheckTable(ContainerInfo container, ContainerText text, IssueCollector issues, CancellationToken token)
     {
-        var delimiter = container.Delimiter is { Length: 1 } d ? d[0] : container.Format == "tsv" ? '\t' : ',';
+        var delimiter = container.Delimiter is { Length: 1 } d ? d[0] : container.Format == "tsv" ? '\t' : GuessDelimiter(text, container.SkipLines);
         char[] delimiters = [delimiter];
         int? expected = null;
         var expectedRaw = 0;
@@ -495,6 +504,28 @@ public static class IntakeValidator
         {
             issues.Add(ValidationSeverity.Warning, "csv.no-rows", "This table has no data rows.", text.FirstLine);
         }
+    }
+
+    /// <summary>
+    /// For a csv container without a delimiter (a marker segment): the candidate that gives the
+    /// most of the first 50 rows the first row's field count (at least 2); ties go to the comma [U: chosen].
+    /// </summary>
+    private static char GuessDelimiter(ContainerText text, int skip)
+    {
+        var rows = text.Lines.Skip(skip).Where(l => l.Trim().Length > 0).Take(50).ToList();
+        var best = ',';
+        var bestScore = 0;
+        foreach (var candidate in KeyValueDelimiters.Where(c => c != '\t'))
+        {
+            var counts = rows.Select(r => RowShape.Summary(RowShape.Split(r, candidate)).Count).ToList();
+            var score = counts.Count > 0 && counts[0] >= 2 ? counts.Count(c => c == counts[0]) : 0;
+            if (score > bestScore)
+            {
+                (best, bestScore) = (candidate, score);
+            }
+        }
+
+        return best;
     }
 
     private static void CheckHeaderNames(List<string> names, long line, IssueCollector issues)

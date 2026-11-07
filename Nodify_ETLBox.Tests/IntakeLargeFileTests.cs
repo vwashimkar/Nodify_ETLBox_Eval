@@ -255,7 +255,8 @@ public class IntakeLargeFileTests : IDisposable
         {
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        /// <summary>Passed on (the validator seeks to each container); the observed position follows.</summary>
+        public override long Seek(long offset, SeekOrigin origin) => _position = inner.Seek(offset, origin);
 
         public override void SetLength(long value) => throw new NotSupportedException();
 

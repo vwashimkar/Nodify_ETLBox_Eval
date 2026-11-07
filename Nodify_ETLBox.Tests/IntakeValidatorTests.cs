@@ -189,6 +189,20 @@ public class IntakeValidatorTests
         Only(container, "csv.no-rows");
     }
 
+    [Fact]
+    public void SkipLines_AboveJson_AreNotParsed()
+    {
+        Assert.Equal(ContainerStatus.Ok, Check("====Data====\n{\n  \"a\": 1\n}", "json", skip: 1).Status);
+    }
+
+    [Theory]
+    [InlineData("produkt;menge;preis\nApfel;10;1,25\nBirne;4;2,10")]
+    [InlineData("id|name|size\n1|a|2\n2|b|3")]
+    public void Csv_WithoutADelimiter_GuessesIt(string text)
+    {
+        Assert.Equal(ContainerStatus.Ok, Check(text, "csv").Status);
+    }
+
     // ---- key-value --------------------------------------------------------------------------
 
     [Fact]
