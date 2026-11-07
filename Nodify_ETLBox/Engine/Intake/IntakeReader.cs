@@ -45,7 +45,7 @@ public static class IntakeReader
 
         // Markers mode: the scanner alone. AutoDetect: the detector alone. MarkersThenAutoDetect: the
         // scanner hands the lines between marker segments to the detector.
-        var detector = settings.Mode == IntakeMode.Markers ? null : new AutoDetector(item, settings.Detector, encoding);
+        var detector = settings.Mode == IntakeMode.Markers ? null : new AutoDetector(item, settings.Detector, encoding, settings.Validation);
         var scanner = settings.Mode == IntakeMode.AutoDetect ? null : new MarkerScanner(settings.Markers, encoding, detector);
         IntakeLineHandler onLine = scanner is not null ? scanner.OnLine : detector!.OnLine;
         int Found() => (scanner?.ContainerCount ?? 0) + (detector?.ContainerCount ?? 0);

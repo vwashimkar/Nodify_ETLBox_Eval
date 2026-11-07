@@ -416,6 +416,73 @@ public class AutoDetectorRuleTests
         Assert.Equal(expected, Assert.Single(Detect(text).Containers).HeaderGuess);
     }
 
+    // ---- G3 step 3: YAML ----------------------------------------------------------------------
+
+    [Fact]
+    public void Yaml_WithNestingAnchorsListsAndABlankLine_IsOneYamlContainer_Likely()
+    {
+        const string yaml = "# settings\ndefaults: &d\n  retries: 3\n\nservice:\n  name: reader\n  <<: *d\n  ports:\n    - 80\n    - 81\n  note: |\n    kept as written\n";
+
+        var container = Assert.Single(Detect(yaml).Containers);
+
+        Assert.Equal(("yaml", 1L, 12L, ContainerConfidence.Likely), (container.Format, container.ContentFirstLine!.Value, container.ContentLastLine!.Value, container.Confidence));
+        Assert.Contains(container.Reasons!, r => r.StartsWith("YAML structure"));
+    }
+
+    [Fact]
+    public void Yaml_WithADocumentMarker_IsSure()
+    {
+        var container = Assert.Single(Detect("---\nrun:\n  plate: 1\n  wells:\n    - A1\n    - A2\n").Containers);
+
+        Assert.Equal(("yaml", ContainerConfidence.Sure), (container.Format, container.Confidence));
+    }
+
+    [Fact]
+    public void YamlStructure_ThatTheParserRejects_StaysText()
+    {
+        Assert.Equal("text", Assert.Single(Detect("items:\n  - a\n  b: c\n  - d\n").Containers).Format);
+    }
+
+    [Theory]
+    [InlineData("The steps were:\n  first we mixed the samples\n  then we read the plate\nResult was fine, see the notes.\n")]
+    [InlineData("Name: one\nPlace: two\nDate: three\nUser: ann\n")]
+    [InlineData("* Name = one\n* Place = two\n* Date = 3\n")]
+    [InlineData("2026-11-08 10:00:01 INFO Run started\n2026-11-08 10:00:02 WARN Plate 2: low signal\n2026-11-08 10:00:03 ERROR Reader stopped:\n    retry 1 failed\n    retry 2 failed\n")]
+    [InlineData("time,event\n10:00:01,start\n10:00:02,read: plate 1\n10:00:03,stop\n")]
+    [InlineData("Notes for the run:\n- check the lid\n- check the tips\n\nThat is all for today, thank you.\n")]
+    public void ProseKeyValueLogsAndTables_AreNeverYaml(string text)
+    {
+        Assert.DoesNotContain(Detect(text).Containers, c => c.Format == "yaml");
+    }
+
+    // ---- G3 step 4: sub-types -----------------------------------------------------------------
+
+    [Fact]
+    public void Json_WithBadgerFishKeysInTwoObjects_HasTheSubTypeBadgerfish_AndStaysJson()
+    {
+        var container = Assert.Single(Detect("{\n  \"plate\": { \"@id\": \"P1\", \"$\": \"first\" },\n  \"well\": { \"@name\": \"A1\" }\n}\n").Containers);
+
+        Assert.Equal(("json", "badgerfish"), (container.Format, container.SubType));
+        Assert.Contains(container.Reasons!, r => r.Contains("badgerfish (Guessed)"));
+    }
+
+    [Fact]
+    public void Json_WithOneBadgerFishObject_HasNoSubType()
+    {
+        Assert.Null(Assert.Single(Detect("{\n  \"plate\": { \"@id\": \"P1\" },\n  \"well\": \"A1\"\n}\n").Containers).SubType);
+    }
+
+    [Theory]
+    [InlineData("http://schemas.xmlsoap.org/soap/envelope/", "1.1")]
+    [InlineData("http://www.w3.org/2003/05/soap-envelope", "1.2")]
+    public void Soap_HasItsVersion(string ns, string version)
+    {
+        var container = Assert.Single(Detect($"<s:Envelope xmlns:s=\"{ns}\">\n  <s:Body/>\n</s:Envelope>\n").Containers);
+
+        Assert.Equal(("xml", "soap", version), (container.Format, container.SubType, container.SubTypeVersion));
+        Assert.Contains(container.Reasons!, r => r.Contains($"soap {version}"));
+    }
+
     public static TheoryData<string> I10Variants => new() { "utf-16le", "utf-16be", "crlf" };
 
     [Theory]

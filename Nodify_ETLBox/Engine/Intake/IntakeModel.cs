@@ -168,6 +168,12 @@ public sealed record DetectorSettings
     /// <summary>... with at least this many tokens per row.</summary>
     public int MinFixedWidthColumns { get; init; } = 4;
 
+    /// <summary>A JSON block is the sub-type badgerfish (Guessed) when at least this many objects have '@' attribute keys or a '$' text key.</summary>
+    public int BadgerFishMinHits { get; init; } = 2;
+
+    /// <summary>The BadgerFish count looks at the first this many JSON tokens only [U].</summary>
+    public long BadgerFishMaxTokens { get; init; } = 1_000_000;
+
     /// <summary>A line of one of these characters repeated is a section separator ...</summary>
     public string SeparatorCharacters { get; init; } = "=-#*~_";
 
