@@ -25,13 +25,16 @@ public sealed record ValidationIssue(
 /// The checks of one container. <see cref="Status"/> is the worst issue (Info counts as Ok).
 /// <see cref="Issues"/> holds at most <see cref="ValidationSettings.MaxIssuesPerContainer"/>;
 /// <see cref="TotalIssues"/> counts all of them and <see cref="MoreNotShown"/> says some were left out.
+/// Rows or lines next to each other with the same problem count as one issue. <see cref="Checked"/>
+/// is false when the format has no checks yet (fixedwidth, an unknown format name).
 /// </summary>
 public sealed record ContainerValidation(
     int Order,
     ContainerStatus Status,
     IReadOnlyList<ValidationIssue> Issues,
     int TotalIssues,
-    bool MoreNotShown);
+    bool MoreNotShown,
+    bool Checked = true);
 
 /// <summary>
 /// The outcome of one validation run over the containers of an <see cref="IntakeResult"/>.
@@ -98,7 +101,7 @@ internal sealed class IssueCollector(int cap)
     /// <summary>Issues of each severity, shown or not, indexed by the severity's value.</summary>
     public int[] BySeverity { get; } = new int[3];
 
-    public ContainerValidation ToValidation(int order)
+    public ContainerValidation ToValidation(int order, bool isChecked = true)
         => new(order, Worst switch { ValidationSeverity.Error => ContainerStatus.Error, ValidationSeverity.Warning => ContainerStatus.Warning, _ => ContainerStatus.Ok },
-            _shown.ToList(), Total, Total > _shown.Count);
+            _shown.ToList(), Total, Total > _shown.Count, isChecked);
 }

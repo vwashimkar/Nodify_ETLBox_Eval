@@ -36,9 +36,9 @@ public class IntakeValidationFileTests
     public void EveryTestFile_IsValidated_WithAStatusPerContainer_AndTheReportIsWritten()
     {
         var text = new StringBuilder();
-        text.AppendLine("# G3 validation report");
+        text.AppendLine("# G4a validation report");
         text.AppendLine();
-        text.AppendLine("Written by `IntakeValidationFileTests`. Per file and mode: each container's format, lines, status and issues (code, line: message). Issues beyond the cap are counted.");
+        text.AppendLine("Written by `IntakeValidationFileTests`. Per file and mode: each container's format (display name), lines, status, whether its format has checks, and issues (code, line (rows or lines when grouped): message). Issues beyond the cap are counted.");
         text.AppendLine();
 
         foreach (var (path, mode) in AllRuns())
@@ -63,24 +63,23 @@ public class IntakeValidationFileTests
             text.AppendLine();
             text.AppendLine($"Errors {validation.Errors}, warnings {validation.Warnings}, infos {validation.Infos}, {validation.ElapsedMs} ms.");
             text.AppendLine();
-            text.AppendLine("| # | Format | Lines | Status | Issues |");
-            text.AppendLine("|---|---|---|---|---|");
+            text.AppendLine("| # | Format | Lines | Status | Checked | Issues |");
+            text.AppendLine("|---|---|---|---|---|---|");
             foreach (var (container, check) in result.Containers.Zip(validation.Containers))
             {
-                var issues = string.Join("<br>", check.Issues.Select(i => $"{i.Severity} `{i.Code}` {i.Line}: {i.Message.Replace("|", "\\|")}"));
+                var issues = string.Join("<br>", check.Issues.Select(i => $"{i.Severity} `{i.Code}` {i.Line}{(i.LineCount > 1 ? $" ({i.LineCount})" : "")}: {i.Message.Replace("|", "\\|")}"));
                 if (check.MoreNotShown)
                 {
                     issues += $"<br>({check.TotalIssues - check.Issues.Count} more not shown)";
                 }
 
-                var format = container.SubType is null ? container.Format : $"{container.Format}/{container.SubType}";
-                text.AppendLine($"| {container.Order} | {format} | {container.ContentFirstLine}-{container.ContentLastLine} | {check.Status} | {issues} |");
+                text.AppendLine($"| {container.Order} | {ContainerDisplay.Format(container)} | {container.ContentFirstLine}-{container.ContentLastLine} | {check.Status} | {(check.Checked ? "yes" : "no")} | {issues} |");
             }
 
             text.AppendLine();
         }
 
-        var report = Path.Combine(Path.GetDirectoryName(AutoDetectTruthTests.ReportPath())!, "g3-validation-report.md");
+        var report = Path.Combine(Path.GetDirectoryName(AutoDetectTruthTests.ReportPath())!, "g4a-validation-report.md");
         File.WriteAllText(report, text.ToString());
     }
 }

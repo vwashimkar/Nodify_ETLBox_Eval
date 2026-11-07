@@ -54,7 +54,7 @@ internal static class YamlCheck
                         nodes++;
                         if (++depth > limits.YamlMaxDepth)
                         {
-                            return Limit($"it is nested deeper than {limits.YamlMaxDepth} levels");
+                            return Limit($"it is nested deeper than {IntakeText.Count(limits.YamlMaxDepth, "level")}");
                         }
 
                         break;
@@ -69,7 +69,7 @@ internal static class YamlCheck
                         nodes++;
                         if (++aliases > limits.YamlMaxAliases)
                         {
-                            return Limit($"it has more than {limits.YamlMaxAliases} alias references");
+                            return Limit($"it has more than {IntakeText.Count(limits.YamlMaxAliases, "alias reference")}");
                         }
 
                         break;
@@ -77,7 +77,7 @@ internal static class YamlCheck
 
                 if (nodes > limits.YamlMaxNodes)
                 {
-                    return Limit($"it has more than {limits.YamlMaxNodes} nodes");
+                    return Limit($"it has more than {IntakeText.Count(limits.YamlMaxNodes, "node")}");
                 }
             }
 

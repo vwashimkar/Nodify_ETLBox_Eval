@@ -71,7 +71,7 @@ public static class IntakeValidator
                         Check(container, read.Value, settings, collector, token);
                     }
 
-                    var validation = collector.ToValidation(container.Order);
+                    var validation = collector.ToValidation(container.Order, HasChecks(container.Format));
                     done.Add(validation);
                     for (var s = 0; s < 3; s++)
                     {
@@ -178,6 +178,10 @@ public static class IntakeValidator
 
     // ---- Checks -------------------------------------------------------------------------------
 
+    /// <summary>False for a format with no checks yet: its container is shown as not checked, with no issue.</summary>
+    internal static bool HasChecks(string format)
+        => format is "json" or "badgerfish-json" or "json-lines" or "xml" or "soap" or "csv" or "tsv" or "keyvalue" or "yaml" or "text";
+
     private static void Check(ContainerInfo container, ContainerText text, IntakeSettings settings, IssueCollector issues, CancellationToken token)
     {
         CheckCharacters(text, issues);
@@ -210,10 +214,8 @@ public static class IntakeValidator
             case "yaml":
                 CheckYaml(text, settings.Validation, issues, token);
                 break;
-            case "text":
-                break;
             default:
-                issues.Add(ValidationSeverity.Info, "format.unchecked", $"There are no checks for the format {container.Format} yet.", text.FirstLine);
+                // text and the formats without checks: only the character check above.
                 break;
         }
     }
@@ -234,7 +236,7 @@ public static class IntakeValidator
 
         if (bad > 0)
         {
-            issues.Add(ValidationSeverity.Warning, "encoding.bad-characters", $"{bad} characters could not be read correctly (wrong encoding?).", first);
+            issues.Add(ValidationSeverity.Warning, "encoding.bad-characters", $"{IntakeText.Count(bad, "character")} could not be read correctly (wrong encoding?).", first);
         }
     }
 
@@ -304,7 +306,7 @@ public static class IntakeValidator
 
             var depth = ex.Message.Contains("depth", StringComparison.OrdinalIgnoreCase);
             issues.Add(ValidationSeverity.Error, depth ? "json.depth" : "json.syntax",
-                depth ? $"The JSON is nested deeper than {settings.JsonMaxDepth} levels, so it was not checked further."
+                depth ? $"The JSON is nested deeper than {IntakeText.Count(settings.JsonMaxDepth, "level")}, so it was not checked further."
                     : $"The JSON is not valid here: {CleanJsonReason(ex.Message)}.",
                 line, (int)(ex.BytePositionInLine ?? 0) + 1);
         }
@@ -441,6 +443,7 @@ public static class IntakeValidator
         var basis = "the first data row";
         var dataRows = 0;
         var header = container.HeaderGuess == HeaderGuess.Yes;
+        var run = new RowRun(issues, "csv.field-count");
 
         for (var i = Math.Min(container.SkipLines, text.Lines.Length); i < text.Lines.Length; i++)
         {
@@ -463,6 +466,7 @@ public static class IntakeValidator
 
             if (RowShape.EndsInsideQuotes(row, delimiters))
             {
+                run.Flush();
                 if (!text.Truncated)
                 {
                     issues.Add(ValidationSeverity.Error, "csv.unterminated-quote", "A quoted field that starts on this line is never closed.", text.FirstLine + first,
@@ -495,11 +499,18 @@ public static class IntakeValidator
             // As in the detector: equal without trailing empty fields, or equal with them (rows padded to one width).
             if (count != expected && fields.Count != expectedRaw)
             {
-                issues.Add(ValidationSeverity.Warning, "csv.field-count", $"This row has {count} fields, but {basis} has {expected}.", text.FirstLine + first,
-                    lineCount: i > first ? i - first + 1 : null);
+                var expectedCount = expected.Value;
+                run.Add(text.FirstLine + first, i - first + 1, dataRows, count, expectedCount, (one, from, to) => one
+                    ? $"Row {from} has {IntakeText.Count(count, "field")}, but {basis} has {expectedCount}."
+                    : $"Rows {from} to {to} have {IntakeText.Count(count, "field")}, but {basis} has {expectedCount}.");
+            }
+            else
+            {
+                run.Flush();
             }
         }
 
+        run.Flush();
         if (dataRows == 0)
         {
             issues.Add(ValidationSeverity.Warning, "csv.no-rows", "This table has no data rows.", text.FirstLine);
@@ -533,12 +544,12 @@ public static class IntakeValidator
         var empty = names.Select((n, i) => (n, i)).Where(x => x.n.Length == 0).Select(x => x.i + 1).ToList();
         if (empty.Count > 0)
         {
-            issues.Add(ValidationSeverity.Warning, "csv.header-empty", $"The header has no name for column {string.Join(", ", empty)}.", line);
+            issues.Add(ValidationSeverity.Warning, "csv.header-empty", $"The header has no name for {IntakeText.Columns(empty)}.", line);
         }
 
         foreach (var duplicate in names.Where(n => n.Length > 0).GroupBy(n => n, StringComparer.Ordinal).Where(g => g.Count() > 1))
         {
-            issues.Add(ValidationSeverity.Warning, "csv.header-duplicate", $"The column name '{Cut(duplicate.Key)}' appears {duplicate.Count()} times in the header.", line);
+            issues.Add(ValidationSeverity.Warning, "csv.header-duplicate", $"The column name '{Cut(duplicate.Key)}' appears {IntakeText.Count(duplicate.Count(), "time")} in the header.", line);
         }
     }
 
@@ -547,6 +558,8 @@ public static class IntakeValidator
         var form = container.KeyValueForm ?? KeyValueForm.Colon;
         var delimiter = container.Delimiter is { Length: 1 } d ? d[0] : form == KeyValueForm.Tab ? '\t' : ',';
         var seen = new Dictionary<string, long>(StringComparer.Ordinal);
+        var run = new RowRun(issues, "kv.line-form");
+        var content = 0;
         for (var i = Math.Min(container.SkipLines, text.Lines.Length); i < text.Lines.Length; i++)
         {
             var line = text.Lines[i];
@@ -556,12 +569,17 @@ public static class IntakeValidator
                 continue;
             }
 
+            content++;
             var pairs = PairsOf(line, form, delimiter, maxKeyLength);
             if (pairs is null)
             {
-                issues.Add(ValidationSeverity.Warning, "kv.line-form", "This line does not have the key and value form of the other lines.", number);
+                run.Add(number, 1, content, 0, 0, (one, from, to) => one
+                    ? "This line does not have the key and value form of the other lines."
+                    : $"Lines {from} to {to} do not have the key and value form of the other lines.");
                 continue;
             }
+
+            run.Flush();
 
             foreach (var (key, value) in pairs)
             {
@@ -580,6 +598,8 @@ public static class IntakeValidator
                 }
             }
         }
+
+        run.Flush();
     }
 
     /// <summary>The keys and values of one line in the container's form, or null when the line does not fit the form.</summary>
@@ -653,6 +673,51 @@ public static class IntakeValidator
         reason = Regex.Replace(reason, @"\bline (\d+)", m => $"line {firstLine + long.Parse(m.Groups[1].Value) - 1}");
         reason = reason.Trim().TrimEnd('.');
         return reason.Length == 0 ? "a tag or character is wrong" : reason;
+    }
+
+    /// <summary>
+    /// Joins rows next to each other with the same problem and the same two counts into one issue.
+    /// Rows are next to each other when their ordinals in the table follow each other, so blank or
+    /// title lines between them and a quoted field over several lines do not break a run [U: chosen].
+    /// The message gets (one row?, first file line, last row's file line). A single row keeps the
+    /// number of lines it spans as its line count; a run has the number of rows.
+    /// </summary>
+    private sealed class RowRun(IssueCollector issues, string code)
+    {
+        private long _firstLine, _lastLine, _ordinal, _lines;
+        private int _rows, _count, _expected;
+        private Func<bool, long, long, string>? _message;
+
+        public void Add(long line, long lines, long ordinal, int count, int expected, Func<bool, long, long, string> message)
+        {
+            if (_rows > 0 && (ordinal != _ordinal + 1 || count != _count || expected != _expected))
+            {
+                Flush();
+            }
+
+            if (_rows == 0)
+            {
+                (_firstLine, _lines, _count, _expected, _message) = (line, 0, count, expected, message);
+            }
+
+            _rows++;
+            _lines += lines;
+            _lastLine = line;
+            _ordinal = ordinal;
+        }
+
+        public void Flush()
+        {
+            if (_rows == 0)
+            {
+                return;
+            }
+
+            var one = _rows == 1;
+            issues.Add(ValidationSeverity.Warning, code, _message!(one, _firstLine, _lastLine), _firstLine,
+                lineCount: one ? (_lines > 1 ? _lines : null) : _rows);
+            _rows = 0;
+        }
     }
 
     private static string Cut(string value, int max = 60) => value.Length <= max ? value : value[..max] + "...";

@@ -289,22 +289,33 @@ public class IntakeValidatorTests
         Assert.StartsWith("2 characters", issue.Message);
     }
 
-    [Fact]
-    public void AFormatWithNoChecks_IsInfo()
+    [Theory]
+    [InlineData("fixedwidth")]
+    [InlineData("someformat")]
+    public void AFormatWithNoChecks_IsNotChecked_AndHasNoIssue(string format)
     {
-        var container = Check("A 1 2 3\nB 4 5 6", "fixedwidth");
+        var container = Check("A 1 2 3\nB 4 5 6", format);
 
-        Assert.Equal((ContainerStatus.Ok, ValidationSeverity.Info), (container.Status, Only(container, "format.unchecked").Severity));
+        Assert.Equal((ContainerStatus.Ok, 0, false), (container.Status, container.TotalIssues, container.Checked));
+    }
+
+    [Theory]
+    [InlineData("text")]
+    [InlineData("json")]
+    public void AFormatWithChecks_IsChecked(string format)
+    {
+        Assert.True(Check("{}", format).Checked);
     }
 
     [Fact]
     public void IssuesAreCappedAt20_AndTheRestIsCounted()
     {
-        var text = "a,b,c\n" + string.Concat(Enumerable.Range(1, 30).Select(i => $"{i},x\n")) + "1,2,3";
+        // 25 single bad rows, each followed by a good row, so none are grouped.
+        var text = "a,b,c\n" + string.Concat(Enumerable.Range(1, 25).Select(i => $"{i},x\n1,2,3\n")) + "1,2,3";
 
         var container = Check(text, "csv", delimiter: ",", header: HeaderGuess.Yes);
 
-        Assert.Equal((20, 30, true), (container.Issues.Count, container.TotalIssues, container.MoreNotShown));
+        Assert.Equal((20, 25, true), (container.Issues.Count, container.TotalIssues, container.MoreNotShown));
     }
 
     [Fact]
@@ -339,8 +350,10 @@ public class IntakeValidatorTests
     [Fact]
     public void ValidationResult_RoundTripsThroughJson_WithEnumsAsStrings()
     {
-        var issue = new ValidationIssue(ValidationSeverity.Warning, "csv.field-count", "This row has 2 fields, but the header has 3.", 12, 4, 2);
-        var result = new IntakeValidationResult(Guid.NewGuid(), Guid.NewGuid(), [new ContainerValidation(1, ContainerStatus.Warning, [issue], 25, true)], 0, 25, 0, 7, false, null);
+        var issue = new ValidationIssue(ValidationSeverity.Warning, "csv.field-count", "Rows 12 to 16 have 2 fields, but the header has 3.", 12, null, 5);
+        var result = new IntakeValidationResult(Guid.NewGuid(), Guid.NewGuid(),
+            [new ContainerValidation(1, ContainerStatus.Warning, [issue], 25, true), new ContainerValidation(2, ContainerStatus.Ok, [], 0, false, Checked: false)],
+            0, 25, 0, 7, false, null);
 
         var json = IntakeJson.Serialize(result);
         var back = IntakeJson.DeserializeValidation(json);
@@ -349,6 +362,8 @@ public class IntakeValidatorTests
         Assert.Contains("\"severity\": \"Warning\"", json);
         Assert.Contains("\"status\": \"Warning\"", json);
         Assert.Equal(issue, back.Containers[0].Issues[0]);
+        Assert.Equal(5L, back.Containers[0].Issues[0].LineCount);
+        Assert.Equal((true, false), (back.Containers[0].Checked, back.Containers[1].Checked));
     }
 
     [Fact]
