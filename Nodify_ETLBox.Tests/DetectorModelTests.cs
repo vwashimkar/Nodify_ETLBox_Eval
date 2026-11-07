@@ -16,7 +16,8 @@ public class DetectorModelTests
         Assert.Equal(3, detector.MinKeyValueLines);
         Assert.Equal(2, detector.TextSplitBlankLines);
         Assert.Equal(1, detector.FieldCountTolerance);
-        Assert.Equal(64, detector.MaxValidationMb);
+        Assert.Equal(16, detector.MaxValidationMb);
+        Assert.Equal(60, detector.MaxKeyLength);
     }
 
     [Fact]

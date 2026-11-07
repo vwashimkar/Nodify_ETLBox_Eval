@@ -142,13 +142,13 @@ public sealed record DetectorSettings
     public int LikelyKeyValueMinLines { get; init; } = 5;
 
     /// <summary>The longest key of a <c>Name: value</c> or <c>Name = value</c> line [U].</summary>
-    public int MaxKeyLength { get; init; } = 40;
+    public int MaxKeyLength { get; init; } = 60;
 
     /// <summary>This many blank lines or more split a text block; fewer stay inside it.</summary>
     public int TextSplitBlankLines { get; init; } = 2;
 
     /// <summary>A JSON or XML region larger than this is not parsed and stays Likely.</summary>
-    public int MaxValidationMb { get; init; } = 64;
+    public int MaxValidationMb { get; init; } = 16;
 
     /// <summary>A quoted field may span at most this many lines; beyond, the quote is taken as text [U].</summary>
     public int MaxQuotedLines { get; init; } = 10;
