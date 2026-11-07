@@ -210,7 +210,7 @@ public static class IntakeReader
     /// read only when the file has a BOM, which decides; reading lines back accepts the names
     /// utf-16le and utf-16be that <see cref="IntakeFileInfo.Encoding"/> gives such a file.
     /// </summary>
-    private static Encoding? ResolveEncoding(string encodingName, out string? error, bool allowUtf16 = false)
+    internal static Encoding? ResolveEncoding(string encodingName, out string? error, bool allowUtf16 = false)
     {
         error = null;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
