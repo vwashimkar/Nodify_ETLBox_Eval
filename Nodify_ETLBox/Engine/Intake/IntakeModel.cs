@@ -95,7 +95,7 @@ public sealed record IntakeItem(
 public sealed record MarkerProfile
 {
     public static readonly IReadOnlyList<string> DefaultKnownFormats =
-        ["text", "json", "json-lines", "badgerfish-json", "xml", "csv", "tsv", "yaml", "soap"];
+        ["text", "json", "json-lines", "badgerfish-json", "xml", "csv", "tsv", "yaml", "soap", "fixedwidth"];
 
     public string BeginPrefix { get; init; } = "##### BEGIN ";
 
@@ -161,6 +161,12 @@ public sealed record DetectorSettings
     /// checked for at most this many lines, so a longer block stays a table [U: chosen].
     /// </summary>
     public int MaxKeyValueLabelLines { get; init; } = 1000;
+
+    /// <summary>A whitespace-aligned (fixedwidth) table has at least this many rows (blank lines end it) ...</summary>
+    public int MinFixedWidthLines { get; init; } = 3;
+
+    /// <summary>... with at least this many tokens per row.</summary>
+    public int MinFixedWidthColumns { get; init; } = 4;
 
     /// <summary>A line of one of these characters repeated is a section separator ...</summary>
     public string SeparatorCharacters { get; init; } = "=-#*~_";

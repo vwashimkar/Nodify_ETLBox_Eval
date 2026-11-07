@@ -364,6 +364,45 @@ public class AutoDetectorRuleTests
         Assert.Equal([("csv", 1L, 3L), ("text", 4L, 4L)], Shape("a,b,c\n1,2,3\n4,5,6\n=========\n"));
     }
 
+    // ---- G2b step 6: whitespace-aligned tables (fixedwidth) -----------------------------------
+
+    [Fact]
+    public void APlateGrid_AlignedWithSpaces_IsFixedWidth_WithAColumnNumberHeader()
+    {
+        const string grid = "     1     2     3     4     5     6\n"
+                            + "A  0.11  0.12  0.13  0.14  0.15  0.16\n"
+                            + "B  0.21  0.22  0.23  0.24  0.25  0.26\n"
+                            + "C  0.31  0.32  0.33  0.34  0.35  0.36\n";
+
+        var container = Assert.Single(Detect(grid).Containers);
+
+        Assert.Equal(("fixedwidth", 1L, 4L, "space", HeaderGuess.Yes, ContainerConfidence.Likely),
+            (container.Format, container.ContentFirstLine!.Value, container.ContentLastLine!.Value, container.Delimiter, container.HeaderGuess!.Value, container.Confidence));
+    }
+
+    [Fact]
+    public void Prose_WithTheSameNumberOfWords_IsNotFixedWidth()
+    {
+        var container = Assert.Single(Detect("the quick brown fox jumps\nover the lazy dog again\nand then it ran far\n").Containers);
+
+        Assert.Equal("text", container.Format);
+    }
+
+    [Fact]
+    public void AFixedWidthTable_WithATitleAbove_HasItAsASkipLine_AndIsNamedByIt()
+    {
+        var container = Assert.Single(Detect("Plate reading results\nWell  Read1  Read2  Read3\nA1  1.5  2.5  3.5\nA2  1.6  2.6  3.6\nA3  1.7  2.7  3.7\n").Containers);
+
+        Assert.Equal(("fixedwidth", 1L, 5L, 1, "Plate reading results", HeaderGuess.Yes),
+            (container.Format, container.ContentFirstLine!.Value, container.ContentLastLine!.Value, container.SkipLines, container.Name, container.HeaderGuess!.Value));
+    }
+
+    [Fact]
+    public void FixedWidth_IsAKnownFormat()
+    {
+        Assert.Contains("fixedwidth", MarkerProfile.DefaultKnownFormats);
+    }
+
     public static TheoryData<string> I10Variants => new() { "utf-16le", "utf-16be", "crlf" };
 
     [Theory]

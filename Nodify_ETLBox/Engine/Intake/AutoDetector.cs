@@ -590,7 +590,75 @@ public sealed class AutoDetector
             return Region.TableFrom(w, table.Value.Skip, table.Value.Delimiter, table.Value.Count, table.Value.HeaderTolerated, table.Value.Ragged, _delimiters);
         }
 
-        return keyValue is null ? null : Region.KeyValueFrom(first, keyValue.Value.Form);
+        if (keyValue is not null)
+        {
+            return Region.KeyValueFrom(first, keyValue.Value.Form);
+        }
+
+        return FindFixedWidth() is { } fixedWidth ? Region.FixedWidthFrom(w, fixedWidth.Skip, fixedWidth.Count, fixedWidth.Header) : null;
+    }
+
+    /// <summary>
+    /// A whitespace-aligned table: at least <see cref="DetectorSettings.MinFixedWidthLines"/> rows
+    /// with the same number of tokens (at least <see cref="DetectorSettings.MinFixedWidthColumns"/>),
+    /// numeric in at least half of the columns after the first. A first row of only text, or of
+    /// consecutive integers, is a header; the integer header may be one token short (a plate grid
+    /// has no label above its row labels). Title lines above it are skip lines, as for a table.
+    /// </summary>
+    private (int Skip, int Count, bool Header)? FindFixedWidth()
+    {
+        var w = _window;
+        for (var skip = 0; skip <= Math.Min(_settings.MaxPreambleLines, w.Count - 1); skip++)
+        {
+            if (skip > 0 && !IsTitle(w[skip - 1]))
+            {
+                return null;
+            }
+
+            var first = RowShape.Tokens(w[skip].Text);
+            if (w[skip].IsWeak || first.Length == 0)
+            {
+                continue;
+            }
+
+            var header = RowShape.IsTokenHeader(first);
+            var count = first.Length;
+            var dataFrom = header ? skip + 1 : skip;
+            if (dataFrom < w.Count && header && RowShape.IsConsecutiveIntegers(first))
+            {
+                var next = RowShape.Tokens(w[dataFrom].Text).Length;
+                if (next != count && Math.Abs(next - count) <= _settings.FieldCountTolerance)
+                {
+                    count = next;
+                }
+            }
+
+            if (count < _settings.MinFixedWidthColumns)
+            {
+                continue;
+            }
+
+            var data = new List<string[]>();
+            for (var i = dataFrom; i < w.Count && !w[i].IsWeak; i++)
+            {
+                var tokens = RowShape.Tokens(w[i].Text);
+                if (tokens.Length != count)
+                {
+                    break;
+                }
+
+                data.Add(tokens);
+            }
+
+            var titlesDiffer = Enumerable.Range(0, skip).All(t => RowShape.Tokens(w[t].Text).Length != count);
+            var numericColumns = Enumerable.Range(1, count - 1).Count(j => data.All(r => RowShape.IsNumeric(r[j])));
+            if (titlesDiffer && data.Count > 0 && data.Count + (header ? 1 : 0) >= _settings.MinFixedWidthLines && 2 * numericColumns >= count - 1)
+            {
+                return (skip, count, header);
+            }
+        }
+
+        return null;
     }
 
 
@@ -833,7 +901,8 @@ internal enum RegionKind
     JsonLines,
     Table,
     KeyValue,
-    TableOrKeyValue
+    TableOrKeyValue,
+    FixedWidth
 }
 
 internal readonly record struct RegionResult(
@@ -928,6 +997,26 @@ internal sealed class Region
         return region;
     }
 
+    public static Region FixedWidthFrom(List<Row> window, int skip, int count, bool header)
+    {
+        var region = new Region(RegionKind.FixedWidth, window[0])
+        {
+            _count = count, _header = header ? HeaderGuess.Yes : HeaderGuess.No, SkipLines = (int)window.Take(skip).Sum(r => r.LineCount),
+            ConsumedRows = skip + 1, _dataLines = header ? 0 : window[skip].LineCount
+        };
+        if (skip > 0)
+        {
+            region._title = window[0].Text.Trim().TrimEnd(':').Trim();
+        }
+
+        for (var i = 1; i <= skip; i++)
+        {
+            region.Take(window[i]);
+        }
+
+        return region;
+    }
+
     public static Region TableFrom(List<Row> window, int skip, int delimiter, int count, bool headerTolerated, bool ragged, char[] delimiters)
     {
         var region = new Region(RegionKind.Table, window[0]) { _ragged = ragged };
@@ -1009,6 +1098,15 @@ internal sealed class Region
 
         switch (Kind)
         {
+            case RegionKind.FixedWidth:
+                if (RowShape.Tokens(row.Text).Length != _count)
+                {
+                    return false;
+                }
+
+                _dataLines += row.LineCount;
+                Take(row);
+                return true;
             case RegionKind.JsonLines:
                 if (!row.JsonObject || _weakTail is not null)
                 {
@@ -1134,6 +1232,16 @@ internal sealed class Region
 
                 var keyValueConfidence = _rows >= settings.LikelyKeyValueMinLines ? ContainerConfidence.Likely : ContainerConfidence.Guessed;
                 return (Result("keyvalue", keyValueConfidence, form: _form), tail);
+            case RegionKind.FixedWidth:
+                reasons.Add($"{_dataLines} lines with {_count} whitespace-separated tokens, numeric in at least half of the columns after the first");
+                if (SkipLines > 0)
+                {
+                    reasons.Add($"{SkipLines} title line(s) above the table are skip lines");
+                }
+
+                reasons.Add(_header == HeaderGuess.Yes ? "header guessed (Guessed): the first row is only text or consecutive integers" : "header guess: No");
+                var fixedTitle = SkipLines > 0 && _title is { Length: > 0 } ft && ft.Length < settings.MaxTitleNameLength ? ft : null;
+                return (Result("fixedwidth", ContainerConfidence.Likely, fixedTitle, "space", _header, SkipLines), tail);
             case RegionKind.Table or RegionKind.TableOrKeyValue
                 when _labels is not null && _labels.Count >= settings.MinKeyValueLines && _otherText && !_tolerated && !_ragged:
                 // No header, distinct labels in the first column and text among the values: a key-value block, also with 2 fields.

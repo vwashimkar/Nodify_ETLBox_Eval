@@ -192,6 +192,25 @@ internal static class RowShape
         return any || text.Contains('"');
     }
 
+    /// <summary>The whitespace-separated tokens of a line, for whitespace-aligned tables.</summary>
+    public static string[] Tokens(string text) => text.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>A header of a whitespace-aligned table: only text, or consecutive integers (column numbers).</summary>
+    public static bool IsTokenHeader(string[] tokens) => tokens.All(t => !IsNumeric(t)) || IsConsecutiveIntegers(tokens);
+
+    public static bool IsConsecutiveIntegers(string[] tokens)
+    {
+        for (var i = 0; i < tokens.Length; i++)
+        {
+            if (!int.TryParse(tokens[i], NumberStyles.None, CultureInfo.InvariantCulture, out var n) || (i > 0 && n != int.Parse(tokens[i - 1], CultureInfo.InvariantCulture) + 1))
+            {
+                return false;
+            }
+        }
+
+        return tokens.Length > 0;
+    }
+
     public static bool IsNumeric(string field)
         => field.Length > 0 && double.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out _);
 
