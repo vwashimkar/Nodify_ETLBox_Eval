@@ -2,8 +2,11 @@ using System.Globalization;
 
 namespace EtlDesigner.Engine.Intake;
 
-/// <summary>What the fields of one row look like for one delimiter.</summary>
-internal readonly record struct FieldSummary(int Count, bool HasNumeric, bool FirstEmpty, bool FirstIsLabel, bool OthersAllText);
+/// <summary>
+/// What the fields of one row look like for one delimiter. <see cref="Count"/> leaves out trailing
+/// empty fields (<c>a,b,,,</c> has 2); <see cref="RawCount"/> counts them.
+/// </summary>
+internal readonly record struct FieldSummary(int Count, bool HasNumeric, bool FirstEmpty, bool FirstIsLabel, bool OthersAllText, int RawCount);
 
 /// <summary>
 /// One logical row of a file for the auto-detector: one line, or several lines when a quoted field
@@ -69,8 +72,14 @@ internal static class RowShape
             }
         }
 
+        var count = fields.Count;
+        while (count > 1 && fields[count - 1].Length == 0)
+        {
+            count--;
+        }
+
         var first = fields[0];
-        return new FieldSummary(fields.Count, hasNumeric, first.Length == 0, first.Length > 0 && !IsNumeric(first), othersAllText && anyOther);
+        return new FieldSummary(count, hasNumeric, first.Length == 0, first.Length > 0 && !IsNumeric(first), othersAllText && anyOther, fields.Count);
     }
 
     /// <summary>
@@ -219,6 +228,10 @@ internal static class RowShape
         var tab = IndexOf(delimiters, '\t');
         return tab >= 0 && fields[tab].Count >= 2 && fields[tab].FirstIsLabel ? KeyValueForm.Tab : null;
     }
+
+    /// <summary>Colon lines and lines of several colon pairs belong in one key-value block [U: chosen]; other forms only with themselves.</summary>
+    public static bool SameKeyValueFamily(KeyValueForm? form, KeyValueForm block)
+        => form == block || (form is KeyValueForm.Colon or KeyValueForm.Pairs && block is KeyValueForm.Colon or KeyValueForm.Pairs);
 
     private static int IndexOf(IReadOnlyList<char> delimiters, char c)
     {

@@ -183,11 +183,52 @@ public class AutoDetectorRuleTests
     }
 
     [Fact]
-    public void ATableWithATrailingDelimiterInTheHeader_IsTolerated_AndLikely()
+    public void AHeaderWithOneFieldMore_IsTolerated_AndLikely()
+    {
+        var container = Assert.Single(Detect("a,b,c,d\n1,2,3\n4,5,6\n7,8,9\n8,9,0\n").Containers);
+
+        Assert.Equal(("csv", 0, ContainerConfidence.Likely), (container.Format, container.SkipLines, container.Confidence));
+    }
+
+    // ---- G2b step 1: trailing empty fields ----------------------------------------------------
+
+    [Fact]
+    public void ATrailingDelimiterInTheHeader_IsNotAField_SoTheTableIsExact()
     {
         var container = Assert.Single(Detect("a,b,c,\n1,2,3\n4,5,6\n7,8,9\n8,9,0\n").Containers);
 
-        Assert.Equal(("csv", 0, ContainerConfidence.Likely), (container.Format, container.SkipLines, container.Confidence));
+        Assert.Equal(("csv", 0, ContainerConfidence.Sure), (container.Format, container.SkipLines, container.Confidence));
+    }
+
+    [Fact]
+    public void TrailingEmptyFields_DoNotCount_SoALineOfTwoFieldsPaddedWithCommas_HasTwo()
+    {
+        var fields = RowShape.Summary(RowShape.Split("a,b,,,,", ','));
+
+        Assert.Equal((2, 6), (fields.Count, fields.RawCount));
+        Assert.Equal([("csv", 1L, 4L)], Shape("x,y,,,\n1,2,,,\n3,4\n5,6,,\n"));
+    }
+
+    [Fact]
+    public void ALineOfOnlyDelimitersOrEmptyQuotes_StaysWeak_InsideATable()
+    {
+        Assert.True(RowShape.IsWeak(",,,,", [',']));
+        Assert.True(RowShape.IsWeak("\"\",\"\"", [',']));
+        Assert.Equal([("csv", 1L, 5L)], Shape("a,b,c\n1,2,3\n,,,\n\"\",\"\"\n4,5,6\n"));
+    }
+
+    [Fact]
+    public void KeyValuePairs_PaddedWithCommasToATableWidth_AreKeyValuePairs()
+    {
+        var container = Assert.Single(Detect("Name: one, Place: two,,,,,\nDate: x, Time: y,,,,,\nUser: a, Role: b,,,,,\n").Containers);
+
+        Assert.Equal(("keyvalue", KeyValueForm.Pairs, 1L, 3L), (container.Format, container.KeyValueForm!.Value, container.ContentFirstLine!.Value, container.ContentLastLine!.Value));
+    }
+
+    [Fact]
+    public void PairLines_AndColonLines_WithAWeakLineBetween_AreOneKeyValueBlock()
+    {
+        Assert.Equal([("keyvalue", 1L, 4L), ("text", 5L, 5L)], Shape("Name: one, Place: two,,,\nDate: x, Time: y,,,\n,,,,\nOperator: z,,,\nSome closing words,,,\n"));
     }
 
     public static TheoryData<string> I10Variants => new() { "utf-16le", "utf-16be", "crlf" };

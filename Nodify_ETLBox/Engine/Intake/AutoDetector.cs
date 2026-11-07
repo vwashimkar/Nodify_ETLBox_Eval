@@ -513,6 +513,12 @@ public sealed class AutoDetector
         var table = FindTable();
         var keyValue = FindKeyValue();
 
+        // Several Key: value parts on one line are not table rows, also when commas pad them to a table's width [U: chosen].
+        if (keyValue is { Form: KeyValueForm.Pairs })
+        {
+            return Region.KeyValueFrom(first, keyValue.Value.Form);
+        }
+
         if (table is not null && keyValue is not null && keyValue.Value.Rows > table.Value.Skip)
         {
             return Region.TableOrKeyValue(w, table.Value.Skip, table.Value.Delimiter, table.Value.Count, table.Value.HeaderTolerated, keyValue.Value.Form,
@@ -578,10 +584,12 @@ public sealed class AutoDetector
     private (int Count, int Length, bool HeaderTolerated)? TableRun(int from, int d)
     {
         var w = _window;
+        // Equal when the counts without trailing empty fields agree, or the full counts do (rows padded to the same width).
         int Run(int start, int count)
         {
+            var raw = w[start].Fields[d].RawCount;
             var n = 0;
-            for (var i = start; i < w.Count && !w[i].IsWeak && w[i].Fields[d].Count == count; i++)
+            for (var i = start; i < w.Count && !w[i].IsWeak && (w[i].Fields[d].Count == count || w[i].Fields[d].RawCount == raw); i++)
             {
                 n++;
             }
@@ -626,10 +634,11 @@ public sealed class AutoDetector
             return null;
         }
 
+        // Weak lines inside the block do not end it and do not count.
         var rows = 0;
-        while (rows < w.Count && w[rows].Form == form)
+        for (var i = 0; i < w.Count && (w[i].IsWeak || RowShape.SameKeyValueFamily(w[i].Form, form)); i++)
         {
-            rows++;
+            rows += w[i].IsWeak ? 0 : 1;
         }
 
         return rows >= _settings.MinKeyValueLines ? (form, rows) : null;
@@ -761,6 +770,7 @@ internal sealed class Region
     private int _delimiter;
     private char _delimiterChar;
     private int _count;
+    private int _rawCount;
     private KeyValueForm _form;
     private bool _tableAlive;
     private bool _keyValueAlive;
@@ -833,6 +843,7 @@ internal sealed class Region
         _delimiter = delimiter;
         _delimiterChar = delimiters[delimiter];
         _count = count;
+        _rawCount = window[skip + (headerTolerated ? 1 : 0)].Fields[delimiter].RawCount;
         _headerTolerated = headerTolerated;
         _tolerated = headerTolerated;
         _tableAlive = true;
@@ -858,7 +869,7 @@ internal sealed class Region
 
         ConsumedRows = skip + 1;
         _dataLines = window[skip].LineCount;
-        if (Kind == RegionKind.TableOrKeyValue && window.Take(skip + 1).Any(r => r.Form != _form))
+        if (Kind == RegionKind.TableOrKeyValue && window.Take(skip + 1).Any(r => !r.IsWeak && !RowShape.SameKeyValueFamily(r.Form, _form)))
         {
             _keyValueAlive = false;
         }
@@ -893,7 +904,7 @@ internal sealed class Region
                 Take(row);
                 return true;
             case RegionKind.KeyValue:
-                if (row.Form != _form)
+                if (!RowShape.SameKeyValueFamily(row.Form, _form))
                 {
                     return false;
                 }
@@ -903,9 +914,9 @@ internal sealed class Region
             case RegionKind.Table:
             case RegionKind.TableOrKeyValue:
                 var count = row.Fields[_delimiter].Count;
-                var exact = count == _count;
+                var exact = count == _count || row.Fields[_delimiter].RawCount == _rawCount;
                 var tableFits = _tableAlive && (exact || (count >= 2 && Math.Abs(count - _count) <= tolerance));
-                var keyValueFits = Kind == RegionKind.TableOrKeyValue && _keyValueAlive && row.Form == _form;
+                var keyValueFits = Kind == RegionKind.TableOrKeyValue && _keyValueAlive && RowShape.SameKeyValueFamily(row.Form, _form);
 
                 if (Kind == RegionKind.TableOrKeyValue && !tableFits && keyValueFits)
                 {
