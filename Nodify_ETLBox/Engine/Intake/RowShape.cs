@@ -229,6 +229,50 @@ internal static class RowShape
         return tab >= 0 && fields[tab].Count >= 2 && fields[tab].FirstIsLabel ? KeyValueForm.Tab : null;
     }
 
+    /// <summary>
+    /// A section separator: one of <paramref name="characters"/> repeated, at least
+    /// <paramref name="minLength"/> times in all, optionally with a name in the middle
+    /// (<c>====Data====</c>). The name is null when there is none. It starts in the first column: an
+    /// indented line is an example inside text, not a separator [U: chosen].
+    /// </summary>
+    public static bool IsSeparator(string text, string characters, int minLength, int maxNameLength, out string? name)
+    {
+        name = null;
+        var trimmed = text.TrimEnd();
+        if (trimmed.Length < minLength || !characters.Contains(trimmed[0]))
+        {
+            return false;
+        }
+
+        var c = trimmed[0];
+        var lead = 0;
+        while (lead < trimmed.Length && trimmed[lead] == c)
+        {
+            lead++;
+        }
+
+        if (lead == trimmed.Length)
+        {
+            return true;
+        }
+
+        var trail = 0;
+        while (trail < trimmed.Length - lead && trimmed[trimmed.Length - 1 - trail] == c)
+        {
+            trail++;
+        }
+
+        // A name needs the character on its left at least twice, so a line like "-5" or "# Note" is not a separator [U: chosen].
+        var middle = trimmed[lead..^trail].Trim();
+        if (lead < 2 || lead + trail < minLength || middle.Length == 0 || middle.Length >= maxNameLength)
+        {
+            return false;
+        }
+
+        name = middle;
+        return true;
+    }
+
     /// <summary>Colon lines and lines of several colon pairs belong in one key-value block [U: chosen]; other forms only with themselves.</summary>
     public static bool SameKeyValueFamily(KeyValueForm? form, KeyValueForm block)
         => form == block || (form is KeyValueForm.Colon or KeyValueForm.Pairs && block is KeyValueForm.Colon or KeyValueForm.Pairs);

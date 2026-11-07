@@ -162,6 +162,12 @@ public sealed record DetectorSettings
     /// </summary>
     public int MaxKeyValueLabelLines { get; init; } = 1000;
 
+    /// <summary>A line of one of these characters repeated is a section separator ...</summary>
+    public string SeparatorCharacters { get; init; } = "=-#*~_";
+
+    /// <summary>... when the character appears at least this many times (a name in the middle is allowed).</summary>
+    public int MinSeparatorLength { get; init; } = 5;
+
     /// <summary>A table's first skip line names it when it is shorter than this.</summary>
     public int MaxTitleNameLength { get; init; } = 60;
 }

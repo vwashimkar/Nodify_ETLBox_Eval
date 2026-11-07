@@ -33,6 +33,7 @@ public sealed class AutoDetector
     private int _blankRun;
     private bool _tableClosedInParagraph;
     private int _reofferedWeak;
+    private (long FirstLine, long StartByte, string? Name)? _separator;
 
     public AutoDetector(IntakeItem item, DetectorSettings settings, Encoding settingsEncoding)
     {
@@ -78,6 +79,12 @@ public sealed class AutoDetector
             return;
         }
 
+        if (RowShape.IsSeparator(text, _settings.SeparatorCharacters, _settings.MinSeparatorLength, _settings.MaxTitleNameLength, out var separatorName))
+        {
+            OnSeparator(line.Number, line.StartByte, line.EndByte, separatorName);
+            return;
+        }
+
         if (TryStartCandidate(line.Number, line.StartByte, line.EndByte, text, cut, out var jsonRow))
         {
             return;
@@ -110,10 +117,38 @@ public sealed class AutoDetector
         EndParagraph();
         CloseOpen();
         _blankRun = 0;
+        if (_separator is { } separator)
+        {
+            // Separator lines with nothing after them: a text container of their own.
+            _separator = null;
+            Emit("text", separator.FirstLine, _lastSeparatorLine, separator.StartByte, _lastSeparatorEnd, ContainerConfidence.Guessed,
+                ["separator lines with no region after them"], separator.Name);
+        }
     }
 
     /// <summary>Call once, after the last line of a scan that reached the end of the file.</summary>
     public void Finish() => Break();
+
+    // ---- Section separators ---------------------------------------------------------------
+
+    private long _lastSeparatorLine;
+    private long _lastSeparatorEnd;
+
+    /// <summary>
+    /// A separator line ends the region before it and becomes the first skip line of the region
+    /// after it; its name names that region. Of several separators in a row the last name wins.
+    /// </summary>
+    private void OnSeparator(long number, long start, long end, string? name)
+    {
+        FlushQuoted();
+        EndParagraph();
+        CloseOpen();
+        _blankRun = 0;
+        _tableClosedInParagraph = false;
+        _separator = _separator is { } open ? open with { Name = name ?? open.Name } : (number, start, name);
+        _lastSeparatorLine = number;
+        _lastSeparatorEnd = end;
+    }
 
     // ---- JSON and XML blocks -------------------------------------------------------------
 
@@ -743,6 +778,16 @@ public sealed class AutoDetector
         ContainerStatus status = ContainerStatus.Ok,
         string message = "")
     {
+        // Separator lines just before the container are its first skip lines, and a separator's name names it.
+        if (_separator is { } separator)
+        {
+            _separator = null;
+            skipLines += (int)(first - separator.FirstLine);
+            first = separator.FirstLine;
+            start = separator.StartByte;
+            title = separator.Name ?? title;
+        }
+
         // <format>-<n>, n counted per format in file order (the marker rule); a table's title names it.
         var count = _formatCounts.GetValueOrDefault(format) + 1;
         _formatCounts[format] = count;

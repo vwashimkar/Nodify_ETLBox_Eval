@@ -316,6 +316,54 @@ public class AutoDetectorRuleTests
         Assert.Equal("csv", Assert.Single(Detect(text).Containers).Format);
     }
 
+    // ---- G2b step 5: section separators -------------------------------------------------------
+
+    [Theory]
+    [InlineData("=====", true, null)]
+    [InlineData("---------- ", true, null)]
+    [InlineData("    ##### Indented #####", false, null)]
+    [InlineData("====Data====", true, "Data")]
+    [InlineData("##### Plate 2 #####", true, "Plate 2")]
+    [InlineData("====", false, null)]
+    [InlineData("# Note", false, null)]
+    [InlineData("-5", false, null)]
+    [InlineData("=-=-=-", false, null)]
+    public void SeparatorLines_AreRecognised(string text, bool expected, string? name)
+    {
+        Assert.Equal((expected, name), (RowShape.IsSeparator(text, "=-#*~_", 5, 60, out var found), found));
+    }
+
+    [Fact]
+    public void ASeparator_EndsTheRegionBefore_AndIsTheFirstSkipLineOfTheRegionAfter()
+    {
+        var result = Detect("a,b,c\n1,2,3\n4,5,6\n=====\nName: x\nPlace: y\nDate: z\n");
+
+        Assert.Equal([("csv", 1L, 3L, 0), ("keyvalue", 4L, 7L, 1)], result.Containers.Select(c => (c.Format, c.ContentFirstLine!.Value, c.ContentLastLine!.Value, c.SkipLines)));
+    }
+
+    [Fact]
+    public void TwoSeparatorsInARow_AreSkipLines_AndTheLastNamesTheRegion()
+    {
+        var container = Assert.Single(Detect("=====\n----Results----\na,b,c\n1,2,3\n4,5,6\n").Containers);
+
+        Assert.Equal(("csv", 1L, 2, "Results"), (container.Format, container.ContentFirstLine!.Value, container.SkipLines, container.Name));
+    }
+
+    [Fact]
+    public void Separators_SplitAFileWithNoBlankLines()
+    {
+        var result = Detect("Report of the day\n====Header====\nName: a\nPlace: b\nDate: c\n----Data----\nx,y,z\n1,2,3\n4,5,6\n=====\nend of the report\n");
+
+        Assert.Equal([("text", 1L, 1L, ""), ("keyvalue", 2L, 5L, "Header"), ("csv", 6L, 9L, "Data"), ("text", 10L, 11L, "")],
+            result.Containers.Select(c => (c.Format, c.ContentFirstLine!.Value, c.ContentLastLine!.Value, c.Name.StartsWith("text-") ? "" : c.Name)));
+    }
+
+    [Fact]
+    public void ASeparatorAtTheEnd_IsATextContainer()
+    {
+        Assert.Equal([("csv", 1L, 3L), ("text", 4L, 4L)], Shape("a,b,c\n1,2,3\n4,5,6\n=========\n"));
+    }
+
     public static TheoryData<string> I10Variants => new() { "utf-16le", "utf-16be", "crlf" };
 
     [Theory]
