@@ -17,7 +17,8 @@ public partial class EditorViewModel
         [ProjectNodeTypes.ParseJson] = NodeType.ParseJson,
         [ProjectNodeTypes.ResultJson] = NodeType.ResultJson,
         [ProjectNodeTypes.ParseValue] = NodeType.ParseValue,
-        [ProjectNodeTypes.DotNetObject] = NodeType.DotNetObject
+        [ProjectNodeTypes.DotNetObject] = NodeType.DotNetObject,
+        [ProjectNodeTypes.FileIntake] = NodeType.FileIntake
     };
 
     /// <summary>A connection that is not on the canvas but stays in the file. Message null: the unknown node's own line covers it.</summary>
@@ -232,6 +233,11 @@ public partial class EditorViewModel
                 SetValue(node, "OutputType", ProjectNodeSettings.ReadOutput(settings).Kind.ToString());
                 break;
 
+            case NodeType.FileIntake:
+                var (intake, intakeRelativePath) = ProjectNodeSettings.ReadFileIntake(settings);
+                node.SetFileIntakeSettings(intake with { Path = ProjectPaths.Resolve(intake.Path, intakeRelativePath, projectFilePath) });
+                break;
+
             default:
                 var values = ProjectNodeSettings.ReadLegacy(settings);
                 foreach (var setting in node.Settings)
@@ -346,6 +352,10 @@ public partial class EditorViewModel
 
             case NodeType.DotNetObject:
                 return ProjectNodeSettings.WriteOutput(node.GetOutputSettings(), loaded);
+
+            case NodeType.FileIntake:
+                var intake = node.GetFileIntakeSettings();
+                return ProjectNodeSettings.WriteFileIntake(intake, RelativePathFor(intake.Path, "path", loaded, projectFilePath), loaded);
 
             default:
                 var filePath = node.Settings.FirstOrDefault(s => s.Kind == SettingKind.FilePath);

@@ -406,8 +406,8 @@ public partial class EditorViewModel : ObservableObject
             NodeType.ResultJson
         };
 
-        // An unknown node from a project file is ignored.
-        var nodeCount = Nodes.Count(n => n.NodeType != NodeType.Unknown);
+        // An unknown node from a project file, and a File intake node (not run yet), are ignored.
+        var nodeCount = Nodes.Count(n => n.NodeType is not (NodeType.Unknown or NodeType.FileIntake));
         if (nodeCount != expectedOrder.Length)
         {
             issues.Add($"Graph supports only a linear 5-node chain (CsvSource -> FilterByCountry -> ToJson -> ParseJson -> ResultJson). Found {nodeCount} nodes.");

@@ -278,6 +278,11 @@
                         Click="PaletteButton_Click"
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <TextBlock Text="Intake" FontWeight="Bold" Margin="0,8,0,8" />
+                <Button Content="File intake" Tag="FileIntake" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
             </StackPanel>
 
             <!-- ===== Center: Nodify editor. NOT wrapped in a ScrollViewer: Nodify owns pan/zoom. ===== -->

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Intake;
 using EtlDesigner.Engine.Parsing;
 using EtlDesigner.Engine.Pipeline;
 using EtlDesigner.Engine.Project;
@@ -21,6 +22,15 @@ public static class NodeFactory
     /// <summary>Opens the ParseValue dialog for a node. Set by MainViewModel.</summary>
     public static Func<NodeViewModel, bool>? ParseValueConfigureHandler { get; set; }
 
+    /// <summary>Opens Intake Studio for a File intake node. Set by MainViewModel.</summary>
+    public static Func<NodeViewModel, bool>? FileIntakeConfigureHandler { get; set; }
+
+    /// <summary>The names a user can change (labels.txt). Read once at startup; empty labels give the defaults.</summary>
+    public static Labels Labels { get; set; } = Labels.Empty;
+
+    /// <summary>Called each time a File intake node is created (the app writes the default labels file once).</summary>
+    public static Action? FileIntakeCreated { get; set; }
+
     /// <summary>Creates a node of a type. A loaded node keeps its id, so it is otherwise a new node of that type.</summary>
     public static NodeViewModel Create(NodeType nodeType, Point location, Guid? id = null)
     {
@@ -34,6 +44,7 @@ public static class NodeFactory
             NodeType.ResultJson => CreateResultJson(location),
             NodeType.ParseValue => CreateParseValue(location),
             NodeType.DotNetObject => CreateDotNetObject(location),
+            NodeType.FileIntake => CreateFileIntake(location),
             _ => throw new ArgumentException($"Unknown node type: {nodeType}")
         };
 
@@ -302,6 +313,71 @@ public static class NodeFactory
         node.Settings.Add(outputType);
         return node;
     }
+
+    /// <summary>
+    /// Creates a File intake node. No ports yet (container ports come in G6). Settings: FilePath,
+    /// Mode (Choice), Encoding (Choice) and MaxFileSizeMb, edited in Intake Studio or the settings
+    /// panel. The canvas shows the file name and, after a scan in this session, its totals.
+    /// </summary>
+    public static NodeViewModel CreateFileIntake(Point location)
+    {
+        FileIntakeCreated?.Invoke();
+        NodeViewModel? node = null;
+        var defaults = FileIntakeNodeSettings.Default;
+
+        node = new NodeViewModel(Guid.NewGuid(), Labels.Get("node.fileintake.title", LabelsSettings.DefaultValues["node.fileintake.title"]), NodeType.FileIntake)
+        {
+            Location = location,
+            Subtitle = Labels.Get("node.fileintake.subtitle", LabelsSettings.DefaultValues["node.fileintake.subtitle"]),
+            ConfigureCommand = new RelayCommand(_ =>
+            {
+                if (node is not null)
+                {
+                    FileIntakeConfigureHandler?.Invoke(node);
+                }
+            })
+        };
+
+        var mode = new SettingViewModel("Mode", "Mode", SettingKind.Choice, required: true, defaults.Mode);
+        mode.Choices.Add(new SettingChoice(FileIntakeNodeSettings.AutoDetect, "Auto-detect", true));
+        mode.Choices.Add(new SettingChoice(FileIntakeNodeSettings.MarkersMode, "Markers", true));
+
+        var encoding = new SettingViewModel("Encoding", "Encoding", SettingKind.Choice, required: true, defaults.Encoding);
+        foreach (var name in IntakeEncodings.Names)
+        {
+            encoding.Choices.Add(new SettingChoice(name, IntakeEncodingLabel(name), true));
+        }
+
+        node.Settings.Add(new SettingViewModel("FilePath", "File path", SettingKind.FilePath, required: false));
+        node.Settings.Add(mode);
+        node.Settings.Add(encoding);
+        node.Settings.Add(new SettingViewModel("MaxFileSizeMb", "Size limit (MB)", SettingKind.Number, required: true,
+            defaults.MaxFileSizeMb.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
+        foreach (var setting in node.Settings)
+        {
+            setting.ValueChanged += (_, _) =>
+            {
+                // A scan result belongs to the settings it was made with.
+                node.IntakeSummary = null;
+                node.NotifyCanvasNoteChanged();
+            };
+        }
+
+        return node;
+    }
+
+    /// <summary>The name of an encoding as a user sees it in a list.</summary>
+    public static string IntakeEncodingLabel(string name) => name switch
+    {
+        IntakeEncodings.Auto => "Auto (UTF-8, else Windows-1252)",
+        IntakeEncodings.Utf8 => "UTF-8",
+        IntakeEncodings.Windows1252 => "Windows-1252",
+        IntakeEncodings.Latin1 => "ISO-8859-1",
+        IntakeEncodings.Utf16Le => "UTF-16 LE",
+        IntakeEncodings.Utf16Be => "UTF-16 BE",
+        _ => name
+    };
 
     /// <summary>
     /// Creates a ToJson node.

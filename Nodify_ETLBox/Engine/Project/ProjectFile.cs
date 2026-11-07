@@ -113,4 +113,5 @@ public static class ProjectNodeTypes
     public const string ToJson = "ToJson";
     public const string ParseJson = "ParseJson";
     public const string ResultJson = "ResultJson";
+    public const string FileIntake = "FileIntake";
 }

@@ -17,6 +17,10 @@
                 CornerRadius="4"
                 Width="160"
                 Padding="8">
+            <Border.InputBindings>
+                <!-- File intake: a double-click opens Intake Studio. Null for the other nodes. [U: Nodify may take the double-click first] -->
+                <MouseBinding MouseAction="LeftDoubleClick" Command="{Binding DoubleClickCommand, Mode=OneWay}" />
+            </Border.InputBindings>
             <Border.Effect>
                 <DropShadowEffect ShadowDepth="2" Opacity="0.3" />
             </Border.Effect>
@@ -29,6 +33,61 @@
                           Foreground="{DynamicResource text-brush}"
                           FontFamily="{DynamicResource font-text}"
                           FontSize="{DynamicResource font-caption}" />
+
+                <!-- File intake: subtitle, file name and scan totals, and the button that opens Intake Studio.
+                     Each part is hidden when the node has no value for it. -->
+                <TextBlock Text="{Binding Subtitle, Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Margin="{DynamicResource Thickness4}"
+                           Foreground="{DynamicResource text-muted-brush}"
+                           FontFamily="{DynamicResource font-text}"
+                           FontSize="{DynamicResource font-caption}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Subtitle, Mode=OneWay}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Text="{Binding CanvasNote, Mode=OneWay}"
+                           ToolTip="{Binding CanvasNoteToolTip, Mode=OneWay}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Margin="{DynamicResource Thickness4}"
+                           Foreground="{DynamicResource text-brush}"
+                           FontFamily="{DynamicResource font-text}"
+                           FontSize="{DynamicResource font-caption}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CanvasNote, Mode=OneWay}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Button Content="Open Intake Studio"
+                        Command="{Binding ConfigureCommand, Mode=OneWay}"
+                        Margin="{DynamicResource Thickness4}"
+                        Padding="{DynamicResource Thickness4}"
+                        FontFamily="{DynamicResource font-text}"
+                        FontSize="{DynamicResource font-caption}">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding NodeType, Mode=OneWay}" Value="FileIntake">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
 
                 <!-- Input connectors -->
                 <ItemsControl ItemsSource="{Binding Inputs}" Margin="0,0,0,8">

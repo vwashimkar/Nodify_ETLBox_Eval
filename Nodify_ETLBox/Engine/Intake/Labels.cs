@@ -20,7 +20,7 @@ public sealed record LabelsSettings
     public static IReadOnlyDictionary<string, string> DefaultValues { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["node.fileintake.title"] = "File intake",
-        ["node.fileintake.subtitle"] = "Reads one file and splits it into containers"
+        ["node.fileintake.subtitle"] = "Reads a file and finds its parts"
     }.Concat(ContainerDisplay.DefaultNames).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
 }
 
