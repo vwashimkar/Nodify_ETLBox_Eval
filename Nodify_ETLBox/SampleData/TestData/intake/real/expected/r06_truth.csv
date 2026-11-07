@@ -1,0 +1,3 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,keyvalue,run header,1,4,4,Weak,B,0,no,",",csv,"Several ""Key: value"" pairs per line separated by commas, padded with commas to 24 fields; line 3 is commas only (not blank)"
+2,csv,raw data,5,25,21,Medium,B,4,yes,",",,Lines 5-8 are title lines (line 6 and 8 are commas only); header at line 9 has an empty first cell; 16 rows A to P with many empty cells

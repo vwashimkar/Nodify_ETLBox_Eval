@@ -1,0 +1,20 @@
+order,truth_format,truth_name,first_line,last_line,line_count,detectability,tier,skip_lines,header,delimiter,accept_also,note
+1,keyvalue,run info,1,3,3,Weak,B,0,no,",",csv,"Quoted ""key"",""value"" lines; field count varies (4,2,3), so a table rule fails"
+2,keyvalue,batch and protocol,5,26,22,Weak,B,0,no,",",csv,"22 quoted key,value rows; some rows carry 3 to 7 values; field count varies"
+3,keyvalue,calibration summary,28,34,7,Weak,B,0,no,",",csv,"Title line then 6 key,value rows"
+4,csv,calibration tables 1,35,40,6,Weak,B,3,yes,",",,"Lines 35-37 are titles (line 35 is """" , not blank); header line 38; 2 data rows. Tables with different headers follow with no blank line between"
+5,csv,calibration tables 2,41,43,3,Weak,B,1,yes,",",,"Title line 41, header 42, 1 data row; header changes from the table above without a blank line"
+6,csv,calibration tables 3,44,45,2,Weak,B,0,yes,",",,Header 44 and 1 data row; a 2-line table
+7,text,samples line,48,48,1,Weak,B,0,n/a,,keyvalue,A single 5-field line
+8,text,results title,50,50,1,Weak,B,0,n/a,,,"Section title ""Results"""
+9,csv,Median,52,57,6,Medium,B,1,yes,",",,"Title ""DataType:,Median"" is preamble (skip 1); header 53; 4 rows"
+10,csv,Count,59,64,6,Medium,B,1,yes,",",,"Same layout as Median, separated by one blank line: must be a separate container"
+11,csv,Net MFI,66,71,6,Medium,B,1,yes,",",,
+12,csv,Avg Net MFI,73,78,6,Medium,B,1,yes,",",,Different header (4 fields) than the three tables above
+13,csv,Units,80,83,4,Weak,B,1,no,",",keyvalue,"Transposed: first column holds labels (Analyte:, BeadID:, Units:), no header row"
+14,csv,Per Bead Count,85,88,4,Weak,B,1,no,",",keyvalue,"Transposed, like Units"
+15,csv,Dilution Factor,90,95,6,Medium,B,1,yes,",",,
+16,csv,Analysis Types,98,100,3,Weak,B,1,no,",",keyvalue,"2 rows, 3 fields"
+17,csv,Audit Logs,102,103,2,Weak,B,1,yes,",",,"Header only, zero data rows; a table with no rows"
+18,csv,Warnings Errors,105,107,3,Medium,B,1,yes,",",,Header and 1 row; a 3-line region with a long quoted message
+19,text,CRC,109,110,2,Weak,B,0,n/a,,keyvalue,"Two lines: ""-- CRC --"" and ""CRC32: <hex>""; preceded by one blank line"
