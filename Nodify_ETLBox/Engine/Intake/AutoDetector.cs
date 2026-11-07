@@ -792,6 +792,8 @@ internal sealed class Region
     private bool _tableAlive;
     private bool _keyValueAlive;
     private bool _tableBroke;
+    private HashSet<string>? _labels;
+    private bool _otherText;
     private string? _title;
     private HeaderGuess? _header;
     private readonly List<string> _reasons = [];
@@ -878,6 +880,14 @@ internal sealed class Region
             : header.HasNumeric ? HeaderGuess.No
             : HeaderGuess.Unknown;
 
+        // With no header, every row is checked for the key-value pattern: distinct labels in the first column.
+        // An all-text first row (header Unknown) may still be a header, so that needs exactly 2 fields [U: chosen].
+        if (_header == HeaderGuess.No || (_header == HeaderGuess.Unknown && count == 2 && !headerTolerated))
+        {
+            _labels = new HashSet<string>(StringComparer.Ordinal);
+            CheckLabel(window[skip]);
+        }
+
         // The window rows up to the table's first data row belong to the region now.
         for (var i = 1; i <= skip; i++)
         {
@@ -955,6 +965,7 @@ internal sealed class Region
                 _ragged |= !exact && ragged;
                 _tolerated |= !exact && !ragged;
                 _dataLines += row.LineCount;
+                CheckLabel(row, settings.MaxKeyValueLabelLines);
                 if (Kind == RegionKind.TableOrKeyValue && !keyValueFits)
                 {
                     Kind = RegionKind.Table;
@@ -965,6 +976,29 @@ internal sealed class Region
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Keeps the labels of the first column while they are distinct and not numbers, and notes a
+    /// text value in the other columns. Stops (and frees the labels) at the first row that breaks
+    /// the pattern, or when the block is longer than <paramref name="maxLines"/>.
+    /// </summary>
+    private void CheckLabel(Row row, int maxLines = int.MaxValue)
+    {
+        if (_labels is null)
+        {
+            return;
+        }
+
+        var fields = RowShape.Split(row.Text, _delimiterChar);
+        var label = fields[0];
+        if (label.Length == 0 || RowShape.IsNumeric(label) || !_labels.Add(label) || _labels.Count > maxLines)
+        {
+            _labels = null;
+            return;
+        }
+
+        _otherText |= fields.Skip(1).Any(f => f.Length > 0 && !RowShape.IsNumeric(f));
     }
 
     private void Take(Row row)
@@ -999,6 +1033,14 @@ internal sealed class Region
 
                 var keyValueConfidence = _rows >= settings.LikelyKeyValueMinLines ? ContainerConfidence.Likely : ContainerConfidence.Guessed;
                 return (Result("keyvalue", keyValueConfidence, form: _form), tail);
+            case RegionKind.Table or RegionKind.TableOrKeyValue
+                when _labels is not null && _labels.Count >= settings.MinKeyValueLines && _otherText && !_tolerated && !_ragged:
+                // No header, distinct labels in the first column and text among the values: a key-value block, also with 2 fields.
+                reasons.Add($"{_labels.Count} lines with {_count} fields and the same field count");
+                reasons.Add("distinct labels in first column, no header");
+                var labelForm = Kind == RegionKind.TableOrKeyValue ? _form : _delimiterChar == '\t' ? KeyValueForm.Tab : KeyValueForm.Delimited;
+                var labelTitle = SkipLines > 0 && _title is { Length: > 0 } lt && lt.Length < settings.MaxTitleNameLength ? lt : null;
+                return (Result("keyvalue", ContainerConfidence.Likely, labelTitle, _delimiterChar.ToString(), skip: SkipLines, form: labelForm), tail);
             case RegionKind.Table:
             case RegionKind.TableOrKeyValue:
                 var delimiterName = _delimiterChar == '\t' ? "tab" : $"'{_delimiterChar}'";
@@ -1025,7 +1067,7 @@ internal sealed class Region
 
                 if (Kind == RegionKind.TableOrKeyValue)
                 {
-                    reasons.Add($"also fits key-value ({_form}), but the field count does not vary, so a table");
+                    reasons.Add($"also fits key-value ({_form}), but has a header or a first column that is not distinct labels, so a table");
                 }
 
                 reasons.Add($"header guess: {_header}");

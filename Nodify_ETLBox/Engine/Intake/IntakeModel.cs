@@ -40,7 +40,10 @@ public enum KeyValueForm
     Tab,
 
     /// <summary>Several <c>Key: value</c> pairs on one line, separated by commas</summary>
-    Pairs
+    Pairs,
+
+    /// <summary><c>Key,value</c> rows with one field count: distinct labels in the first column and no header</summary>
+    Delimited
 }
 
 public enum ContainerStatus
@@ -152,6 +155,12 @@ public sealed record DetectorSettings
 
     /// <summary>A row shorter than its table's first row stays in the table (ragged right) when it has at least this many fields.</summary>
     public int MinRaggedFields { get; init; } = 2;
+
+    /// <summary>
+    /// A block with no header and distinct labels in its first column is key-value; the labels are
+    /// checked for at most this many lines, so a longer block stays a table [U: chosen].
+    /// </summary>
+    public int MaxKeyValueLabelLines { get; init; } = 1000;
 
     /// <summary>A table's first skip line names it when it is shorter than this.</summary>
     public int MaxTitleNameLength { get; init; } = 60;

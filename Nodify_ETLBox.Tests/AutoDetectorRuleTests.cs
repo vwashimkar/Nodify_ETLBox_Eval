@@ -260,6 +260,30 @@ public class AutoDetectorRuleTests
         Assert.Equal([("csv", 1L, 3L), ("csv", 4L, 5L)], Shape("id,name,size,mass,flag\n1,a,2,3,4\n2,b,5,6,7\nid,name,size\n3,c,8\n"));
     }
 
+    // ---- G2b step 3: key-value against a table ------------------------------------------------
+
+    [Theory]
+    [InlineData("Name\tAlpha\nPlace\tLab 2\nDate\t2026-11-06\n", KeyValueForm.Tab)]
+    [InlineData("Temperature,25.3,C\nOperator,ann,-\nDate,2026-11-06,-\nPlate,P1,-\n", KeyValueForm.Delimited)]
+    public void DistinctLabels_InTheFirstColumn_AndNoHeader_AreKeyValue_Likely(string text, KeyValueForm form)
+    {
+        var container = Assert.Single(Detect(text).Containers);
+
+        Assert.Equal(("keyvalue", form, ContainerConfidence.Likely), (container.Format, container.KeyValueForm!.Value, container.Confidence));
+        Assert.Contains("distinct labels in first column, no header", container.Reasons!);
+    }
+
+    [Theory]
+    [InlineData("name,value\nalpha,1\nbeta,2\ngamma,3\n")]
+    [InlineData("A,x\nA,y\nB,z\n")]
+    [InlineData("1,x\n2,y\n3,z\n")]
+    [InlineData("A,1\nB,2\nC,3\n")]
+    [InlineData("ticket,owner,text\nT-1,ann,first words\nT-2,bob,more words\n")]
+    public void AHeader_ARepeatedOrNumericFirstColumn_OrOnlyNumbers_KeepATable(string text)
+    {
+        Assert.Equal("csv", Assert.Single(Detect(text).Containers).Format);
+    }
+
     public static TheoryData<string> I10Variants => new() { "utf-16le", "utf-16be", "crlf" };
 
     [Theory]
