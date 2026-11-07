@@ -7,16 +7,37 @@ namespace Nodify_ETLBox.Tests;
 
 /// <summary>
 /// The auto-detector against the truth files. Tier A rows must match and fail the build; Tier B
-/// rows and the real files are scored and written to reports/g2-detect-report.md, never failing.
-/// real/r05 and real/r06 are the hold-out and run only with INTAKE_HOLDOUT=1.
+/// rows and the real files are scored and written to reports/g2b-detect-report.md, never failing.
+/// real/r07 to real/r12 are the fresh hold-out of G2b and run only with INTAKE_HOLDOUT=1.
 /// </summary>
 public class AutoDetectTruthTests
 {
     public const string HoldOutVariable = "INTAKE_HOLDOUT";
     private const string HoldOutHeading = "## Hold-out";
 
-    public static readonly string[] DevelopmentRealFiles = ["r01_luminex_xponent.csv", "r02_moldev_softmax_pro_utf16.txt", "r03_perkinelmer_envision.csv", "r04_quantstudio.txt"];
-    public static readonly string[] HoldOutRealFiles = ["r05_agilent_gen5.txt", "r06_bmg_pherastar.csv"];
+    public static readonly string[] DevelopmentRealFiles =
+    [
+        "r01_luminex_xponent.csv", "r02_moldev_softmax_pro_utf16.txt", "r03_perkinelmer_envision.csv", "r04_quantstudio.txt",
+        "r05_agilent_gen5.txt", "r06_bmg_pherastar.csv"
+    ];
+
+    public static readonly string[] HoldOutRealFiles =
+    [
+        "r07_ctl_immunospot.txt", "r08_revvity_kaleido.csv", "r09_qiacuity_dpcr.csv", "r10_methodical_mind.txt", "r11_roche_cedex_bioht.txt",
+        "r12_msd_workbench.csv"
+    ];
+
+    /// <summary>The G2 results per file (Match, LinesOff, FormatOff, Merged, Split, Missed), from reports/taskG2-report.md; r05 and r06 were G2's hold-out.</summary>
+    private static readonly Dictionary<string, int[]> G2Results = new()
+    {
+        ["i09_sample_nomarkers (tier B rows)"] = [1, 0, 1, 2, 0, 0],
+        ["r01_luminex_xponent.csv"] = [15, 0, 1, 2, 1, 0],
+        ["r02_moldev_softmax_pro_utf16.txt"] = [1, 0, 0, 3, 2, 0],
+        ["r03_perkinelmer_envision.csv"] = [21, 0, 0, 2, 0, 0],
+        ["r04_quantstudio.txt"] = [4, 0, 0, 0, 0, 0],
+        ["r05_agilent_gen5.txt"] = [3, 0, 1, 1, 2, 0],
+        ["r06_bmg_pherastar.csv"] = [0, 0, 0, 2, 0, 0]
+    };
 
     internal sealed record TruthRow(
         int Order, string Format, string Name, long FirstLine, long LastLine, string Tier,
@@ -164,9 +185,10 @@ public class AutoDetectTruthTests
         var path = ReportPath();
         var holdOut = File.Exists(path) ? ExistingHoldOut(File.ReadAllText(path)) : null;
         var text = new StringBuilder();
-        text.AppendLine("# G2 auto-detect report");
+        text.AppendLine("# G2b auto-detect report");
         text.AppendLine();
-        text.AppendLine("Written by `AutoDetectTruthTests`. Tier B rows and the real files never fail the build. Results: Match (format and exact lines), LinesOff, FormatOff, Merged, Split, Missed.");
+        text.AppendLine("Written by `AutoDetectTruthTests`. Tier B rows and the real files never fail the build. Results: Match (format and exact lines), LinesOff, FormatOff, Merged, Split, Missed. "
+                        + "The line G2 under a file gives the G2 result for the same file.");
         text.AppendLine();
         AppendSections(text, sections);
         if (holdOut is not null)
@@ -180,7 +202,7 @@ public class AutoDetectTruthTests
 
     [HoldOutFact]
     [Trait("Category", "HoldOut")]
-    public void HoldOut_R05AndR06_AreScoredOnce()
+    public void HoldOut_R07ToR12_AreScoredOnce()
     {
         var sections = HoldOutRealFiles.Select(f => (f, Score(ReadTruth(TruthPathOf(f)), Detect(FilePathOf(f)).Containers))).ToList();
         foreach (var file in HoldOutRealFiles)
@@ -189,7 +211,7 @@ public class AutoDetectTruthTests
         }
 
         var path = ReportPath();
-        var existing = File.Exists(path) ? File.ReadAllText(path) : "# G2 auto-detect report\n";
+        var existing = File.Exists(path) ? File.ReadAllText(path) : "# G2b auto-detect report\n";
         var at = existing.IndexOf(HoldOutHeading, StringComparison.Ordinal);
         var text = new StringBuilder(at >= 0 ? existing[..at] : existing.TrimEnd() + Environment.NewLine + Environment.NewLine);
         text.AppendLine(HoldOutHeading);
@@ -225,6 +247,12 @@ public class AutoDetectTruthTests
 
             text.AppendLine();
             text.AppendLine(string.Join(", ", results.Select(r => $"{r} {rows.Count(s => s.Result == r)}")));
+            if (G2Results.TryGetValue(file, out var g2))
+            {
+                text.AppendLine();
+                text.AppendLine("G2: " + string.Join(", ", results.Select((r, i) => $"{r} {g2[i]}")));
+            }
+
             text.AppendLine();
         }
 
@@ -232,6 +260,11 @@ public class AutoDetectTruthTests
         text.AppendLine("### Totals");
         text.AppendLine();
         text.AppendLine(string.Join(", ", results.Select(r => $"{r} {totals[r]}")) + $" (of {totals.Values.Sum()} rows)");
+        if (sections.All(s => G2Results.ContainsKey(s.File)))
+        {
+            text.AppendLine();
+            text.AppendLine("G2: " + string.Join(", ", results.Select((r, i) => $"{r} {sections.Sum(s => G2Results[s.File][i])}")));
+        }
         if (matches.Count > 0)
         {
             text.AppendLine();
@@ -271,7 +304,7 @@ public class AutoDetectTruthTests
 
         var root = folder?.FullName ?? throw new InvalidOperationException("The repository root (with the .slnx file) was not found, so the report cannot be written.");
         Directory.CreateDirectory(Path.Combine(root, "reports"));
-        return Path.Combine(root, "reports", "g2-detect-report.md");
+        return Path.Combine(root, "reports", "g2b-detect-report.md");
     }
 }
 
@@ -282,7 +315,7 @@ internal sealed class HoldOutFactAttribute : FactAttribute
     {
         if (Environment.GetEnvironmentVariable(AutoDetectTruthTests.HoldOutVariable) != "1")
         {
-            Skip = $"hold-out: set {AutoDetectTruthTests.HoldOutVariable}=1 to run r05 and r06 once";
+            Skip = $"hold-out: set {AutoDetectTruthTests.HoldOutVariable}=1 to run r07 to r12 once";
         }
     }
 }

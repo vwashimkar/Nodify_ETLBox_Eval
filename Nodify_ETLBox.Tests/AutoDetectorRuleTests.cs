@@ -231,6 +231,35 @@ public class AutoDetectorRuleTests
         Assert.Equal([("keyvalue", 1L, 4L), ("text", 5L, 5L)], Shape("Name: one, Place: two,,,\nDate: x, Time: y,,,\n,,,,\nOperator: z,,,\nSome closing words,,,\n"));
     }
 
+    // ---- G2b step 2: ragged right -------------------------------------------------------------
+
+    [Fact]
+    public void ATenFieldHeader_WithRowsOfTwoAndThreeFields_IsOneRaggedTable_Likely()
+    {
+        var container = Assert.Single(Detect("h1,h2,h3,h4,h5,h6,h7,h8,h9,h10\nA,1\nB,2,3\nC,4\nD,5,6\n").Containers);
+
+        Assert.Equal(("csv", 1L, 5L, ContainerConfidence.Likely), (container.Format, container.ContentFirstLine!.Value, container.ContentLastLine!.Value, container.Confidence));
+        Assert.Contains("rows shorter than header", container.Reasons!.First(r => r.Contains("shorter")));
+    }
+
+    [Fact]
+    public void ABlock_WhereEveryLineHasADifferentFieldCount_IsNotATable()
+    {
+        Assert.DoesNotContain(Detect("a,b,c,d,e,f\n1,2,3,4,5\n1,2,3,4\n1,2,3\n1,2\n").Containers, c => c.Format == "csv");
+    }
+
+    [Fact]
+    public void ARowWithOneField_EndsARaggedTable()
+    {
+        Assert.Equal([("csv", 1L, 4L), ("text", 5L, 5L)], Shape("a,b,c,d,e\n1,2\n3,4\n5,6,7\nclosing words\n"));
+    }
+
+    [Fact]
+    public void AShorterRowWithNoNumber_UnderATableWithAHeader_StartsTheNextTable()
+    {
+        Assert.Equal([("csv", 1L, 3L), ("csv", 4L, 5L)], Shape("id,name,size,mass,flag\n1,a,2,3,4\n2,b,5,6,7\nid,name,size\n3,c,8\n"));
+    }
+
     public static TheoryData<string> I10Variants => new() { "utf-16le", "utf-16be", "crlf" };
 
     [Theory]

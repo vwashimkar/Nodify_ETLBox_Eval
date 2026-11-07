@@ -150,6 +150,9 @@ public sealed record DetectorSettings
     /// <summary>A quoted field may span at most this many lines; beyond, the quote is taken as text [U].</summary>
     public int MaxQuotedLines { get; init; } = 10;
 
+    /// <summary>A row shorter than its table's first row stays in the table (ragged right) when it has at least this many fields.</summary>
+    public int MinRaggedFields { get; init; } = 2;
+
     /// <summary>A table's first skip line names it when it is shorter than this.</summary>
     public int MaxTitleNameLength { get; init; } = 60;
 }

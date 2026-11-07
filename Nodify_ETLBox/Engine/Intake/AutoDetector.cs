@@ -443,7 +443,7 @@ public sealed class AutoDetector
         {
             if (_open is not null && _open.Kind != RegionKind.Text)
             {
-                if (_open.TryExtend(_window[0], _settings.FieldCountTolerance))
+                if (_open.TryExtend(_window[0], _settings))
                 {
                     _window.RemoveAt(0);
                     continue;
@@ -521,13 +521,13 @@ public sealed class AutoDetector
 
         if (table is not null && keyValue is not null && keyValue.Value.Rows > table.Value.Skip)
         {
-            return Region.TableOrKeyValue(w, table.Value.Skip, table.Value.Delimiter, table.Value.Count, table.Value.HeaderTolerated, keyValue.Value.Form,
-                _delimiters);
+            return Region.TableOrKeyValue(w, table.Value.Skip, table.Value.Delimiter, table.Value.Count, table.Value.HeaderTolerated, table.Value.Ragged,
+                keyValue.Value.Form, _delimiters);
         }
 
         if (table is not null)
         {
-            return Region.TableFrom(w, table.Value.Skip, table.Value.Delimiter, table.Value.Count, table.Value.HeaderTolerated, _delimiters);
+            return Region.TableFrom(w, table.Value.Skip, table.Value.Delimiter, table.Value.Count, table.Value.HeaderTolerated, table.Value.Ragged, _delimiters);
         }
 
         return keyValue is null ? null : Region.KeyValueFrom(first, keyValue.Value.Form);
@@ -535,7 +535,7 @@ public sealed class AutoDetector
 
 
 
-    private (int Skip, int Delimiter, int Count, bool HeaderTolerated)? FindTable()
+    private (int Skip, int Delimiter, int Count, bool HeaderTolerated, bool Ragged)? FindTable()
     {
         var w = _window;
         for (var skip = 0; skip <= Math.Min(_settings.MaxPreambleLines, w.Count - 1); skip++)
@@ -545,7 +545,7 @@ public sealed class AutoDetector
                 return null;
             }
 
-            (int Delimiter, int Count, int Length, bool HeaderTolerated)? best = null;
+            (int Delimiter, int Count, int Length, bool HeaderTolerated, bool Ragged)? best = null;
             for (var d = 0; d < _delimiters.Length; d++)
             {
                 var run = TableRun(skip, d);
@@ -554,7 +554,7 @@ public sealed class AutoDetector
                     continue;
                 }
 
-                var (count, length, tolerated) = run.Value;
+                var (count, length, tolerated, ragged) = run.Value;
                 var titlesDiffer = Enumerable.Range(0, skip).All(t => w[t].Fields[d].Count != count);
                 if (!titlesDiffer)
                 {
@@ -563,13 +563,13 @@ public sealed class AutoDetector
 
                 if (best is null || length > best.Value.Length || (length == best.Value.Length && count > best.Value.Count))
                 {
-                    best = (d, count, length, tolerated);
+                    best = (d, count, length, tolerated, ragged);
                 }
             }
 
             if (best is not null)
             {
-                return (skip, best.Value.Delimiter, best.Value.Count, best.Value.HeaderTolerated);
+                return (skip, best.Value.Delimiter, best.Value.Count, best.Value.HeaderTolerated, best.Value.Ragged);
             }
         }
 
@@ -579,9 +579,11 @@ public sealed class AutoDetector
     /// <summary>
     /// The table that starts at a row: rows with the same field count (at least 2), long enough by
     /// the settings. The first row may differ by the tolerance when the rows after it agree (a
-    /// header with a trailing delimiter, for example).
+    /// header with a trailing delimiter, for example). Rows shorter than the first row are a ragged
+    /// table when each has at least <see cref="DetectorSettings.MinRaggedFields"/> fields and two of
+    /// them share a field count, so a block whose every line has its own count stays apart.
     /// </summary>
-    private (int Count, int Length, bool HeaderTolerated)? TableRun(int from, int d)
+    private (int Count, int Length, bool HeaderTolerated, bool Ragged)? TableRun(int from, int d)
     {
         var w = _window;
         // Equal when the counts without trailing empty fields agree, or the full counts do (rows padded to the same width).
@@ -606,7 +608,7 @@ public sealed class AutoDetector
             var exact = Run(from, c);
             if (LongEnough(exact, c))
             {
-                return (c, exact, false);
+                return (c, exact, false, false);
             }
         }
 
@@ -616,7 +618,21 @@ public sealed class AutoDetector
             var rest = Run(from + 1, next);
             if (next >= 2 && Math.Abs(next - c) <= _settings.FieldCountTolerance && rest >= _settings.MinShortTableLines && LongEnough(rest + 1, next))
             {
-                return (next, rest + 1, true);
+                return (next, rest + 1, true, false);
+            }
+        }
+
+        if (c > _settings.MinRaggedFields)
+        {
+            var counts = new List<int>();
+            for (var i = from + 1; i < w.Count && !w[i].IsWeak && w[i].Fields[d].Count <= c && w[i].Fields[d].Count >= _settings.MinRaggedFields; i++)
+            {
+                counts.Add(w[i].Fields[d].Count);
+            }
+
+            if (counts.Any(n => n < c) && counts.Count != counts.Distinct().Count() && LongEnough(counts.Count + 1, c))
+            {
+                return (c, counts.Count + 1, false, true);
             }
         }
 
@@ -766,6 +782,7 @@ internal sealed class Region
     private long _rows;
     private long _dataLines;
     private bool _tolerated;
+    private bool _ragged;
     private bool _headerTolerated;
     private int _delimiter;
     private char _delimiterChar;
@@ -824,16 +841,16 @@ internal sealed class Region
         return region;
     }
 
-    public static Region TableFrom(List<Row> window, int skip, int delimiter, int count, bool headerTolerated, char[] delimiters)
+    public static Region TableFrom(List<Row> window, int skip, int delimiter, int count, bool headerTolerated, bool ragged, char[] delimiters)
     {
-        var region = new Region(RegionKind.Table, window[0]);
+        var region = new Region(RegionKind.Table, window[0]) { _ragged = ragged };
         region.StartTable(window, skip, delimiter, count, headerTolerated, delimiters);
         return region;
     }
 
-    public static Region TableOrKeyValue(List<Row> window, int skip, int delimiter, int count, bool headerTolerated, KeyValueForm form, char[] delimiters)
+    public static Region TableOrKeyValue(List<Row> window, int skip, int delimiter, int count, bool headerTolerated, bool ragged, KeyValueForm form, char[] delimiters)
     {
-        var region = new Region(RegionKind.TableOrKeyValue, window[0]) { _form = form, _keyValueAlive = true };
+        var region = new Region(RegionKind.TableOrKeyValue, window[0]) { _form = form, _keyValueAlive = true, _ragged = ragged };
         region.StartTable(window, skip, delimiter, count, headerTolerated, delimiters);
         return region;
     }
@@ -878,7 +895,7 @@ internal sealed class Region
     public void AddText(Row row) => Take(row);
 
     /// <summary>Takes the next row when it fits; false closes the region.</summary>
-    public bool TryExtend(Row row, int tolerance)
+    public bool TryExtend(Row row, DetectorSettings settings)
     {
         if (row.IsWeak)
         {
@@ -915,7 +932,9 @@ internal sealed class Region
             case RegionKind.TableOrKeyValue:
                 var count = row.Fields[_delimiter].Count;
                 var exact = count == _count || row.Fields[_delimiter].RawCount == _rawCount;
-                var tableFits = _tableAlive && (exact || (count >= 2 && Math.Abs(count - _count) <= tolerance));
+                // A shorter row with no number under a table with a header is the header of the next table, not a ragged row [U: chosen].
+                var ragged = count < _count && count >= settings.MinRaggedFields && !(_header == HeaderGuess.Yes && !row.Fields[_delimiter].HasNumeric);
+                var tableFits = _tableAlive && (exact || ragged || (count >= 2 && Math.Abs(count - _count) <= settings.FieldCountTolerance));
                 var keyValueFits = Kind == RegionKind.TableOrKeyValue && _keyValueAlive && RowShape.SameKeyValueFamily(row.Form, _form);
 
                 if (Kind == RegionKind.TableOrKeyValue && !tableFits && keyValueFits)
@@ -933,7 +952,8 @@ internal sealed class Region
                     return false;
                 }
 
-                _tolerated |= !exact;
+                _ragged |= !exact && ragged;
+                _tolerated |= !exact && !ragged;
                 _dataLines += row.LineCount;
                 if (Kind == RegionKind.TableOrKeyValue && !keyValueFits)
                 {
@@ -993,6 +1013,11 @@ internal sealed class Region
                     reasons.Add(_headerTolerated ? "the first line has a different field count (a trailing delimiter?)" : "some lines have a field count that differs by the tolerance");
                 }
 
+                if (_ragged)
+                {
+                    reasons.Add("rows shorter than header (the missing fields are at the end)");
+                }
+
                 if (HeaderChanged)
                 {
                     reasons.Add("follows another table with no blank line between: split where the field count changes (Guessed)");
@@ -1005,7 +1030,7 @@ internal sealed class Region
 
                 reasons.Add($"header guess: {_header}");
                 var confidence = HeaderChanged ? ContainerConfidence.Guessed
-                    : _tolerated ? ContainerConfidence.Likely
+                    : _tolerated || _ragged ? ContainerConfidence.Likely
                     : _dataLines >= settings.SureTableMinLines ? ContainerConfidence.Sure
                     : ContainerConfidence.Guessed;
                 var format = _delimiterChar == '\t' ? "tsv" : "csv";
