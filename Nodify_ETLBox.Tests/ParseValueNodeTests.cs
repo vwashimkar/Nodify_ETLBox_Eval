@@ -49,6 +49,16 @@ public class ParseValueNodeTests
         Assert.Equal("id, name", Summary(node, "CarryColumns"));
     }
 
+    private static string Summary(NodeViewModel node, string key) => node.Settings.Single(s => s.Key == key).Value;
+}
+
+/// <summary>
+/// The handler is static and every new MainViewModel replaces it, so this test must not run beside
+/// the classes that create one.
+/// </summary>
+[Collection(NodeFactoryHandlerCollection.Name)]
+public class ParseValueConfigureHandlerTests
+{
     [Fact]
     public void ConfigureCommand_CallsTheHandlerWithTheNode()
     {
@@ -67,6 +77,10 @@ public class ParseValueNodeTests
 
         Assert.Same(node, opened);
     }
+}
 
-    private static string Summary(NodeViewModel node, string key) => node.Settings.Single(s => s.Key == key).Value;
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class NodeFactoryHandlerCollection
+{
+    public const string Name = "NodeFactory handlers";
 }
