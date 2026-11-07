@@ -331,7 +331,8 @@ public class AutoDetectPropertyTests
             data.Add(file);
         }
 
-        foreach (var file in AutoDetectTruthTests.DevelopmentRealFiles)
+        // r07 to r12 were scored once as the G2b hold-out; since then they are ordinary test files here.
+        foreach (var file in AutoDetectTruthTests.DevelopmentRealFiles.Concat(AutoDetectTruthTests.HoldOutRealFiles))
         {
             data.Add(Path.Combine(RealIntakeFileTests.Folder, file));
         }
