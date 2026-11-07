@@ -28,7 +28,7 @@ public class LineIndexerTests : IDisposable
         return lines;
     }
 
-    private static IntakeItem ChunkedItem(byte[] bytes, int chunk)
+    internal static IntakeItem ChunkedItem(byte[] bytes, int chunk)
         => new(Guid.NewGuid(), "memory", "chunked.txt", bytes.Length, DateTime.UtcNow, () => new ChunkedStream(bytes, chunk));
 
     [Fact]
@@ -215,9 +215,9 @@ public class LineIndexerTests : IDisposable
     }
 
     [Fact]
-    public void Utf16File_GivesAMessage()
+    public void Utf32File_GivesAMessage()
     {
-        Assert.Equal(LineIndexer.Utf16Message, IntakeTestData.ReadMarkers(IntakeTestData.MemoryItem(new byte[] { 0xFF, 0xFE, 0x61, 0x00 })).Error);
+        Assert.Equal(LineIndexer.Utf32Message, IntakeTestData.ReadMarkers(IntakeTestData.MemoryItem(new byte[] { 0xFF, 0xFE, 0x00, 0x00, 0x61, 0x00, 0x00, 0x00 })).Error);
     }
 
     [Theory]

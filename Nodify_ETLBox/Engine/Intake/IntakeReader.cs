@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -13,9 +12,9 @@ public static class IntakeReader
 {
     public const string AutoDetectPendingMessage = "Auto-detection comes in the next stage. Use Markers mode for now.";
 
-    private static readonly string ToolVersion = typeof(IntakeResult).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
+    public const string Utf16SettingMessage = "UTF-16 and UTF-32 cannot be chosen as the encoding: a UTF-16 file is read when it starts with a byte order mark (BOM), which decides. Choose utf-8 or a one-byte encoding such as windows-1252.";
 
-    private static readonly SearchValues<byte> LineBreaks = SearchValues.Create("\r\n"u8);
+    private static readonly string ToolVersion = typeof(IntakeResult).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
 
     /// <summary>Runs <see cref="Read"/> off the calling thread.</summary>
     public static Task<IntakeResult> ReadAsync(IntakeItem item, IntakeSettings settings, Action<IntakeProgress>? progress, CancellationToken token)
@@ -95,7 +94,7 @@ public static class IntakeReader
             return new IntakeLines([], $"The byte range {firstByte} to {lastByte} is not valid. Read the file again and use the offsets of that result.");
         }
 
-        var encoding = ResolveEncoding(encodingName, out var encodingError);
+        var encoding = ResolveEncoding(encodingName, out var encodingError, allowUtf16: true);
         if (encoding is null)
         {
             return new IntakeLines([], encodingError);
@@ -112,52 +111,51 @@ public static class IntakeReader
             using var stream = item.OpenRead();
             MoveTo(stream, firstByte);
 
+            // Decoded first and split on characters, so a two-byte encoding splits the same way.
             var buffer = new byte[LineIndexer.BlockSize];
-            using var current = new MemoryStream();
+            var decoder = encoding.GetDecoder();
+            var chars = new char[encoding.GetMaxCharCount(buffer.Length)];
+            var current = new StringBuilder();
             var remaining = lastByte - firstByte;
             var afterCr = false;
 
             while (remaining > 0 && lines.Count < maxLines)
             {
                 var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
-                if (read == 0)
-                {
-                    break;
-                }
-
                 remaining -= read;
-                var i = 0;
-                while (i < read && lines.Count < maxLines)
+                var count = decoder.GetChars(buffer, 0, read, chars, 0, flush: read == 0 || remaining == 0);
+                for (var i = 0; i < count && lines.Count < maxLines; i++)
                 {
+                    var c = chars[i];
                     if (afterCr)
                     {
                         afterCr = false;
-                        if (buffer[i] == (byte)'\n')
+                        if (c == '\n')
                         {
-                            i++;
                             continue;
                         }
                     }
 
-                    var next = buffer.AsSpan(i, read - i).IndexOfAny(LineBreaks);
-                    if (next < 0)
+                    if (c is '\n' or '\r')
                     {
-                        current.Write(buffer, i, read - i);
-                        break;
+                        lines.Add(current.ToString());
+                        current.Clear();
+                        afterCr = c == '\r';
+                        continue;
                     }
 
-                    current.Write(buffer, i, next);
-                    lines.Add(encoding.GetString(current.GetBuffer(), 0, (int)current.Length));
-                    current.SetLength(0);
-                    i += next;
-                    afterCr = buffer[i] == (byte)'\r';
-                    i++;
+                    current.Append(c);
+                }
+
+                if (read == 0)
+                {
+                    break;
                 }
             }
 
             if (lines.Count < maxLines)
             {
-                lines.Add(encoding.GetString(current.GetBuffer(), 0, (int)current.Length));
+                lines.Add(current.ToString());
             }
 
             return new IntakeLines(lines, null);
@@ -194,13 +192,24 @@ public static class IntakeReader
     }
 
     /// <summary>
-    /// Line ends are found on bytes, so only encodings that keep ASCII as single bytes work. A
-    /// UTF-16 or UTF-32 setting is refused [U: chosen].
+    /// The scan finds line ends on bytes, so a setting must keep ASCII as single bytes. UTF-16 is
+    /// read only when the file has a BOM, which decides; reading lines back accepts the names
+    /// utf-16le and utf-16be that <see cref="IntakeFileInfo.Encoding"/> gives such a file.
     /// </summary>
-    private static Encoding? ResolveEncoding(string encodingName, out string? error)
+    private static Encoding? ResolveEncoding(string encodingName, out string? error, bool allowUtf16 = false)
     {
         error = null;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+        if (allowUtf16 && string.Equals(encodingName, "utf-16le", StringComparison.OrdinalIgnoreCase))
+        {
+            return new UnicodeEncoding(bigEndian: false, byteOrderMark: false);
+        }
+
+        if (allowUtf16 && string.Equals(encodingName, "utf-16be", StringComparison.OrdinalIgnoreCase))
+        {
+            return new UnicodeEncoding(bigEndian: true, byteOrderMark: false);
+        }
 
         try
         {
@@ -210,7 +219,7 @@ public static class IntakeReader
                 return encoding;
             }
 
-            error = LineIndexer.Utf16Message;
+            error = Utf16SettingMessage;
             return null;
         }
         catch (ArgumentException)
