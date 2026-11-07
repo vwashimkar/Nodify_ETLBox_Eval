@@ -125,7 +125,39 @@ public class AutoDetectorRuleTests
     {
         Assert.Equal([("csv", 1L, 5L)], Shape("a,b,c\n1,2,3\n,,,\n4,5,6\n7,8,9\n"));
         Assert.Equal([("csv", 1L, 3L), ("text", 4L, 4L)], Shape("a,b,c\n1,2,3\n4,5,6\n,,\n"));
-        Assert.Equal([("text", 1L, 1L), ("csv", 2L, 4L)], Shape("\"\"\na,b,c\n1,2,3\n4,5,6\n"));
+    }
+
+    // ---- G2b step 4: weak lines above a table -------------------------------------------------
+
+    [Fact]
+    public void AWeakLine_DirectlyAboveATable_IsItsSkipLine()
+    {
+        var container = Assert.Single(Detect("\"\"\na,b,c\n1,2,3\n4,5,6\n").Containers);
+
+        Assert.Equal(("csv", 1L, 4L, 1), (container.Format, container.ContentFirstLine!.Value, container.ContentLastLine!.Value, container.SkipLines));
+    }
+
+    [Fact]
+    public void WeakLines_BetweenTitleLinesAndATable_AreSkipLines_AndTheTitleNamesIt()
+    {
+        var container = Assert.Single(Detect("First title\n,,,\nSecond title\n,,,\na,b,c\n1,2,3\n4,5,6\n").Containers);
+
+        Assert.Equal(("csv", 1L, 7L, 4, "First title"), (container.Format, container.ContentFirstLine!.Value, container.ContentLastLine!.Value, container.SkipLines, container.Name));
+    }
+
+    [Fact]
+    public void AWeakLine_BetweenTwoTables_WithNoBlankLine_GoesToTheTableBelow()
+    {
+        var result = Detect("a,b\n1,2\n3,4\n\"\"\nv,w,x,y,z\n1,2,3,4,5\n6,7,8,9,0\n");
+
+        Assert.Equal([("csv", 1L, 3L), ("csv", 4L, 7L)], result.Containers.Select(c => (c.Format, c.ContentFirstLine!.Value, c.ContentLastLine!.Value)));
+        Assert.Equal(1, result.Containers[1].SkipLines);
+    }
+
+    [Fact]
+    public void AWeakLine_AfterATable_WithTextBelow_StaysItsOwnText()
+    {
+        Assert.Equal([("csv", 1L, 3L), ("text", 4L, 4L), ("text", 5L, 5L)], Shape("a,b,c\n1,2,3\n4,5,6\n,,\nclosing words here\n"));
     }
 
     [Theory]

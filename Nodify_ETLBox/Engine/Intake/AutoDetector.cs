@@ -32,6 +32,7 @@ public sealed class AutoDetector
     private Region? _open;
     private int _blankRun;
     private bool _tableClosedInParagraph;
+    private int _reofferedWeak;
 
     public AutoDetector(IntakeItem item, DetectorSettings settings, Encoding settingsEncoding)
     {
@@ -39,7 +40,8 @@ public sealed class AutoDetector
         _settings = settings;
         _settingsEncoding = settingsEncoding;
         _delimiters = settings.DelimiterCandidates.Where(d => d.Length == 1).Select(d => d[0]).ToArray();
-        _windowSize = settings.MaxPreambleLines + Math.Max(settings.MinTableLines, settings.MinKeyValueLines) + 2;
+        // Title lines and weak lines between them can both precede a table, so room for both.
+        _windowSize = 2 * settings.MaxPreambleLines + Math.Max(settings.MinTableLines, settings.MinKeyValueLines) + 2;
     }
 
     public IReadOnlyList<ContainerInfo> Containers => _containers;
@@ -449,7 +451,15 @@ public sealed class AutoDetector
                     continue;
                 }
 
+                // Weak lines after the region did not end it; offered again, they may sit above the next table.
+                var back = _open.TakeWeakTail();
                 CloseOpen(inParagraph: true);
+                if (back is not null)
+                {
+                    _window.InsertRange(0, back);
+                    _reofferedWeak = back.Count;
+                }
+
                 continue;
             }
 
@@ -459,6 +469,18 @@ public sealed class AutoDetector
             }
 
             var start = DecideStart();
+            if (start is null && _reofferedWeak > 0)
+            {
+                // No table below them: they stay a text container of their own, as in G2.
+                var first = _window[0];
+                var last = _window[_reofferedWeak - 1];
+                _window.RemoveRange(0, _reofferedWeak);
+                _reofferedWeak = 0;
+                EmitText(first.FirstLine, last.LastLine, first.StartByte, last.EndByte, ["only delimiters, spaces or quotes after the block; such a line cannot end it"]);
+                continue;
+            }
+
+            _reofferedWeak = 0;
             if (_open is { Kind: RegionKind.Text } && start is null)
             {
                 _open.AddText(_window[0]);
@@ -502,7 +524,10 @@ public sealed class AutoDetector
         var first = w[0];
         if (first.IsWeak)
         {
-            return null;
+            // A weak line may start a region only as a skip line above a table.
+            return FindTable() is { Skip: > 0 } weakTable
+                ? Region.TableFrom(w, weakTable.Skip, weakTable.Delimiter, weakTable.Count, weakTable.HeaderTolerated, weakTable.Ragged, _delimiters)
+                : null;
         }
 
         if (first.JsonValue)
@@ -538,11 +563,25 @@ public sealed class AutoDetector
     private (int Skip, int Delimiter, int Count, bool HeaderTolerated, bool Ragged)? FindTable()
     {
         var w = _window;
-        for (var skip = 0; skip <= Math.Min(_settings.MaxPreambleLines, w.Count - 1); skip++)
+        var titles = 0;
+        var weak = 0;
+        for (var skip = 0; skip <= Math.Min(2 * _settings.MaxPreambleLines, w.Count - 1); skip++)
         {
-            if (skip > 0 && !IsTitle(w[skip - 1]))
+            // Skip lines are up to MaxPreambleLines title lines, with up to as many weak lines among or below them.
+            if (skip > 0)
             {
-                return null;
+                var above = w[skip - 1];
+                titles += above.IsWeak ? 0 : 1;
+                weak += above.IsWeak ? 1 : 0;
+                if ((!above.IsWeak && !IsTitle(above)) || titles > _settings.MaxPreambleLines || weak > _settings.MaxPreambleLines)
+                {
+                    return null;
+                }
+            }
+
+            if (w[skip].IsWeak)
+            {
+                continue;
             }
 
             (int Delimiter, int Count, int Length, bool HeaderTolerated, bool Ragged)? best = null;
@@ -555,7 +594,7 @@ public sealed class AutoDetector
                 }
 
                 var (count, length, tolerated, ragged) = run.Value;
-                var titlesDiffer = Enumerable.Range(0, skip).All(t => w[t].Fields[d].Count != count);
+                var titlesDiffer = Enumerable.Range(0, skip).All(t => w[t].IsWeak || w[t].Fields[d].Count != count);
                 if (!titlesDiffer)
                 {
                     continue;
@@ -779,6 +818,7 @@ internal sealed class Region
     private long _lastLine;
     private long _endByte;
     private LineRange? _weakTail;
+    private List<Row>? _weakRows;
     private long _rows;
     private long _dataLines;
     private bool _tolerated;
@@ -868,9 +908,9 @@ internal sealed class Region
         _tableAlive = true;
         SkipLines = (int)window.Take(skip).Sum(r => r.LineCount);
 
-        if (skip > 0)
+        if (window.Take(skip).FirstOrDefault(r => !r.IsWeak) is { } titleRow)
         {
-            var titleFields = RowShape.Split(window[0].Text, _delimiterChar).Where(f => f.Length > 0);
+            var titleFields = RowShape.Split(titleRow.Text, _delimiterChar).Where(f => f.Length > 0);
             _title = string.Join(" ", titleFields).Trim().TrimEnd(':').Trim();
         }
 
@@ -915,6 +955,8 @@ internal sealed class Region
             }
 
             // Inside only when a real row follows; until then it is a tail that cannot end the region.
+            // A short tail keeps its rows, so they can be offered to the next region.
+            _weakRows = _weakTail is null ? [row] : _weakRows is { } kept && kept.Count < settings.MaxPreambleLines ? [.. kept, row] : null;
             _weakTail = _weakTail is { } tail ? tail with { LastLine = row.LastLine, EndByte = row.EndByte }
                 : new LineRange(row.FirstLine, row.LastLine, row.StartByte, row.EndByte);
             return true;
@@ -1001,9 +1043,23 @@ internal sealed class Region
         _otherText |= fields.Skip(1).Any(f => f.Length > 0 && !RowShape.IsNumeric(f));
     }
 
+    /// <summary>The weak lines at the end of the region, taken out of it, or null when there are none or too many to keep.</summary>
+    public List<Row>? TakeWeakTail()
+    {
+        var rows = _weakRows;
+        if (rows is not null)
+        {
+            _weakTail = null;
+            _weakRows = null;
+        }
+
+        return rows;
+    }
+
     private void Take(Row row)
     {
         _weakTail = null;
+        _weakRows = null;
         _lastLine = row.LastLine;
         _endByte = row.EndByte;
         _rows++;
