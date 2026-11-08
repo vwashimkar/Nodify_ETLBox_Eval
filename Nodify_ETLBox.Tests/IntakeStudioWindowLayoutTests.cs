@@ -213,7 +213,7 @@ public sealed partial class IntakeStudioWindowTests
                     var b = Bounds(i, viewport);
                     return b.Top >= -0.5 && b.Bottom <= viewport.ActualHeight + 0.5;
                 });
-            var root = (Grid)window.Content; Assert.True(inside >= 9, $"Only {inside} rows fit in the list at 820 x 560 (viewport {viewport.ViewportHeight:0}). Root {root.ActualHeight:0}: " + string.Join(", ", root.Children.OfType<FrameworkElement>().Select(c => $"row {Grid.GetRow(c)} {c.ActualHeight:0}")) + $"; details {Part<Border>(window, "DetailsPanel").ActualHeight:0}, preview {Part<TextBox>(window, "PreviewBox").ActualHeight:0}");
+            var root = (Grid)window.Content; Assert.True(inside >= 9, $"Only {inside} rows fit in the list at 820 x 560 (viewport {viewport.ViewportHeight:0}). Root {root.ActualHeight:0}: " + string.Join(", ", root.Children.OfType<FrameworkElement>().Select(c => $"row {Grid.GetRow(c)} {c.ActualHeight:0}")) + $"; details {Part<Border>(window, "DetailsPanel").ActualHeight:0}, preview {Part<Control>(window, "PreviewBox").ActualHeight:0}");
         });
 
     [Theory]
@@ -255,7 +255,7 @@ public sealed partial class IntakeStudioWindowTests
             Assert.All(rows.Take(8), b => Assert.True(b.Bottom <= viewer.ViewportHeight + 0.5,
                 $"A detail row ends at {b.Bottom:0}, the Details viewport is {viewer.ViewportHeight:0} high."));
 
-            var preview = Part<TextBox>(window, "PreviewBox");
+            var preview = Part<Control>(window, "PreviewBox");
             var lineHeight = preview.FontFamily.LineSpacing * preview.FontSize;
             Assert.True(preview.ActualHeight >= 6 * lineHeight, $"The preview is {preview.ActualHeight:0} px high, 6 lines need {6 * lineHeight:0}.");
 
