@@ -18,7 +18,10 @@ public static class ProjectNodeSettings
     private const string Columns = "columns";
 
     /// <summary>Optional properties the serializers leave out when empty. They are known, so never kept from the old file.</summary>
-    private static readonly HashSet<string> KnownOptional = new() { RelativePath, "subPartColumn" };
+    private static readonly HashSet<string> KnownOptional = new() { RelativePath, "subPartColumn", LayoutPlan };
+
+    /// <summary>File intake: the saved layout (an <c>IntakePlan</c> as JSON). Absent when the layout is automatic.</summary>
+    public const string LayoutPlan = "layoutPlan";
 
     public static JsonElement WriteCsvFile(CsvFileSettings settings, CsvColumnSelection columns, string? relativePath, JsonElement? loaded = null)
     {
@@ -53,8 +56,12 @@ public static class ProjectNodeSettings
     public static OutputSettings ReadOutput(JsonElement settings)
         => SettingsJson.DeserializeOutputSettings(settings.GetRawText());
 
-    /// <summary>A File intake node: path, relativePath, mode, encoding and maxFileSizeMb.</summary>
-    public static JsonElement WriteFileIntake(FileIntakeNodeSettings settings, string? relativePath, JsonElement? loaded = null)
+    /// <summary>
+    /// A File intake node: path, relativePath, mode, encoding and maxFileSizeMb, and the saved layout
+    /// (<paramref name="layoutPlanJson"/>) as a JSON value when there is one. The layout is written as
+    /// it is and never merged with the loaded one.
+    /// </summary>
+    public static JsonElement WriteFileIntake(FileIntakeNodeSettings settings, string? relativePath, JsonElement? loaded = null, string? layoutPlanJson = null)
     {
         var json = new JsonObject { ["path"] = settings.Path };
         if (relativePath is not null)
@@ -65,8 +72,26 @@ public static class ProjectNodeSettings
         json["mode"] = settings.Mode;
         json["encoding"] = settings.Encoding;
         json["maxFileSizeMb"] = settings.MaxFileSizeMb;
-        return Finish(json, loaded);
+        var finished = Finish(json, loaded);
+        if (layoutPlanJson is null)
+        {
+            return finished;
+        }
+
+        var withPlan = JsonNode.Parse(finished.GetRawText())!.AsObject();
+        withPlan[LayoutPlan] = JsonNode.Parse(layoutPlanJson);
+        return JsonSerializer.SerializeToElement(withPlan);
     }
+
+    /// <summary>
+    /// The saved layout of a File intake node as JSON text, or null when there is none. It is not
+    /// checked here: a layout that cannot be read never stops a project from loading (Intake Studio
+    /// says so when it scans).
+    /// </summary>
+    public static string? ReadLayoutPlan(JsonElement settings)
+        => settings.ValueKind == JsonValueKind.Object && settings.TryGetProperty(LayoutPlan, out var plan) && plan.ValueKind != JsonValueKind.Null
+            ? plan.GetRawText()
+            : null;
 
     /// <summary>
     /// A missing property takes its default. A mode or encoding this version does not know, or a

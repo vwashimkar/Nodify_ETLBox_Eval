@@ -53,6 +53,8 @@ public class NodeViewModel : ObservableObject
     private string _title;
     private bool _isRefreshing;
     private string? _intakeSummary;
+    private string? _intakePlanJson;
+    private bool _intakePlanReadable;
 
     public NodeViewModel(Guid id, string title, NodeType nodeType, Func<CsvFileSettings, bool>? loadPreviewAction = null)
     {
@@ -174,6 +176,29 @@ public class NodeViewModel : ObservableObject
     }
 
     public const string NoFileChosenText = "No file chosen";
+
+    public const string LayoutEditedText = "Layout: edited";
+
+    /// <summary>
+    /// File intake only: the saved layout (an <see cref="IntakePlan"/> as JSON), or null for the
+    /// automatic layout. Saved in the project; a text that cannot be read is kept as it is.
+    /// </summary>
+    public string? IntakePlanJson
+    {
+        get => _intakePlanJson;
+        set
+        {
+            if (SetProperty(ref _intakePlanJson, value))
+            {
+                // Read once here: a large layout is not parsed again for every canvas refresh.
+                _intakePlanReadable = value is not null && EtlDesigner.Engine.Intake.IntakePlanJson.Deserialize(value, out _) is not null;
+                OnPropertyChanged(nameof(IntakeLayoutText));
+            }
+        }
+    }
+
+    /// <summary>File intake only: "Layout: edited" when a readable saved layout exists, else null (the canvas hides it).</summary>
+    public string? IntakeLayoutText => NodeType == NodeType.FileIntake && _intakePlanReadable ? LayoutEditedText : null;
 
     /// <summary>File intake only: the file name (or "No file chosen") and the scan summary, shown on the canvas.</summary>
     public string? CanvasNote

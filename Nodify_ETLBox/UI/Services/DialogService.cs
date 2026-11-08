@@ -161,6 +161,16 @@ public class DialogService : IDialogService
         return viewModel.Choice;
     }
 
+    public bool AskYesNo(string title, string question)
+    {
+        // Owned by the active dialog (for example Intake Studio), else the main window.
+        var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current.MainWindow;
+        var answer = owner is null
+            ? MessageBox.Show(question, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No)
+            : MessageBox.Show(owner, question, title, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+        return answer == MessageBoxResult.Yes;
+    }
+
     public void ShowIntakeStudio(IntakeStudioViewModel viewModel)
     {
         var owner = Application.Current.MainWindow;

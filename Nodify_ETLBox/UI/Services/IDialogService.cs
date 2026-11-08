@@ -42,6 +42,9 @@ public interface IDialogService
     /// <summary>Asks "Save changes to &lt;name&gt;?" with Save, Don't save and Cancel (modal, owned by the main window).</summary>
     UnsavedChangesChoice AskUnsavedChanges(string projectName);
 
+    /// <summary>Asks a Yes / No question; No is the default answer. True only for Yes. A service without a dialog answers No.</summary>
+    bool AskYesNo(string title, string question) => false;
+
     /// <summary>
     /// Opens Intake Studio (modal, owned by the main window). Closing asks about unsaved settings
     /// through the view model and cancels a running scan.

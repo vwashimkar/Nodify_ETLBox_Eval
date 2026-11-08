@@ -52,6 +52,13 @@ public sealed class CanvasNodeTextTests
                 var scanned = await TextsOf(window, node);
                 Assert.Equal([node.Title, node.Subtitle!, "i01_sample.txt", "27 containers, 3 warnings"], scanned);
                 AssertNoGenericLines(scanned);
+
+                // G5b: a saved layout adds one short line; removing it hides the line again.
+                node.IntakePlanJson = IntakePlanJson.Serialize(new IntakePlan(IntakePlan.CurrentFormatVersion, "00", 1, null, IntakeMode.AutoDetect, []));
+                var edited = await TextsOf(window, node);
+                Assert.Equal([node.Title, node.Subtitle!, "i01_sample.txt", "27 containers, 3 warnings", NodeViewModel.LayoutEditedText], edited);
+                node.IntakePlanJson = null;
+                Assert.Equal(scanned, await TextsOf(window, node));
             }
             finally
             {
