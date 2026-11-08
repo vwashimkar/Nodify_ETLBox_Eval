@@ -86,6 +86,9 @@ public sealed class IntakeEditSession
 
     public bool CanUndo => _undo.Count > 0;
 
+    /// <summary>The steps that can be undone now (at most <see cref="EditSettings.MaxUndo"/>).</summary>
+    public int UndoSteps => _undo.Count;
+
     public bool CanRedo => _redo.Count > 0;
 
     // ---- Operations ----------------------------------------------------------------------------

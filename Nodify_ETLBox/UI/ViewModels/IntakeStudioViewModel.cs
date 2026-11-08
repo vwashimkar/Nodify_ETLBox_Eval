@@ -28,7 +28,7 @@ public sealed record IntakeDetailRow(string Label, string Value);
 /// window types; the window binds to it. The file is opened only while a scan or a preview read
 /// runs, read-only.
 /// </summary>
-public sealed class IntakeStudioViewModel : ObservableObject
+public sealed partial class IntakeStudioViewModel : ObservableObject
 {
     public const string ScanCancelledText = "Scan cancelled";
     public const string ScanFailedText = "The scan stopped. See the message below.";
@@ -64,6 +64,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
     private IntakeItem? _scannedItem;
     private string? _scannedEncoding;
     private bool _closeConfirmed;
+    private ObservableCollection<IntakeContainerRow> _containers = new();
 
     public IntakeStudioViewModel(
         FileIntakeNodeSettings settings,
@@ -71,7 +72,11 @@ public sealed class IntakeStudioViewModel : ObservableObject
         Func<string?, string?>? pickFile = null,
         Action<FileIntakeNodeSettings>? save = null,
         Func<UnsavedChangesChoice>? askUnsaved = null,
-        Func<string, IntakeItem>? createItem = null)
+        Func<string, IntakeItem>? createItem = null,
+        ILineageLog? lineage = null,
+        string? savedPlanJson = null,
+        Action<string?>? savePlan = null,
+        Func<string, bool>? confirm = null)
     {
         _savedSettings = settings ?? throw new ArgumentNullException(nameof(settings));
         _labels = labels ?? Labels.Empty;
@@ -80,6 +85,10 @@ public sealed class IntakeStudioViewModel : ObservableObject
         _askUnsaved = askUnsaved;
         _createItem = createItem ?? (path => new FileIntakeFactory().CreateItem(path));
         _context = SynchronizationContext.Current;
+        _lineage = lineage;
+        _savedPlanJson = savedPlanJson;
+        _savePlan = savePlan;
+        _confirm = confirm;
 
         _filePath = settings.Path;
         _mode = settings.Mode;
@@ -93,11 +102,12 @@ public sealed class IntakeStudioViewModel : ObservableObject
         ];
         Encodings = IntakeEncodings.Names.Select(n => new SettingChoice(n, NodeFactory.IntakeEncodingLabel(n), true)).ToList();
 
-        ScanCommand = new RelayCommand(_ => ScanTask = ScanAsync(), _ => !IsScanning && !string.IsNullOrWhiteSpace(FilePath));
+        ScanCommand = new RelayCommand(_ => ScanAgain(), _ => !IsScanning && !string.IsNullOrWhiteSpace(FilePath));
         CancelCommand = new RelayCommand(_ => Cancel(), _ => IsScanning);
         BrowseCommand = new RelayCommand(_ => Browse(), _ => !IsScanning && _pickFile is not null);
         SaveCommand = new RelayCommand(_ => Save(), _ => HasUnsavedChanges);
         CloseCommand = new RelayCommand(_ => RequestClose());
+        CreateEditCommands();
         EscapeCommand = new RelayCommand(_ =>
         {
             if (IsScanning)
@@ -201,7 +211,8 @@ public sealed class IntakeStudioViewModel : ObservableObject
         MaxFileSizeMb = MaxFileSizeMb
     };
 
-    public bool HasUnsavedChanges => CurrentSettings != _savedSettings;
+    /// <summary>The settings differ from the node's, or the layout differs from the one last saved (or opened).</summary>
+    public bool HasUnsavedChanges => CurrentSettings != _savedSettings || _layoutDirty;
 
     public bool IsScanning
     {
@@ -213,6 +224,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
                 ScanCommand.RaiseCanExecuteChanged();
                 CancelCommand.RaiseCanExecuteChanged();
                 BrowseCommand.RaiseCanExecuteChanged();
+                RaiseEditStates();
             }
         }
     }
@@ -263,7 +275,12 @@ public sealed class IntakeStudioViewModel : ObservableObject
     /// <summary>The settings of the last finished scan, or null.</summary>
     public FileIntakeNodeSettings? ScannedSettings { get; private set; }
 
-    public ObservableCollection<IntakeContainerRow> Containers { get; } = new();
+    /// <summary>The rows of the list. A large change replaces the whole collection (one reset instead of thousands of events).</summary>
+    public ObservableCollection<IntakeContainerRow> Containers
+    {
+        get => _containers;
+        private set => SetProperty(ref _containers, value);
+    }
 
     public IntakeContainerRow? SelectedContainer
     {
@@ -332,10 +349,18 @@ public sealed class IntakeStudioViewModel : ObservableObject
 
         IntakeItem? item = null;
         IntakeScanResult result;
+        LayoutStart? start = null;
         try
         {
             item = _createItem(settings.Path);
-            result = await new IntakeScanService(settings.ToIntakeSettings()).ScanAsync(item, progress, cancel.Token);
+            var intakeId = Guid.NewGuid().ToString("D");
+            result = await new IntakeScanService(settings.ToIntakeSettings(), _lineage).ScanAsync(item, progress, cancel.Token, intakeId);
+            if (result is { Error: null, Cancelled: false, Intake: { File: not null, Error: null, Cancelled: false } } && version == _scanVersion)
+            {
+                // A saved layout is checked against the whole file, so the session is made off the UI thread.
+                var scannedItem = item;
+                start = await Task.Run(() => StartSession(scannedItem, result, settings, intakeId));
+            }
         }
         catch (Exception ex)
         {
@@ -363,7 +388,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
 
         IsScanning = false;
         IsCancelVisible = false;
-        Apply(result, item, settings);
+        Apply(result, item, settings, start);
     }
 
     public void Cancel() => _scanCancel?.Cancel();
@@ -372,13 +397,17 @@ public sealed class IntakeStudioViewModel : ObservableObject
     public void Save()
     {
         var settings = CurrentSettings;
-        if (settings == _savedSettings)
+        if (settings != _savedSettings)
         {
-            return;
+            _save?.Invoke(settings);
+            _savedSettings = settings;
         }
 
-        _save?.Invoke(settings);
-        _savedSettings = settings;
+        if (_layoutDirty)
+        {
+            SaveLayout();
+        }
+
         RaiseUnsavedChanged();
     }
 
@@ -447,6 +476,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
 
     private void RaiseUnsavedChanged()
     {
+        _layoutDirty = _session is not null && !SameLayout(_session.Containers, _savedLayout);
         OnPropertyChanged(nameof(HasUnsavedChanges));
         SaveCommand.RaiseCanExecuteChanged();
     }
@@ -455,11 +485,13 @@ public sealed class IntakeStudioViewModel : ObservableObject
     {
         _previewVersion++;
         SelectedContainer = null;
-        Containers.Clear();
+        Containers = new ObservableCollection<IntakeContainerRow>();
+        ClearSession();
         Details.Clear();
         Reasons.Clear();
         IssueLines.Clear();
         PreviewLines.Clear();
+        PreviewRows.Clear();
         PreviewNote = null;
         PreviewText = string.Empty;
         Message = null;
@@ -471,7 +503,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
         _scannedEncoding = null;
     }
 
-    private void Apply(IntakeScanResult result, IntakeItem? item, FileIntakeNodeSettings settings)
+    private void Apply(IntakeScanResult result, IntakeItem? item, FileIntakeNodeSettings settings, LayoutStart? start)
     {
         if (result.Cancelled)
         {
@@ -487,19 +519,21 @@ public sealed class IntakeStudioViewModel : ObservableObject
             return;
         }
 
-        var validations = result.Validation.Containers.ToDictionary(v => v.Order);
-        foreach (var info in result.Intake.Containers)
+        _errors = result.Validation.Errors;
+        _warnings = result.Validation.Warnings;
+        if (start is { } layout)
         {
-            Containers.Add(ToRow(info, validations.GetValueOrDefault(info.Order)));
+            ShowSession(layout);
+        }
+        else
+        {
+            var validations = result.Validation.Containers.ToDictionary(v => v.Order);
+            Containers = new ObservableCollection<IntakeContainerRow>(
+                result.Intake.Containers.Select(info => ToRow(info, validations.GetValueOrDefault(info.Order))));
+            UpdateTotals();
         }
 
         var count = IntakeText.Count(Containers.Count, "container");
-        var errors = result.Validation.Errors;
-        var warnings = result.Validation.Warnings;
-        TotalsText = $"{count}, {IntakeText.Count(errors, "error")}, {IntakeText.Count(warnings, "warning")}";
-        Summary = string.Join(", ", new[] { count }
-            .Concat(errors > 0 ? [IntakeText.Count(errors, "error")] : [])
-            .Concat(warnings > 0 ? [IntakeText.Count(warnings, "warning")] : []));
 
         if (result.EncodingGuessed)
         {
@@ -563,9 +597,11 @@ public sealed class IntakeStudioViewModel : ObservableObject
         Reasons.Clear();
         IssueLines.Clear();
         PreviewLines.Clear();
+        PreviewRows.Clear();
         PreviewNote = null;
         PreviewText = string.Empty;
         var version = ++_previewVersion;
+        FillEditFields();
 
         if (SelectedContainer is not { } row)
         {
@@ -604,6 +640,11 @@ public sealed class IntakeStudioViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(info.Notes))
         {
             Details.Add(new IntakeDetailRow("Notes", info.Notes));
+        }
+
+        if (info.ConfirmedByUser)
+        {
+            Details.Add(new IntakeDetailRow("Layout", SetByYouText));
         }
 
         foreach (var reason in info.Reasons ?? [])
@@ -656,14 +697,15 @@ public sealed class IntakeStudioViewModel : ObservableObject
             return;
         }
 
+        var width = preview.Lines.Count == 0 ? 1 : preview.Lines[^1].LineNumber.ToString(CultureInfo.InvariantCulture).Length;
         foreach (var line in preview.Lines)
         {
             PreviewLines.Add(line);
+            PreviewRows.Add(new IntakePreviewRow(line.LineNumber, line.LineNumber.ToString(CultureInfo.InvariantCulture).PadLeft(width) + "  " + line.Text));
         }
 
-        var width = preview.Lines.Count == 0 ? 1 : preview.Lines[^1].LineNumber.ToString(CultureInfo.InvariantCulture).Length;
-        PreviewText = string.Join(Environment.NewLine,
-            preview.Lines.Select(l => l.LineNumber.ToString(CultureInfo.InvariantCulture).PadLeft(width) + "  " + l.Text));
+        PreviewText = string.Join(Environment.NewLine, PreviewRows.Select(r => r.Text));
+        SyncPreviewSelection();
 
         var notes = new List<string>();
         if (preview.Error is not null)
@@ -673,7 +715,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
 
         if (preview.Truncated)
         {
-            notes.Add($"Only the first {PreviewMaxLines} lines are shown; more lines are not shown.");
+            notes.Add(PreviewShortText);
         }
 
         if (preview.LinesCut)
