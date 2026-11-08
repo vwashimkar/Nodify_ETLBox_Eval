@@ -32,7 +32,7 @@ public interface IRawArchive
 /// <summary>
 /// Records what happened in each run (plan section 10): input id and hash, containers, which layout
 /// and definition produced which output, counts, times, user and tool version. This is the lineage
-/// and data quality metadata DMBOK asks for. First implementation: <c>TextFileLineageLog</c>,
+/// and data quality metadata DMBOK asks for. First implementation: <see cref="TextFileLineageLog"/>,
 /// one JSON line per event. An implementation never throws.
 /// </summary>
 public interface ILineageLog
