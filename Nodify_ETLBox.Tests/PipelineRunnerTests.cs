@@ -275,6 +275,9 @@ public class PipelineRunnerTests
 /// </summary>
 internal sealed class LicenceLimitFactAttribute : FactAttribute
 {
+    /// <summary>True when ETLBox reads past record 5,000 without a licence error (probed once per run).</summary>
+    internal static bool HasValidLicence => ValidLicence.Value;
+
     private static readonly Lazy<bool> ValidLicence = new(() =>
     {
         // A private copy: the preview cancel tests open the shared c10 file exclusively.

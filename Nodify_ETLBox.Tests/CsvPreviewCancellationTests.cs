@@ -100,6 +100,17 @@ public class CsvPreviewCancellationTests
 
     private static void AssertCancelledOrComplete(CsvPreview preview, CancelCase cancelCase)
     {
+        // Depends on the licence state. Without a valid licence ETLBox reads ahead of the row
+        // step and can pass its 5,000-row limit before the stop lands (seen in full runs while
+        // DLL tests compiled next to this one; the stop count varies, see CLAUDE.md). The
+        // product then reports the licence stop with no rows; that is documented, not a hang.
+        if (preview.Error is not null && !LicenceLimitFactAttribute.HasValidLicence)
+        {
+            Assert.StartsWith("The ETLBox licence stopped the preview.", preview.Error);
+            Assert.Empty(preview.Rows);
+            return;
+        }
+
         Assert.Null(preview.Error);
 
         if (preview.Cancelled)
