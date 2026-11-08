@@ -1,0 +1,266 @@
+<Window x:Class="Nodify_ETLBox.UI.IntakeStudioWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Intake Studio"
+        Width="1100"
+        Height="720"
+        MinWidth="820"
+        MinHeight="560"
+        ResizeMode="CanResize"
+        Background="{DynamicResource surface-brush}"
+        Foreground="{DynamicResource text-brush}"
+        FontFamily="{DynamicResource font-text}"
+        FontSize="{DynamicResource font-body}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/DialogStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+            <!-- A text that is hidden while its value is null. -->
+            <Style x:Key="HiddenWhenNull" TargetType="Border">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Null}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="SectionTitle" TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <!-- Esc cancels a running scan; with no scan it closes (asking about unsaved settings). -->
+        <KeyBinding Key="Escape" Command="{Binding EscapeCommand, Mode=OneWay}" />
+    </Window.InputBindings>
+
+    <Grid Margin="{DynamicResource Thickness16}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ===== Top bar: file, mode, encoding, Scan, Cancel, progress ===== -->
+        <Border Grid.Row="0" BorderBrush="{DynamicResource border-brush}" BorderThickness="1"
+                Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}">
+            <StackPanel>
+                <WrapPanel>
+                    <TextBlock Text="File" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                    <TextBlock Text="{Binding FileName, Mode=OneWay}" ToolTip="{Binding FileToolTip, Mode=OneWay}"
+                               FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="160" MaxWidth="360"
+                               TextTrimming="CharacterEllipsis" Margin="{DynamicResource Thickness4}" />
+                    <Button Content="Browse..." Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}"
+                            Command="{Binding BrowseCommand, Mode=OneWay}" />
+                    <TextBlock Text="Mode" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                    <ComboBox Width="130" Margin="{DynamicResource Thickness4}" ItemsSource="{Binding Modes, Mode=OneWay}"
+                              DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Mode, Mode=TwoWay}"
+                              AutomationProperties.Name="Mode" />
+                    <TextBlock Text="Encoding" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
+                    <ComboBox Width="230" Margin="{DynamicResource Thickness4}" ItemsSource="{Binding Encodings, Mode=OneWay}"
+                              DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Encoding, Mode=TwoWay}"
+                              AutomationProperties.Name="Encoding" />
+                    <Button Content="Scan" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}" MinWidth="80"
+                            Command="{Binding ScanCommand, Mode=OneWay}" />
+                    <Button Content="Cancel" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}" MinWidth="80"
+                            Command="{Binding CancelCommand, Mode=OneWay}"
+                            Visibility="{Binding IsCancelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                </WrapPanel>
+                <ProgressBar Height="8" Minimum="0" Maximum="100" Margin="{DynamicResource Thickness4}"
+                             Value="{Binding ProgressPercent, Mode=OneWay}" />
+                <TextBlock Text="{Binding ProgressText, Mode=OneWay}" Foreground="{DynamicResource text-muted-brush}"
+                           Margin="{DynamicResource Thickness4}" />
+            </StackPanel>
+        </Border>
+
+        <!-- ===== Middle: containers (left) and details with preview (right) ===== -->
+        <Grid Grid.Row="1" Margin="{DynamicResource Thickness8}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="4*" MinWidth="280" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="6*" MinWidth="320" />
+            </Grid.ColumnDefinitions>
+
+            <DockPanel Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top" Text="Containers" Style="{StaticResource SectionTitle}" />
+
+                <!-- Column headers; the rows share the column widths. -->
+                <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource border-brush}" BorderThickness="0,0,0,1"
+                        Padding="{DynamicResource Thickness4}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="90" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="#" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="Part" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="2" Text="Lines" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="3" Text="Status" FontWeight="SemiBold" />
+                    </Grid>
+                </Border>
+
+                <ListBox ItemsSource="{Binding Containers, Mode=OneWay}"
+                         SelectedItem="{Binding SelectedContainer, Mode=TwoWay}"
+                         HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         KeyboardNavigation.DirectionalNavigation="Contained"
+                         AutomationProperties.Name="Containers">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ToolTip="{Binding Confidence, Mode=OneWay, StringFormat='Guess confidence: {0}'}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="36" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="90" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding Number, Mode=OneWay}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Part, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="2" Text="{Binding Lines, Mode=OneWay}" FontFamily="{DynamicResource font-data}" />
+                                <TextBlock Grid.Column="3" Text="{Binding StatusText, Mode=OneWay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status, Mode=OneWay}" Value="Warning">
+                                                    <Setter Property="Foreground" Value="{DynamicResource warning-brush}" />
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status, Mode=OneWay}" Value="Error">
+                                                    <Setter Property="Foreground" Value="{DynamicResource error-brush}" />
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding IssueSummary, Mode=OneWay}"
+                                           Foreground="{DynamicResource text-muted-brush}" FontSize="{DynamicResource font-caption}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Background="Transparent" ResizeBehavior="PreviousAndNext" />
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="2*" MinHeight="120" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="3*" MinHeight="160" />
+                </Grid.RowDefinitions>
+
+                <!-- Details: format, delimiter, header, skip lines, reasons, then the checks. -->
+                <DockPanel Grid.Row="0">
+                    <TextBlock DockPanel.Dock="Top" Text="Details" Style="{StaticResource SectionTitle}" />
+                    <Border BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Padding="{DynamicResource Thickness8}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <TextBlock Text="Choose a container on the left to see its details."
+                                           Foreground="{DynamicResource text-muted-brush}" TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedContainer, Mode=OneWay}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <ItemsControl ItemsSource="{Binding Details, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Label, Mode=OneWay}" Foreground="{DynamicResource text-muted-brush}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Value, Mode=OneWay}" TextWrapping="Wrap" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding Reasons, Mode=OneWay}" Margin="{DynamicResource Thickness4}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource text-muted-brush}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding IssueLines, Mode=OneWay}" Margin="{DynamicResource Thickness4}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Mode=OneWay}" TextWrapping="Wrap" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </DockPanel>
+
+                <GridSplitter Grid.Row="1" Height="8" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                              Background="Transparent" ResizeBehavior="PreviousAndNext" />
+
+                <!-- Preview: file line numbers, read-only, selectable, no wrapping. -->
+                <DockPanel Grid.Row="2">
+                    <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource SectionTitle}" />
+                    <TextBlock DockPanel.Dock="Bottom" Text="{Binding PreviewNote, Mode=OneWay}" TextWrapping="Wrap"
+                               Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
+                    <TextBox Text="{Binding PreviewText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             IsReadOnlyCaretVisible="True"
+                             FontFamily="{DynamicResource font-data}"
+                             FontSize="{DynamicResource font-body}"
+                             TextWrapping="NoWrap"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"
+                             AutomationProperties.Name="Preview" />
+                </DockPanel>
+            </Grid>
+        </Grid>
+
+        <!-- ===== Bottom: totals, messages, encoding notice, buttons ===== -->
+        <DockPanel Grid.Row="2">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Button Content="Save settings" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
+                        Command="{Binding SaveCommand, Mode=OneWay}" />
+                <Button Content="Close" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
+                        Command="{Binding CloseCommand, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="{Binding TotalsText, Mode=OneWay}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                <Border Tag="{Binding Message, Mode=OneWay}" Style="{StaticResource HiddenWhenNull}"
+                        BorderBrush="{DynamicResource border-brush}" BorderThickness="1"
+                        Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}" Margin="{DynamicResource Thickness4}">
+                    <TextBlock Text="{Binding Message, Mode=OneWay}" TextWrapping="Wrap" />
+                </Border>
+                <Border Tag="{Binding EncodingNotice, Mode=OneWay}" Style="{StaticResource HiddenWhenNull}"
+                        BorderBrush="{DynamicResource warning-brush}" BorderThickness="1"
+                        Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}" Margin="{DynamicResource Thickness4}">
+                    <TextBlock TextWrapping="Wrap">
+                        <Run Text="Encoding: " FontWeight="SemiBold" /><Run Text="{Binding EncodingNotice, Mode=OneWay}" />
+                    </TextBlock>
+                </Border>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

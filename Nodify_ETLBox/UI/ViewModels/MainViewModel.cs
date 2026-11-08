@@ -58,6 +58,7 @@ public partial class MainViewModel : ObservableObject
 
         NodeFactory.CsvPreviewHandler = ShowCsvPreview;
         NodeFactory.ParseValueConfigureHandler = ShowParseValue;
+        NodeFactory.FileIntakeConfigureHandler = ShowIntakeStudio;
 
         HookCountryRefreshListeners();
         HookCsvFileValidationListeners();
@@ -487,6 +488,40 @@ public partial class MainViewModel : ObservableObject
         {
             MessageBox.Show($"Failed to open CSV preview.\n\n{ex}", "Load preview error", MessageBoxButton.OK, MessageBoxImage.Error);
             Editor.Issues.Add($"CsvFile: {ex}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Opens Intake Studio for a File intake node. Save writes the settings to the node's rows
+    /// (only a change marks the project dirty). The scan totals go onto the node when the last scan
+    /// used the node's settings.
+    /// </summary>
+    internal bool ShowIntakeStudio(NodeViewModel node)
+    {
+        try
+        {
+            var viewModel = new IntakeStudioViewModel(
+                node.GetFileIntakeSettings(),
+                NodeFactory.Labels,
+                _dialogService.PickIntakeFile,
+                save: node.SetFileIntakeSettings,
+                askUnsaved: () => _dialogService.AskUnsavedChanges($"the settings of {node.Title}"));
+
+            _dialogService.ShowIntakeStudio(viewModel);
+
+            if (viewModel.ScannedSettings is { } scanned && scanned == node.GetFileIntakeSettings())
+            {
+                node.IntakeSummary = viewModel.Summary;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write("Intake Studio", ex);
+            _dialogService.ShowError("Intake Studio", "Intake Studio could not be opened. The details are in unhandled-exception.log next to the program.");
+            Editor.Issues.Add("Intake Studio could not be opened. The details are in unhandled-exception.log next to the program.");
             return false;
         }
     }

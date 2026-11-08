@@ -62,6 +62,9 @@ public sealed class ProjectEditorTests : IDisposable
         public string? PickProjectToOpen(string? currentPath) => PathToOpen;
         public string? PickProjectToSave(string? currentPath, string projectName) => PathToSave;
         public void ShowError(string title, string message) => Errors.Add(message);
+        public Action<IntakeStudioViewModel>? OnIntakeStudio { get; set; }
+        public void ShowIntakeStudio(IntakeStudioViewModel viewModel) => OnIntakeStudio?.Invoke(viewModel);
+        public string? PickIntakeFile(string? currentPath) => PathToOpen;
 
         public UnsavedChangesChoice AskUnsavedChanges(string projectName)
         {

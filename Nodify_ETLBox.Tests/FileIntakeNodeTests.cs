@@ -303,4 +303,112 @@ public sealed class FileIntakeNodeTests : IDisposable
         Assert.Equal(MainViewModel.GenerateDllLegacyHint, main.GenerateDllBlockedReason);
         Assert.False(main.GenerateDllCommand.CanExecute(null));
     }
+
+    [Fact]
+    public void IntakeStudio_SaveWritesTheSettings_AndMarksTheProjectDirty_OnlyWhenSomethingChanged()
+    {
+        var dialogs = new ProjectEditorTests.FakeDialogs();
+        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent());
+        var node = AddIntake(main.Editor);
+        main.Editor.MarkClean();
+
+        dialogs.OnIntakeStudio = vm => { vm.Save(); vm.CloseCommand.Execute(null); };
+        Assert.True(main.ShowIntakeStudio(node));
+        Assert.False(main.Editor.IsDirty);
+        Assert.Empty(dialogs.Asked);
+
+        dialogs.OnIntakeStudio = vm => { vm.Mode = FileIntakeNodeSettings.MarkersMode; vm.Encoding = "utf-16le"; vm.SaveCommand.Execute(null); };
+        main.ShowIntakeStudio(node);
+        Assert.True(main.Editor.IsDirty);
+        Assert.Equal(FileIntakeNodeSettings.MarkersMode, node.GetFileIntakeSettings().Mode);
+        Assert.Equal("utf-16le", node.GetFileIntakeSettings().Encoding);
+    }
+
+    [Fact]
+    public void IntakeStudio_UnsavedChanges_AskOnce_AndDontSaveKeepsTheNode()
+    {
+        var dialogs = new ProjectEditorTests.FakeDialogs { Answer = EtlDesigner.UI.Services.UnsavedChangesChoice.DontSave };
+        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent());
+        var node = AddIntake(main.Editor);
+        var closed = 0;
+
+        dialogs.OnIntakeStudio = vm =>
+        {
+            vm.CloseRequested += (_, _) => closed++;
+            vm.Mode = FileIntakeNodeSettings.MarkersMode;
+            vm.EscapeCommand.Execute(null);
+            Assert.True(vm.ConfirmClose());
+        };
+        main.ShowIntakeStudio(node);
+
+        Assert.Equal(1, closed);
+        Assert.Single(dialogs.Asked);
+        Assert.Equal(FileIntakeNodeSettings.AutoDetect, node.GetFileIntakeSettings().Mode);
+    }
+
+    [Fact]
+    public void IntakeStudio_AScanWithTheNodesSettings_PutsTheTotalsOnTheNode_AScanWithUnsavedSettingsDoesNot()
+    {
+        var dialogs = new ProjectEditorTests.FakeDialogs();
+        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent());
+        var node = AddIntake(main.Editor);
+        node.SetFileIntakeSettings(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") });
+        main.Editor.MarkClean();
+
+        dialogs.OnIntakeStudio = vm => Task.Run(vm.ScanAsync).Wait(TimeSpan.FromSeconds(30));
+        main.ShowIntakeStudio(node);
+        Assert.Equal("27 containers, 3 warnings", node.IntakeSummary);
+        Assert.Equal("i01_sample.txt" + Environment.NewLine + "27 containers, 3 warnings", node.CanvasNote);
+        Assert.False(main.Editor.IsDirty);
+
+        dialogs.OnIntakeStudio = vm => { vm.Mode = FileIntakeNodeSettings.MarkersMode; Task.Run(vm.ScanAsync).Wait(TimeSpan.FromSeconds(30)); };
+        main.ShowIntakeStudio(node);
+        Assert.Equal("27 containers, 3 warnings", node.IntakeSummary);
+    }
+}
+
+/// <summary>The File intake handler and labels are static, so these tests do not run beside the classes that create a MainViewModel.</summary>
+[Collection(NodeFactoryHandlerCollection.Name)]
+public class FileIntakeStaticHandlerTests
+{
+    [Fact]
+    public void ConfigureCommand_AndDoubleClick_CallTheHandlerWithTheNode()
+    {
+        var node = NodeFactory.CreateFileIntake(new Point(0, 0));
+        var opened = new List<NodeViewModel>();
+        var previous = NodeFactory.FileIntakeConfigureHandler;
+        NodeFactory.FileIntakeConfigureHandler = n => { opened.Add(n); return true; };
+        try
+        {
+            node.ConfigureCommand!.Execute(null);
+            node.DoubleClickCommand!.Execute(null);
+        }
+        finally
+        {
+            NodeFactory.FileIntakeConfigureHandler = previous;
+        }
+
+        Assert.Equal([node, node], opened);
+        Assert.Null(NodeFactory.CreateParseValue(new Point(0, 0)).DoubleClickCommand);
+    }
+
+    [Fact]
+    public void TheTitleAndSubtitle_ComeFromTheLabels_AndCreatingANodeCallsTheFirstUseHook()
+    {
+        var (labels, hook) = (NodeFactory.Labels, NodeFactory.FileIntakeCreated);
+        var created = 0;
+        NodeFactory.Labels = Labels.Parse("node.fileintake.title = Instrument file\nnode.fileintake.subtitle = Splits exports");
+        NodeFactory.FileIntakeCreated = () => created++;
+        try
+        {
+            var node = NodeFactory.CreateFileIntake(new Point(0, 0));
+            Assert.Equal("Instrument file", node.Title);
+            Assert.Equal("Splits exports", node.Subtitle);
+            Assert.Equal(1, created);
+        }
+        finally
+        {
+            (NodeFactory.Labels, NodeFactory.FileIntakeCreated) = (labels, hook);
+        }
+    }
 }

@@ -57,6 +57,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
     private string? _totalsText;
     private IntakeContainerRow? _selectedContainer;
     private string? _previewNote;
+    private string _previewText = string.Empty;
     private int _scanVersion;
     private int _previewVersion;
     private CancellationTokenSource? _scanCancel;
@@ -294,6 +295,13 @@ public sealed class IntakeStudioViewModel : ObservableObject
         private set => SetProperty(ref _previewNote, value);
     }
 
+    /// <summary>The preview as one read-only text: each line starts with its file line number.</summary>
+    public string PreviewText
+    {
+        get => _previewText;
+        private set => SetProperty(ref _previewText, value);
+    }
+
     /// <summary>Starts a scan with the settings shown. A running scan is never doubled.</summary>
     public async Task ScanAsync()
     {
@@ -453,6 +461,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
         IssueLines.Clear();
         PreviewLines.Clear();
         PreviewNote = null;
+        PreviewText = string.Empty;
         Message = null;
         EncodingNotice = null;
         TotalsText = null;
@@ -555,6 +564,7 @@ public sealed class IntakeStudioViewModel : ObservableObject
         IssueLines.Clear();
         PreviewLines.Clear();
         PreviewNote = null;
+        PreviewText = string.Empty;
         var version = ++_previewVersion;
 
         if (SelectedContainer is not { } row)
@@ -650,6 +660,10 @@ public sealed class IntakeStudioViewModel : ObservableObject
         {
             PreviewLines.Add(line);
         }
+
+        var width = preview.Lines.Count == 0 ? 1 : preview.Lines[^1].LineNumber.ToString(CultureInfo.InvariantCulture).Length;
+        PreviewText = string.Join(Environment.NewLine,
+            preview.Lines.Select(l => l.LineNumber.ToString(CultureInfo.InvariantCulture).PadLeft(width) + "  " + l.Text));
 
         var notes = new List<string>();
         if (preview.Error is not null)
