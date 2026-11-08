@@ -91,6 +91,62 @@ public sealed class IntakeStudioWindowTests
             }
         });
 
+    /// <summary>
+    /// Screens for the report: i01 scanned (Auto-detect), container 12 selected, at 96 and 144 DPI, at
+    /// 1100 x 720 and 820 x 560, in reports/screens. Parts that do not fit inside the window's client
+    /// area are written to g4c-clipping-&lt;theme&gt;.txt next to them (not a failure: the report says it).
+    /// </summary>
+    [Theory]
+    [InlineData(WpfTheme.Light)]
+    [InlineData(WpfTheme.Dark)]
+    public Task Screens_ForTheReport(WpfTheme theme)
+        => _wpf.RunAsync(async () =>
+        {
+            WpfHost.SetTheme(theme);
+            var vm = Studio();
+            var window = new IntakeStudioWindow { DataContext = vm };
+            var folder = Path.Combine(WpfHost.ReportsFolder(), "screens");
+            var clipping = new List<string>();
+            try
+            {
+                WpfHost.Layout(window, 1100, 720);
+                await Scan(vm, window);
+                await Select(vm, window, 12);
+
+                foreach (var (width, height) in new[] { (1100, 720), (820, 560) })
+                {
+                    WpfHost.Layout(window, width, height);
+                    await WpfHost.Settle();
+                    var client = (FrameworkElement)System.Windows.Media.VisualTreeHelper.GetChild(window, 0);
+                    foreach (var name in Parts.Where(n => n != "CancelButton"))
+                    {
+                        var part = (FrameworkElement)window.FindName(name);
+                        var corner = part.TranslatePoint(new Point(part.ActualWidth, part.ActualHeight), client);
+                        if (corner.X > client.ActualWidth + 0.5 || corner.Y > client.ActualHeight + 0.5)
+                        {
+                            clipping.Add($"{width} x {height}: {name} ends at {corner.X:0} x {corner.Y:0}, client area {client.ActualWidth:0} x {client.ActualHeight:0}");
+                        }
+                    }
+
+                    foreach (var dpi in new[] { 96, 144 })
+                    {
+                        var path = Path.Combine(folder, $"g4c-studio-{theme.ToString().ToLowerInvariant()}-{dpi}-{width}x{height}.png");
+                        WpfHost.RenderPng(window, dpi, path);
+
+                        Assert.True(new FileInfo(path).Length < 400 * 1024, $"{path} is 400 KB or more.");
+                        Assert.True(WpfHost.DistinctColours(path) > 5, $"{path} looks blank.");
+                    }
+                }
+
+                File.WriteAllLines(Path.Combine(folder, $"g4c-clipping-{theme.ToString().ToLowerInvariant()}.txt"),
+                    clipping.Count == 0 ? ["No named part ends outside the client area."] : clipping);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
     [Theory]
     [InlineData(WpfTheme.Light)]
     [InlineData(WpfTheme.Dark)]
