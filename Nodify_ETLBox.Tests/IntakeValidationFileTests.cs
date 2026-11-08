@@ -91,27 +91,16 @@ public class IntakeValidationLargeFileTests : IDisposable
     private static readonly TimeSpan LargeLimit = TimeSpan.FromSeconds(60);
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "intake-g3-" + Guid.NewGuid().ToString("N"));
     private readonly ITestOutputHelper _output;
+    private readonly StressFiles _stress;
 
-    public IntakeValidationLargeFileTests(ITestOutputHelper output)
+    public IntakeValidationLargeFileTests(ITestOutputHelper output, StressFiles stress)
     {
         _output = output;
+        _stress = stress;
         Directory.CreateDirectory(_folder);
     }
 
     public void Dispose() => ProjectEditorTests.DeleteTempFolder(_folder);
-
-    private string WriteRepeated(int copies, string name)
-    {
-        var sample = File.ReadAllBytes(IntakeTestData.PathOf("i09_sample_nomarkers"));
-        var path = Path.Combine(_folder, name);
-        using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20);
-        for (var i = 0; i < copies; i++)
-        {
-            output.Write(sample);
-        }
-
-        return path;
-    }
 
     private static IntakeItem Observed(string path, Action<long> onRead)
     {
@@ -136,8 +125,8 @@ public class IntakeValidationLargeFileTests : IDisposable
     [Fact]
     public async Task Cancel_20Times_DuringValidation_ReleasesTheFile()
     {
-        var original = WriteRepeated(2000, "stress.txt");
-        var result = IntakeReader.Read(new FileIntakeFactory().CreateItem(original), new IntakeSettings(), null, CancellationToken.None);
+        var original = _stress.N2000;
+        var result = _stress.N2000Result.Result;
         Assert.Null(result.Error);
 
         for (var i = 0; i < 20; i++)
@@ -166,9 +155,8 @@ public class IntakeValidationLargeFileTests : IDisposable
     [Fact]
     public async Task Progress_IsReported_AndTheLastReportEqualsTheTotals()
     {
-        var path = WriteRepeated(2000, "progress.txt");
-        var item = new FileIntakeFactory().CreateItem(path);
-        var result = IntakeReader.Read(item, new IntakeSettings(), null, CancellationToken.None);
+        var item = new FileIntakeFactory().CreateItem(_stress.N2000);
+        var result = _stress.N2000Result.Result;
         var reports = new List<IntakeProgress>();
 
         var clock = Stopwatch.StartNew();
@@ -196,27 +184,29 @@ public class IntakeValidationLargeFileTests : IDisposable
     /// <summary>The G1 method: full collections at 20 points of the file, minus the share of the validation result so far.</summary>
     private (long Retained, long MaxExcess) Measure(int copies)
     {
-        var path = WriteRepeated(copies, $"memory{copies}.txt");
+        var path = _stress.Path(copies);
         var size = new FileInfo(path).Length;
-        var result = IntakeReader.Read(new FileIntakeFactory().CreateItem(path), new IntakeSettings(), null, CancellationToken.None);
+        var result = copies == 2000
+            ? _stress.N2000Result.Result
+            : IntakeReader.Read(new FileIntakeFactory().CreateItem(path), new IntakeSettings(), null, CancellationToken.None);
         var samples = new List<(long Bytes, long Live)>();
         var nextSample = size / 20;
         GC.Collect();
         GC.WaitForPendingFinalizers();
-        var baseline = GC.GetTotalMemory(forceFullCollection: true);
+        var baseline = LiveMemory.Bytes();
         var item = Observed(path, position =>
         {
             if (position >= nextSample)
             {
                 nextSample += size / 20;
-                samples.Add((position, GC.GetTotalMemory(forceFullCollection: true) - baseline));
+                samples.Add((position, LiveMemory.Bytes() - baseline));
             }
         });
 
         var clock = Stopwatch.StartNew();
         var validation = IntakeValidator.Validate(item, result, null, CancellationToken.None);
         clock.Stop();
-        var retained = GC.GetTotalMemory(forceFullCollection: true) - baseline;
+        var retained = LiveMemory.Bytes() - baseline;
         var excess = samples.Max(s => s.Live - (long)(retained * ((double)s.Bytes / size)));
 
         Assert.Null(validation.Error);

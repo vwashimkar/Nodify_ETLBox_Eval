@@ -14,22 +14,22 @@ public class AutoDetectLargeFileTests : IDisposable
     private static readonly TimeSpan LargeLimit = TimeSpan.FromSeconds(60);
 
     private readonly ITestOutputHelper _output;
+    private readonly StressFiles _stress;
     private readonly string _folder = Directory.CreateTempSubdirectory("g2_large_").FullName;
 
-    public AutoDetectLargeFileTests(ITestOutputHelper output) => _output = output;
+    public AutoDetectLargeFileTests(ITestOutputHelper output, StressFiles stress)
+    {
+        _output = output;
+        _stress = stress;
+    }
 
     public void Dispose() => ProjectEditorTests.DeleteTempFolder(_folder);
 
-    private string WriteRepeated(int copies)
+    /// <summary>A private copy of the shared file, for a test that deletes it.</summary>
+    private string CopyOf(int copies, int number)
     {
-        var sample = File.ReadAllBytes(IntakeTestData.PathOf("i09_sample_nomarkers"));
-        var path = Path.Combine(_folder, $"i09_x{copies}.txt");
-        using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20);
-        for (var i = 0; i < copies; i++)
-        {
-            output.Write(sample);
-        }
-
+        var path = Path.Combine(_folder, $"i09_x{copies}_{number}.txt");
+        File.Copy(_stress.Path(copies), path);
         return path;
     }
 
@@ -50,12 +50,10 @@ public class AutoDetectLargeFileTests : IDisposable
     public async Task N2000_GivesTheSameContainers_WhateverTheReadSize()
     {
         const int copies = 2000;
-        var path = WriteRepeated(copies);
+        var path = _stress.N2000;
         var item = new FileIntakeFactory().CreateItem(path);
 
-        var clock = Stopwatch.StartNew();
-        var whole = await TestTimeout.Run(() => IntakeReader.ReadAsync(item, new IntakeSettings(), null, CancellationToken.None), LargeLimit);
-        var ms = clock.ElapsedMilliseconds;
+        var (whole, ms) = _stress.N2000Result;
         var small = await TestTimeout.Run(() => IntakeReader.ReadAsync(WithStream(item, s => new SmallReadStream(s, 4093)), new IntakeSettings(), null, CancellationToken.None), LargeLimit);
 
         Assert.Null(whole.Error);
@@ -78,26 +76,26 @@ public class AutoDetectLargeFileTests : IDisposable
     /// <summary>The G1 method: full collections at 20 points of the file, minus the container list's share so far.</summary>
     private (int Containers, long Retained, long Peak, long MaxExcess, long Ms) Measure(int copies)
     {
-        var path = WriteRepeated(copies);
+        var path = _stress.Path(copies);
         var size = new FileInfo(path).Length;
         var samples = new List<(long Bytes, long Live)>();
         var nextSample = size / 20;
         GC.Collect();
         GC.WaitForPendingFinalizers();
-        var baseline = GC.GetTotalMemory(forceFullCollection: true);
+        var baseline = LiveMemory.Bytes();
         var item = WithStream(new FileIntakeFactory().CreateItem(path), inner => new IntakeLargeFileTests.ObservingStream(inner, position =>
         {
             if (position >= nextSample)
             {
                 nextSample += size / 20;
-                samples.Add((position, GC.GetTotalMemory(forceFullCollection: true) - baseline));
+                samples.Add((position, LiveMemory.Bytes() - baseline));
             }
         }));
 
         var clock = Stopwatch.StartNew();
         var result = IntakeReader.Read(item, new IntakeSettings(), null, CancellationToken.None);
         clock.Stop();
-        var retained = GC.GetTotalMemory(forceFullCollection: true) - baseline;
+        var retained = LiveMemory.Bytes() - baseline;
         var excess = samples.Max(s => s.Live - (long)(retained * ((double)s.Bytes / size)));
 
         Assert.Null(result.Error);
@@ -112,7 +110,7 @@ public class AutoDetectLargeFileTests : IDisposable
     {
         for (var i = 0; i < 20; i++)
         {
-            var path = WriteRepeated(200);
+            var path = CopyOf(200, i);
             using var cts = new CancellationTokenSource();
             var lines = 0;
             var item = WithStream(new FileIntakeFactory().CreateItem(path), inner => new IntakeLargeFileTests.ObservingStream(inner, _ =>
@@ -134,7 +132,7 @@ public class AutoDetectLargeFileTests : IDisposable
     [Fact]
     public async Task Progress_HasReadingDetectingAndDone_AndTheLastReportEqualsTheTotals()
     {
-        var path = WriteRepeated(2000);
+        var path = _stress.N2000;
         var reports = new List<IntakeProgress>();
 
         var result = await TestTimeout.Run(() => IntakeReader.ReadAsync(new FileIntakeFactory().CreateItem(path), new IntakeSettings(), p => { lock (reports) reports.Add(p); }, CancellationToken.None), LargeLimit);
@@ -153,11 +151,11 @@ public class AutoDetectLargeFileTests : IDisposable
         {
             File.WriteAllText(path, "a,b,c\n" + string.Concat(Enumerable.Repeat("1,2,3\n", 100_000)));
             GC.Collect();
-            var before = GC.GetTotalMemory(forceFullCollection: true);
+            var before = LiveMemory.Bytes();
 
             var result = IntakeReader.Read(new FileIntakeFactory().CreateItem(path), new IntakeSettings(), null, CancellationToken.None);
 
-            var retained = GC.GetTotalMemory(forceFullCollection: true) - before;
+            var retained = LiveMemory.Bytes() - before;
             var container = Assert.Single(result.Containers);
             Assert.Equal(("csv", 1L, 100_001L, ContainerConfidence.Sure), (container.Format, container.ContentFirstLine!.Value, container.ContentLastLine!.Value, container.Confidence));
             Assert.True(retained < 1024 * 1024, $"the result keeps {retained:N0} bytes");
