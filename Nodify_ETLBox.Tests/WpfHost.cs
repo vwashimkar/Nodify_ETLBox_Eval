@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Reflection;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -47,6 +48,8 @@ public sealed class WpfHost : IDisposable
                     throw new InvalidOperationException("A WPF Application already exists in this test run; the WPF tests need to own it.");
                 }
 
+                // Relative resource URIs (such as "Themes/Light.xaml" in the main window's theme box) resolve in the app assembly, as in the app.
+                UseAppResourceAssembly();
                 _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 ready.SetResult(Dispatcher.CurrentDispatcher);
             }
@@ -65,6 +68,26 @@ public sealed class WpfHost : IDisposable
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
         _dispatcher = ready.Task.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Makes relative resource URIs resolve in the app assembly, as in the app. The public setter refuses
+    /// when there is an entry assembly (here the test host), so the two private fields are set. Test only.
+    /// </summary>
+    private static void UseAppResourceAssembly()
+    {
+        var assembly = typeof(MainWindow).Assembly;
+        const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Static;
+        typeof(Application).GetField("_resourceAssembly", Private)?.SetValue(null, assembly);
+        foreach (var holder in new[] { typeof(UIElement).Assembly, typeof(Application).Assembly })
+        {
+            holder.GetType("System.Windows.Navigation.BaseUriHelper")?.GetProperty("ResourceAssembly", Private)?.SetValue(null, assembly);
+        }
+
+        if (Application.ResourceAssembly != assembly)
+        {
+            throw new InvalidOperationException("The WPF test host could not point resource URIs at the app assembly.");
+        }
     }
 
     /// <summary>Runs <paramref name="action"/> on the STA thread (with its synchronization context) and fails after the limit.</summary>
@@ -90,7 +113,7 @@ public sealed class WpfHost : IDisposable
         dictionaries.Clear();
         dictionaries.Add(new ResourceDictionary
         {
-            Source = new Uri($"pack://application:,,,/Nodify_ETLBox;component/Themes/{theme}.xaml", UriKind.Absolute)
+            Source = new Uri($"Themes/{theme}.xaml", UriKind.Relative)
         });
     }
 

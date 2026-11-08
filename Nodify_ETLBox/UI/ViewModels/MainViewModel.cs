@@ -519,7 +519,15 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorLog.Write("Intake Studio", ex);
+            try
+            {
+                ErrorLog.Write("Intake Studio", ex);
+            }
+            catch (Exception)
+            {
+                // The log could not be written (for example a read-only program folder); the message still shows.
+            }
+
             _dialogService.ShowError("Intake Studio", "Intake Studio could not be opened. The details are in unhandled-exception.log next to the program.");
             Editor.Issues.Add("Intake Studio could not be opened. The details are in unhandled-exception.log next to the program.");
             return false;

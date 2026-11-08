@@ -4,6 +4,7 @@
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:vm="clr-namespace:EtlDesigner.UI.ViewModels"
         xmlns:conv="clr-namespace:EtlDesigner.UI.Converters"
+        xmlns:controls="clr-namespace:EtlDesigner.UI.Controls"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="{Binding WindowTitle, Mode=OneWay}"
         Height="700"
@@ -338,7 +339,9 @@
                 <!-- A node: title, typed input/output connectors, state footer -->
                 <nodify:NodifyEditor.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:NodeViewModel}">
+                        <!-- A double-click opens the node's dialog (File intake: Intake Studio); DoubleClickCommand is null for the others. -->
                         <nodify:Node Header="{Binding Title}"
+                                     controls:NodeDoubleClick.Command="{Binding DoubleClickCommand, Mode=OneWay}"
                                      Input="{Binding Inputs}"
                                      Output="{Binding Outputs}"
                                      Background="{DynamicResource NodeBodyBackground}"
@@ -449,6 +452,25 @@
                         </TextBlock>
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel>
+                                <!-- File intake: opens Intake Studio, the same command as a double-click on the node. -->
+                                <Button x:Name="OpenIntakeStudioButton"
+                                        Content="Open Intake Studio"
+                                        MinWidth="120"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,8"
+                                        Padding="8,2"
+                                        Command="{Binding Editor.SelectedNode.ConfigureCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="FileIntake">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                                 <ItemsControl ItemsSource="{Binding Editor.SelectedNode.Settings}"
                                               ItemTemplate="{StaticResource SettingRowTemplate}" />
                                 <Button Content="Load preview"
