@@ -114,18 +114,28 @@ public class CsvPreviewReaderTests
     [Fact]
     public async Task ReadAsync_C10Large_IsFast_HasMoreRows_AndReleasesFileLock()
     {
-        var reader = new CsvPreviewReader();
-        var settings = CreateSettings(CompositePath("c10_large.csv"), ",", true, 0, "utf-8", 5);
+        // A private copy: the exclusive open below failed with "being used by another process"
+        // when a test in the c10_large.csv collection copied the shared file at the same moment.
+        var path = PipelineRunnerTests.PrivateCopyOfC10();
+        try
+        {
+            var reader = new CsvPreviewReader();
+            var settings = CreateSettings(path, ",", true, 0, "utf-8", 5);
 
-        var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
+            var preview = await TestTimeout.Run(() => reader.ReadAsync(settings, CancellationToken.None));
 
-        Assert.Null(preview.Error);
-        Assert.Equal(5, preview.Rows.Count);
-        Assert.True(preview.HasMoreRows);
-        Assert.True(preview.ElapsedMs < 2000, $"Expected elapsed < 2000ms but was {preview.ElapsedMs}ms.");
+            Assert.Null(preview.Error);
+            Assert.Equal(5, preview.Rows.Count);
+            Assert.True(preview.HasMoreRows);
+            Assert.True(preview.ElapsedMs < 2000, $"Expected elapsed < 2000ms but was {preview.ElapsedMs}ms.");
 
-        using var stream = new FileStream(settings.Path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-        Assert.True(stream.Length > 0);
+            using var stream = new FileStream(settings.Path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            Assert.True(stream.Length > 0);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]
