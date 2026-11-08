@@ -132,6 +132,31 @@ public sealed class ProjectEditorTests : IDisposable
 
     private static Task Settled(MainViewModel main) => TestTimeout.Run(() => main.ProjectRefresh);
 
+    /// <summary>
+    /// Waits for the column read that building a graph starts in the background. MainViewModel
+    /// does not expose that read; it sets the CsvFile node's KnownColumns and then validates, so
+    /// ValidationStateChanged with KnownColumns set is the signal. Deleting the file before that
+    /// failed with "being used by another process" (Task P2).
+    /// </summary>
+    private static Task ColumnsRead(MainViewModel main, NodeViewModel csv)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler handler = (_, _) =>
+        {
+            if (csv.KnownColumns is not null)
+            {
+                done.TrySetResult();
+            }
+        };
+        main.Editor.ValidationStateChanged += handler;
+        handler(null, EventArgs.Empty);
+        return TestTimeout.Run(async () =>
+        {
+            await done.Task;
+            main.Editor.ValidationStateChanged -= handler;
+        });
+    }
+
     [Fact]
     public void NewGraph_RoundTrips_ThroughTheCanvas_ByteForByte()
     {
@@ -650,7 +675,8 @@ public sealed class ProjectEditorTests : IDisposable
         var (main, dialogs, _) = NewMain();
         dialogs.PathToSave = InFolder("a.etlproj");
         var csvPath = CreateCsv();
-        BuildC01(main.Editor, csvPath);
+        var built = BuildC01(main.Editor, csvPath);
+        await ColumnsRead(main, built.Csv);
         main.SaveProject();
         File.Delete(csvPath);
 
