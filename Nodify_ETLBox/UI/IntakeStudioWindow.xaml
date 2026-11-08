@@ -56,19 +56,19 @@
                     <TextBlock Text="{Binding FileName, Mode=OneWay}" ToolTip="{Binding FileToolTip, Mode=OneWay}"
                                FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="160" MaxWidth="360"
                                TextTrimming="CharacterEllipsis" Margin="{DynamicResource Thickness4}" />
-                    <Button Content="Browse..." Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}"
+                    <Button x:Name="BrowseButton" Content="Browse..." Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}"
                             Command="{Binding BrowseCommand, Mode=OneWay}" />
                     <TextBlock Text="Mode" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
-                    <ComboBox Width="130" Margin="{DynamicResource Thickness4}" ItemsSource="{Binding Modes, Mode=OneWay}"
+                    <ComboBox x:Name="ModeBox" Width="130" Margin="{DynamicResource Thickness4}" ItemsSource="{Binding Modes, Mode=OneWay}"
                               DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Mode, Mode=TwoWay}"
                               AutomationProperties.Name="Mode" />
                     <TextBlock Text="Encoding" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
-                    <ComboBox Width="230" Margin="{DynamicResource Thickness4}" ItemsSource="{Binding Encodings, Mode=OneWay}"
+                    <ComboBox x:Name="EncodingBox" Width="230" Margin="{DynamicResource Thickness4}" ItemsSource="{Binding Encodings, Mode=OneWay}"
                               DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Encoding, Mode=TwoWay}"
                               AutomationProperties.Name="Encoding" />
-                    <Button Content="Scan" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}" MinWidth="80"
+                    <Button x:Name="ScanButton" Content="Scan" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}" MinWidth="80"
                             Command="{Binding ScanCommand, Mode=OneWay}" />
-                    <Button Content="Cancel" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}" MinWidth="80"
+                    <Button x:Name="CancelButton" Content="Cancel" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}" MinWidth="80"
                             Command="{Binding CancelCommand, Mode=OneWay}"
                             Visibility="{Binding IsCancelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                 </WrapPanel>
@@ -107,7 +107,7 @@
                     </Grid>
                 </Border>
 
-                <ListBox ItemsSource="{Binding Containers, Mode=OneWay}"
+                <ListBox x:Name="ContainersList" ItemsSource="{Binding Containers, Mode=OneWay}"
                          SelectedItem="{Binding SelectedContainer, Mode=TwoWay}"
                          HorizontalContentAlignment="Stretch"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -167,7 +167,7 @@
                 <!-- Details: format, delimiter, header, skip lines, reasons, then the checks. -->
                 <DockPanel Grid.Row="0">
                     <TextBlock DockPanel.Dock="Top" Text="Details" Style="{StaticResource SectionTitle}" />
-                    <Border BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Padding="{DynamicResource Thickness8}">
+                    <Border x:Name="DetailsPanel" BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Padding="{DynamicResource Thickness8}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
                                 <TextBlock Text="Choose a container on the left to see its details."
@@ -224,7 +224,7 @@
                     <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource SectionTitle}" />
                     <TextBlock DockPanel.Dock="Bottom" Text="{Binding PreviewNote, Mode=OneWay}" TextWrapping="Wrap"
                                Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
-                    <TextBox Text="{Binding PreviewText, Mode=OneWay}"
+                    <TextBox x:Name="PreviewBox" Text="{Binding PreviewText, Mode=OneWay}"
                              IsReadOnly="True"
                              IsReadOnlyCaretVisible="True"
                              FontFamily="{DynamicResource font-data}"
@@ -241,13 +241,13 @@
         <!-- ===== Bottom: totals, messages, encoding notice, buttons ===== -->
         <DockPanel Grid.Row="2">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
-                <Button Content="Save settings" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
+                <Button x:Name="SaveButton" Content="Save settings" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
                         Command="{Binding SaveCommand, Mode=OneWay}" />
-                <Button Content="Close" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
+                <Button x:Name="CloseButton" Content="Close" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
                         Command="{Binding CloseCommand, Mode=OneWay}" />
             </StackPanel>
             <StackPanel>
-                <TextBlock Text="{Binding TotalsText, Mode=OneWay}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                <TextBlock x:Name="TotalsText" Text="{Binding TotalsText, Mode=OneWay}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
                 <Border Tag="{Binding Message, Mode=OneWay}" Style="{StaticResource HiddenWhenNull}"
                         BorderBrush="{DynamicResource border-brush}" BorderThickness="1"
                         Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}" Margin="{DynamicResource Thickness4}">
