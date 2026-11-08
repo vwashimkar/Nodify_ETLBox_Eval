@@ -68,10 +68,26 @@ public static class LineIndexer
         Action<IntakeProgress>? progress,
         CancellationToken token)
     {
+        var tracker = EncodingTracker.For(encodingName, out var error);
+        return tracker is null
+            ? new LineIndexOutcome(null, item.Size, 0, false, error)
+            : Scan(item, maxFileSizeMb, tracker, onLine, containersFound, progress, token);
+    }
+
+    /// <summary>The scan with the encoding of the read, which learns from the bytes as they pass (see <see cref="EncodingTracker"/>).</summary>
+    internal static LineIndexOutcome Scan(
+        IntakeItem item,
+        int maxFileSizeMb,
+        EncodingTracker tracker,
+        IntakeLineHandler onLine,
+        Func<int> containersFound,
+        Action<IntakeProgress>? progress,
+        CancellationToken token)
+    {
         try
         {
             using var stream = item.OpenRead();
-            return ScanStream(stream, item, maxFileSizeMb, encodingName, onLine, containersFound, progress, token);
+            return ScanStream(stream, item, maxFileSizeMb, tracker, onLine, containersFound, progress, token);
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -87,7 +103,7 @@ public static class LineIndexer
         Stream stream,
         IntakeItem item,
         int maxFileSizeMb,
-        string encodingName,
+        EncodingTracker tracker,
         IntakeLineHandler onLine,
         Func<int> containersFound,
         Action<IntakeProgress>? progress,
@@ -134,6 +150,7 @@ public static class LineIndexer
         {
             start = 3;
             lineStart = 3;
+            tracker.SetBom(System.Text.Encoding.UTF8, IntakeEncodings.Utf8);
         }
         else if (firstBytes.StartsWith<byte>([0xFF, 0xFE, 0x00, 0x00]) || firstBytes.StartsWith<byte>([0x00, 0x00, 0xFE, 0xFF]))
         {
@@ -141,7 +158,14 @@ public static class LineIndexer
         }
         else if (firstBytes.StartsWith<byte>([0xFF, 0xFE]) || firstBytes.StartsWith<byte>([0xFE, 0xFF]))
         {
-            return ScanUtf16(stream, item, size, buffer, read, firstBytes[0] == 0xFE, onLine, containersFound, progress, token);
+            var bigEndian = firstBytes[0] == 0xFE;
+            tracker.SetBom(new System.Text.UnicodeEncoding(bigEndian, false), bigEndian ? IntakeEncodings.Utf16Be : IntakeEncodings.Utf16Le);
+            return ScanUtf16(stream, item, size, buffer, read, bigEndian, 2, onLine, containersFound, progress, token);
+        }
+        else if (tracker.FixedUtf16BigEndian is { } fixedBigEndian)
+        {
+            // A UTF-16 setting and no BOM: the setting gives the byte order.
+            return ScanUtf16(stream, item, size, buffer, read, fixedBigEndian, 0, onLine, containersFound, progress, token);
         }
         else if (LooksLikeUtf16WithoutBom(firstBytes))
         {
@@ -157,6 +181,8 @@ public static class LineIndexer
 
             hash.AppendData(buffer, 0, read);
             var block = buffer.AsSpan(0, read);
+            // Before the block's lines, so the encoding they are decoded with covers their bytes.
+            tracker.Append(block[start..]);
             var i = start;
             start = 0;
 
@@ -232,7 +258,8 @@ public static class LineIndexer
             onLine(new IntakeLine(lineNumber, lineStart, blockStart, isBlank, head.AsSpan(0, headLength), blockStart - lineStart == headLength));
         }
 
-        var encoding = hasBom ? "utf-8" : encodingName;
+        tracker.Finish();
+        var encoding = tracker.Name;
         var lineEnding = LineEndingOf(lfCount, crLfCount, crCount);
         var sha256 = Convert.ToHexStringLower(hash.GetHashAndReset());
         var file = new IntakeFileInfo(item.Name, blockStart, sha256, encoding, hasBom, lineEnding, lineNumber);
@@ -241,7 +268,7 @@ public static class LineIndexer
     }
 
     /// <summary>
-    /// The same scan for UTF-16 with a BOM, in two-byte units. The BOM decides the byte order. Line
+    /// The same scan for UTF-16, in two-byte units. The BOM, or a UTF-16 setting when there is none, decides the byte order. Line
     /// ends are LF, CRLF or CR as units; offsets count bytes of the original file, BOM included.
     /// </summary>
     private static LineIndexOutcome ScanUtf16(
@@ -251,6 +278,7 @@ public static class LineIndexer
         byte[] buffer,
         int read,
         bool bigEndian,
+        int bomLength,
         IntakeLineHandler onLine,
         Func<int> containersFound,
         Action<IntakeProgress>? progress,
@@ -263,13 +291,13 @@ public static class LineIndexer
         var clock = Stopwatch.StartNew();
         var lastReport = TimeSpan.Zero;
 
-        long blockStart = 0, lineStart = 2, lineNumber = 0;
+        long blockStart = 0, lineStart = bomLength, lineNumber = 0;
         long lfCount = 0, crLfCount = 0, crCount = 0;
         var charCount = 0;
         var lineChars = 0L;
         var isBlank = true;
         var afterCr = false;
-        var start = 2;
+        var start = bomLength;
         int? pendingByte = null;
 
         void Report(long endByte)
@@ -370,7 +398,7 @@ public static class LineIndexer
 
         var lineEnding = LineEndingOf(lfCount, crLfCount, crCount);
         var sha256 = Convert.ToHexStringLower(hash.GetHashAndReset());
-        var file = new IntakeFileInfo(item.Name, blockStart, sha256, bigEndian ? "utf-16be" : "utf-16le", true, lineEnding, lineNumber);
+        var file = new IntakeFileInfo(item.Name, blockStart, sha256, bigEndian ? IntakeEncodings.Utf16Be : IntakeEncodings.Utf16Le, bomLength > 0, lineEnding, lineNumber);
 
         return new LineIndexOutcome(file, size, blockStart, false, lineNumber == 0 ? EmptyMessage : null);
     }

@@ -15,10 +15,16 @@ namespace Nodify_ETLBox.Tests;
 /// Each DLL is generated into a temp folder and loaded from bytes into a collectible
 /// AssemblyLoadContext; ETLBox comes from the test's own dependencies.
 /// </summary>
-[Collection(LargeFileCollection.Name)]
-public class CsvPipelineDllTests
+/// <remarks>
+/// The manifest rows are a class of their own so they compile next to the other DLL tests and
+/// not after them (each test generates and compiles a DLL). Neither class uses c10_large.csv;
+/// the one test that copies it is in <see cref="CsvPipelineDllCancelTests"/>.
+/// </remarks>
+public class CsvPipelineDllManifestTests
 {
     public static TheoryData<string> ManifestRows() => CompositeManifestTests.ManifestRows();
+
+    private static Task<PipelineResult> RunApp(PipelineDefinition definition) => CsvPipelineDllTests.RunApp(definition);
 
     [Theory]
     [MemberData(nameof(ManifestRows))]
@@ -46,6 +52,13 @@ public class CsvPipelineDllTests
         Assert.Equal(app.Counts, result.Counts);
         Assert.Equal(app.LicenceLimitReached, result.LicenceLimitReached);
     }
+}
+
+/// <summary>Copies the shared c10_large.csv, so it is in that file's collection.</summary>
+[Collection(LargeFileCollection.Name)]
+public class CsvPipelineDllCancelTests
+{
+    private static Task<PipelineResult> RunApp(PipelineDefinition definition) => CsvPipelineDllTests.RunApp(definition);
 
     [Fact]
     public async Task Cancel_AfterTheFirstRows_ReturnsCancelled_AndReleasesTheFile()
@@ -77,6 +90,10 @@ public class CsvPipelineDllTests
 
         Assert.True(cancelledAfterRows, "no run was cancelled after its first rows");
     }
+}
+
+public class CsvPipelineDllTests
+{
 
     [Fact]
     public async Task Cancel_BeforeStart_ReturnsCancelled()

@@ -55,6 +55,9 @@ public partial class App : Application
             return;
         }
 
+        // Names a user can change (labels.txt in %AppData%\EtlDesigner), read once.
+        LabelsStartup.Install(EtlDesigner.Engine.Intake.LabelsLocation.DefaultPath());
+
         // Manually compose ViewModels
         var mainViewModel = new MainViewModel();
 

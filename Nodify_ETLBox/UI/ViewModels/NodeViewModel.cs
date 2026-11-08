@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Intake;
 using EtlDesigner.Engine.Parsing;
 using EtlDesigner.Engine.Pipeline;
 using EtlDesigner.Engine.Project;
@@ -18,6 +19,9 @@ public enum NodeType
     ResultJson,
     ParseValue,
     DotNetObject,
+
+    /// <summary>Reads a file and finds its parts (containers). No ports yet; not part of Run, Execute or the DLL.</summary>
+    FileIntake,
 
     /// <summary>A placeholder for a node in a project file that this version cannot use. Never in the palette.</summary>
     Unknown
@@ -48,6 +52,7 @@ public class NodeViewModel : ObservableObject
     private ParseValueSettings? _parseValueSettings;
     private string _title;
     private bool _isRefreshing;
+    private string? _intakeSummary;
 
     public NodeViewModel(Guid id, string title, NodeType nodeType, Func<CsvFileSettings, bool>? loadPreviewAction = null)
     {
@@ -149,6 +154,76 @@ public class NodeViewModel : ObservableObject
         set => SetProperty(ref _isRefreshing, value);
     }
 
+    /// <summary>A short line under the title (File intake). Null for nodes without one.</summary>
+    public string? Subtitle { get; init; }
+
+    /// <summary>
+    /// File intake only: the totals of the last scan in this session, for example "27 containers,
+    /// 1 warning". Never saved; a changed setting clears it.
+    /// </summary>
+    public string? IntakeSummary
+    {
+        get => _intakeSummary;
+        set
+        {
+            if (SetProperty(ref _intakeSummary, value))
+            {
+                OnPropertyChanged(nameof(CanvasNote));
+            }
+        }
+    }
+
+    public const string NoFileChosenText = "No file chosen";
+
+    /// <summary>File intake only: the file name (or "No file chosen") and the scan summary, shown on the canvas.</summary>
+    public string? CanvasNote
+    {
+        get
+        {
+            if (NodeType != NodeType.FileIntake)
+            {
+                return null;
+            }
+
+            var path = GetFileIntakeSettings().Path;
+            var name = string.IsNullOrWhiteSpace(path) ? NoFileChosenText : System.IO.Path.GetFileName(path.Trim());
+            return IntakeSummary is null ? name : name + Environment.NewLine + IntakeSummary;
+        }
+    }
+
+    /// <summary>File intake only: the file name, or "No file chosen" when the path is empty. Null for the other nodes.</summary>
+    public string? IntakeFileText
+    {
+        get
+        {
+            if (NodeType != NodeType.FileIntake)
+            {
+                return null;
+            }
+
+            var path = GetFileIntakeSettings().Path;
+            return string.IsNullOrWhiteSpace(path) ? NoFileChosenText : System.IO.Path.GetFileName(path.Trim());
+        }
+    }
+
+    /// <summary>File intake only: the full path, for the tooltip of <see cref="CanvasNote"/>.</summary>
+    public string? CanvasNoteToolTip
+    {
+        get
+        {
+            var path = NodeType == NodeType.FileIntake ? GetFileIntakeSettings().Path : null;
+            return string.IsNullOrWhiteSpace(path) ? null : path;
+        }
+    }
+
+    /// <summary>Tells the canvas that a File intake setting changed.</summary>
+    internal void NotifyCanvasNoteChanged()
+    {
+        OnPropertyChanged(nameof(CanvasNote));
+        OnPropertyChanged(nameof(IntakeFileText));
+        OnPropertyChanged(nameof(CanvasNoteToolTip));
+    }
+
     /// <summary>The node as it came from the project file, kept for what this version does not read.</summary>
     internal ProjectNode? LoadedFrom { get; set; }
 
@@ -200,11 +275,47 @@ public class NodeViewModel : ObservableObject
     /// <summary>Opens the node's dialog (ParseValue). Null for nodes without one.</summary>
     public RelayCommand? ConfigureCommand { get; init; }
 
+    /// <summary>The double-click on the canvas: opens Intake Studio for a File intake node, nothing for the others.</summary>
+    public RelayCommand? DoubleClickCommand => NodeType == NodeType.FileIntake ? ConfigureCommand : null;
+
     /// <summary>DotNetObject only: the output settings from the "Output type" row (default when unreadable).</summary>
     public OutputSettings GetOutputSettings()
     {
         var value = Settings.FirstOrDefault(s => s.Key == "OutputType")?.Value;
         return Enum.TryParse<ObjectKind>(value, out var kind) ? new OutputSettings(kind) : OutputSettings.Default;
+    }
+
+    /// <summary>File intake only: the settings from the node's setting rows (defaults when unreadable).</summary>
+    public FileIntakeNodeSettings GetFileIntakeSettings()
+    {
+        var defaults = FileIntakeNodeSettings.Default;
+        string Value(string key, string fallback) => Settings.FirstOrDefault(s => s.Key == key)?.Value ?? fallback;
+
+        return new FileIntakeNodeSettings
+        {
+            Path = Value("FilePath", defaults.Path),
+            Mode = Value("Mode", defaults.Mode),
+            Encoding = Value("Encoding", defaults.Encoding),
+            MaxFileSizeMb = int.TryParse(Value("MaxFileSizeMb", ""), out var size) && size > 0 ? size : defaults.MaxFileSizeMb
+        };
+    }
+
+    /// <summary>File intake only: writes settings to the setting rows. Only rows whose value differs change.</summary>
+    public void SetFileIntakeSettings(FileIntakeNodeSettings settings)
+    {
+        void Set(string key, string value)
+        {
+            var row = Settings.FirstOrDefault(s => s.Key == key);
+            if (row is not null && row.Value != value)
+            {
+                row.Value = value;
+            }
+        }
+
+        Set("FilePath", settings.Path);
+        Set("Mode", settings.Mode);
+        Set("Encoding", settings.Encoding);
+        Set("MaxFileSizeMb", settings.MaxFileSizeMb.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>CsvFile only: the reader settings from the node's setting rows.</summary>

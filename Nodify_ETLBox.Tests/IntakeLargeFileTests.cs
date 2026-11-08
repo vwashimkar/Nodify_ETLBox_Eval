@@ -8,7 +8,75 @@ namespace Nodify_ETLBox.Tests;
 
 /// <summary>The memory numbers cover the whole process, so nothing else may run next to these tests.</summary>
 [CollectionDefinition("Intake memory", DisableParallelization = true)]
-public class IntakeMemoryCollection;
+public class IntakeMemoryCollection : ICollectionFixture<StressFiles>;
+
+/// <summary>
+/// The i09 text repeated 200 and 2,000 times, written once for the whole collection, and the
+/// auto-detect result of the 2,000 copy, read once. Tests that delete a file use their own copy.
+/// </summary>
+public sealed class StressFiles : IDisposable
+{
+    private readonly string _folder = Directory.CreateTempSubdirectory("p2_stress_").FullName;
+    private readonly Lazy<string> _n200;
+    private readonly Lazy<string> _n2000;
+    private readonly Lazy<(IntakeResult Result, long Ms)> _n2000Result;
+
+    public StressFiles()
+    {
+        _n200 = new(() => Write(200));
+        _n2000 = new(() => Write(2000));
+        _n2000Result = new(() =>
+        {
+            var clock = Stopwatch.StartNew();
+            var result = IntakeReader.Read(new FileIntakeFactory().CreateItem(N2000), new IntakeSettings(), null, CancellationToken.None);
+            return (result, clock.ElapsedMilliseconds);
+        });
+    }
+
+    public string N200 => _n200.Value;
+
+    public string N2000 => _n2000.Value;
+
+    /// <summary>Auto-detect of <see cref="N2000"/> with the default settings, and how long it took.</summary>
+    public (IntakeResult Result, long Ms) N2000Result => _n2000Result.Value;
+
+    public string Path(int copies) => copies switch
+    {
+        200 => N200,
+        2000 => N2000,
+        _ => throw new ArgumentOutOfRangeException(nameof(copies))
+    };
+
+    private string Write(int copies)
+    {
+        var sample = File.ReadAllBytes(IntakeTestData.PathOf("i09_sample_nomarkers"));
+        var path = System.IO.Path.Combine(_folder, $"i09_x{copies}.txt");
+        using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20);
+        for (var i = 0; i < copies; i++)
+        {
+            output.Write(sample);
+        }
+
+        return path;
+    }
+
+    public void Dispose() => ProjectEditorTests.DeleteTempFolder(_folder);
+}
+
+internal static class LiveMemory
+{
+    /// <summary>
+    /// Live bytes after two blocking full collections. <c>GC.GetTotalMemory(true)</c> repeats full
+    /// collections until the number settles, up to 20 times per call, which is slow on a big heap.
+    /// </summary>
+    public static long Bytes()
+    {
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+        return GC.GetTotalMemory(forceFullCollection: false);
+    }
+}
 
 /// <summary>Runs only when INTAKE_SLOW_TESTS=1.</summary>
 public sealed class SlowFactAttribute : FactAttribute
@@ -42,13 +110,21 @@ public class IntakeLargeFileTests : IDisposable
 
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
-    private string WriteStressFile(int copies)
+    /// <summary>With <paramref name="invalidUtf8AtTheEnd"/> the first byte of the last copy (a text line) is 0xB5, so the UTF-8 check runs over the whole file and Auto guesses windows-1252.</summary>
+    private string WriteStressFile(int copies, bool invalidUtf8AtTheEnd = false)
     {
         var sample = File.ReadAllBytes(IntakeTestData.PathOf("i01_sample"));
-        var path = Path.Combine(_folder, $"stress_{copies}.txt");
+        var path = Path.Combine(_folder, $"stress_{copies}{(invalidUtf8AtTheEnd ? "_1252" : "")}.txt");
         using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 20);
         for (var i = 0; i < copies; i++)
         {
+            if (invalidUtf8AtTheEnd && i == copies - 1)
+            {
+                output.WriteByte(0xB5);
+                output.Write(sample, 1, sample.Length - 1);
+                continue;
+            }
+
             output.Write(sample);
         }
 
@@ -71,7 +147,7 @@ public class IntakeLargeFileTests : IDisposable
     /// list's share so far is taken off; MaxExcessBytes is what is left: everything else the scan
     /// keeps in memory, which is what must not grow.
     /// </summary>
-    private MemoryNumbers MeasureScan(string path, int copies)
+    private MemoryNumbers MeasureScan(string path, int copies, bool guessed = false)
     {
         var size = new FileInfo(path).Length;
         var samples = new List<(long Bytes, long Live)>();
@@ -79,14 +155,14 @@ public class IntakeLargeFileTests : IDisposable
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
-        var baseline = GC.GetTotalMemory(forceFullCollection: true);
+        var baseline = LiveMemory.Bytes();
 
         var item = WithStream(new FileIntakeFactory().CreateItem(path), inner => new ObservingStream(inner, position =>
         {
             if (position >= nextSample)
             {
                 nextSample += size / 20;
-                samples.Add((position, GC.GetTotalMemory(forceFullCollection: true) - baseline));
+                samples.Add((position, LiveMemory.Bytes() - baseline));
             }
         }));
 
@@ -94,11 +170,12 @@ public class IntakeLargeFileTests : IDisposable
         var result = IntakeTestData.ReadMarkers(item);
         clock.Stop();
 
-        var retained = GC.GetTotalMemory(forceFullCollection: true) - baseline;
+        var retained = LiveMemory.Bytes() - baseline;
         var excess = samples.Max(s => s.Live - (long)(retained * ((double)s.Bytes / size)));
 
         Assert.Null(result.Error);
         Assert.Equal(ExpectedContainers(copies), result.Containers.Count);
+        Assert.Equal((guessed, guessed ? "windows-1252" : "utf-8"), (result.EncodingGuessed, result.EncodingUsed));
 
         var numbers = new MemoryNumbers(result.Containers.Count, size, retained, samples.Max(s => s.Live), excess, clock.ElapsedMilliseconds);
         _output.WriteLine(numbers.ToString());
@@ -132,6 +209,18 @@ public class IntakeLargeFileTests : IDisposable
         Assert.True(large.MaxExcessBytes < 2 * 1024 * 1024, $"the scan keeps {large.MaxExcessBytes:N0} bytes beyond the container list");
         Assert.True(large.MaxExcessBytes - small.MaxExcessBytes < 1024 * 1024, $"excess grew from {small.MaxExcessBytes:N0} to {large.MaxExcessBytes:N0} bytes");
         Assert.True(bytesPerContainer < 1024, $"a container takes {bytesPerContainer:F0} bytes");
+    }
+
+    [Fact]
+    public void Memory_StaysFlat_WithTheUtf8Check_AndAGuessAtTheEnd()
+    {
+        var small = MeasureScan(WriteStressFile(200, invalidUtf8AtTheEnd: true), 200, guessed: true);
+        var large = MeasureScan(WriteStressFile(2000, invalidUtf8AtTheEnd: true), 2000, guessed: true);
+
+        File.AppendAllText(Path.Combine(Path.GetDirectoryName(AutoDetectTruthTests.ReportPath())!, "g4a-large-file.txt"),
+            $"{DateTime.Now:HH:mm:ss} encoding check, invalid byte in the last copy: N=200 {small}; N=2000 {large}{Environment.NewLine}");
+        Assert.True(large.MaxExcessBytes < 2 * 1024 * 1024, $"the scan keeps {large.MaxExcessBytes:N0} bytes beyond the container list");
+        Assert.True(large.MaxExcessBytes - small.MaxExcessBytes < 1024 * 1024, $"excess grew from {small.MaxExcessBytes:N0} to {large.MaxExcessBytes:N0} bytes");
     }
 
     [SlowFact]
@@ -255,7 +344,8 @@ public class IntakeLargeFileTests : IDisposable
         {
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        /// <summary>Passed on (the validator seeks to each container); the observed position follows.</summary>
+        public override long Seek(long offset, SeekOrigin origin) => _position = inner.Seek(offset, origin);
 
         public override void SetLength(long value) => throw new NotSupportedException();
 

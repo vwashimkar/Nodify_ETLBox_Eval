@@ -58,6 +58,7 @@ public partial class MainViewModel : ObservableObject
 
         NodeFactory.CsvPreviewHandler = ShowCsvPreview;
         NodeFactory.ParseValueConfigureHandler = ShowParseValue;
+        NodeFactory.FileIntakeConfigureHandler = ShowIntakeStudio;
 
         HookCountryRefreshListeners();
         HookCsvFileValidationListeners();
@@ -74,7 +75,10 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Runs CsvFile -> ParseValue -> DotNetObject over a whole file in the Execute dialog. The legacy Run is separate.</summary>
     public RelayCommand ExecuteCommand { get; }
 
-    public const string RunIsForLegacyChainMessage = "Run is for the old five-node chain. Use Execute for this pipeline.";
+    /// <summary>Run and Generate DLL ignore File intake nodes and say so in this one line.</summary>
+    public const string FileIntakeNotRunMessage = "File intake nodes are not run yet.";
+
+    public const string RunIsForLegacyChainMessage ="Run is for the old five-node chain. Use Execute for this pipeline.";
 
     public const string ExecuteReadyHint ="Run CsvFile -> ParseValue -> DotNetObject over the whole file.";
 
@@ -141,8 +145,8 @@ public partial class MainViewModel : ObservableObject
     {
         definition = null;
 
-        // An unknown node from a project file is ignored.
-        var nodes = Editor.Nodes.Where(n => n.NodeType != NodeType.Unknown).ToList();
+        // An unknown node from a project file, and a File intake node (not run yet), are ignored.
+        var nodes = Editor.Nodes.Where(n => n.NodeType is not (NodeType.Unknown or NodeType.FileIntake)).ToList();
         var csv = nodes.FirstOrDefault(n => n.NodeType == NodeType.CsvFile);
         var parse = nodes.FirstOrDefault(n => n.NodeType == NodeType.ParseValue);
         var output = nodes.FirstOrDefault(n => n.NodeType == NodeType.DotNetObject);
@@ -271,6 +275,29 @@ public partial class MainViewModel : ObservableObject
     }
 
     private async Task RunAsync()
+    {
+        try
+        {
+            await RunGraphAsync();
+        }
+        finally
+        {
+            AddFileIntakeNotRunLine();
+        }
+    }
+
+    /// <summary>Adds <see cref="FileIntakeNotRunMessage"/> once when the canvas has a File intake node.</summary>
+    private void AddFileIntakeNotRunLine(string prefix = "")
+    {
+        var line = prefix + FileIntakeNotRunMessage;
+        if (Editor.Nodes.Any(n => n.NodeType == NodeType.FileIntake) && !Editor.Issues.Contains(line))
+        {
+            Editor.Issues.Remove("No issues found.");
+            Editor.Issues.Add(line);
+        }
+    }
+
+    private async Task RunGraphAsync()
     {
         if (Editor.HasOnlyNewStyleNodes)
         {
@@ -465,6 +492,48 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Opens Intake Studio for a File intake node. Save writes the settings to the node's rows
+    /// (only a change marks the project dirty). The scan totals go onto the node when the last scan
+    /// used the node's settings.
+    /// </summary>
+    internal bool ShowIntakeStudio(NodeViewModel node)
+    {
+        try
+        {
+            var viewModel = new IntakeStudioViewModel(
+                node.GetFileIntakeSettings(),
+                NodeFactory.Labels,
+                _dialogService.PickIntakeFile,
+                save: node.SetFileIntakeSettings,
+                askUnsaved: () => _dialogService.AskUnsavedChanges($"the settings of {node.Title}"));
+
+            _dialogService.ShowIntakeStudio(viewModel);
+
+            if (viewModel.ScannedSettings is { } scanned && scanned == node.GetFileIntakeSettings())
+            {
+                node.IntakeSummary = viewModel.Summary;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                ErrorLog.Write("Intake Studio", ex);
+            }
+            catch (Exception)
+            {
+                // The log could not be written (for example a read-only program folder); the message still shows.
+            }
+
+            _dialogService.ShowError("Intake Studio", "Intake Studio could not be opened. The details are in unhandled-exception.log next to the program.");
+            Editor.Issues.Add("Intake Studio could not be opened. The details are in unhandled-exception.log next to the program.");
+            return false;
+        }
+    }
+
     private bool ShowParseValue(NodeViewModel node)
     {
         try
@@ -568,6 +637,18 @@ public partial class MainViewModel : ObservableObject
 
     private async Task GenerateDllAsync()
     {
+        try
+        {
+            await GenerateDllForGraphAsync();
+        }
+        finally
+        {
+            AddFileIntakeNotRunLine("Generate DLL: ");
+        }
+    }
+
+    private async Task GenerateDllForGraphAsync()
+    {
         if (IsNewPipelineGraph)
         {
             GenerateCsvPipelineDll();
@@ -662,7 +743,8 @@ public partial class MainViewModel : ObservableObject
             var successMessage =
                 $"DLL generated at:\n{dllPath}\n\n" +
                 "Generated .cs files are in the same folder.\n" +
-                "Using the DLL needs the ETLBox 3.11.1 packages and a valid ETLBox license at runtime. The free edition is limited to 5,000 rows.";
+                "Using the DLL needs the ETLBox 3.11.1 packages and a valid ETLBox license at runtime. The free edition is limited to 5,000 rows." +
+                (Editor.Nodes.Any(n => n.NodeType == NodeType.FileIntake) ? "\n\n" + FileIntakeNotRunMessage : "");
             System.Windows.MessageBox.Show(successMessage, "Generate DLL", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
         finally

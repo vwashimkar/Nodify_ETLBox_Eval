@@ -160,6 +160,8 @@ public class ExecuteEnablingTests
         public string? PickProjectToSave(string? currentPath, string projectName) => null;
         public UnsavedChangesChoice AskUnsavedChanges(string projectName) => UnsavedChangesChoice.Cancel;
         public void ShowError(string title, string message) { }
+        public void ShowIntakeStudio(IntakeStudioViewModel viewModel) { }
+        public string? PickIntakeFile(string? currentPath) => null;
     }
 
     private static (MainViewModel Main, NodeViewModel Csv, NodeViewModel Parse, NodeViewModel Output, NoDialogs Dialogs) BuildGraph(bool connectOutput = true)

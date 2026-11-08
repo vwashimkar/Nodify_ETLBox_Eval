@@ -168,6 +168,12 @@ public sealed record DetectorSettings
     /// <summary>... with at least this many tokens per row.</summary>
     public int MinFixedWidthColumns { get; init; } = 4;
 
+    /// <summary>A JSON block is the sub-type badgerfish (Guessed) when at least this many objects have '@' attribute keys or a '$' text key.</summary>
+    public int BadgerFishMinHits { get; init; } = 2;
+
+    /// <summary>The BadgerFish count looks at the first this many JSON tokens only [U].</summary>
+    public long BadgerFishMaxTokens { get; init; } = 1_000_000;
+
     /// <summary>A line of one of these characters repeated is a section separator ...</summary>
     public string SeparatorCharacters { get; init; } = "=-#*~_";
 
@@ -184,11 +190,14 @@ public sealed record IntakeSettings
 
     public DetectorSettings Detector { get; init; } = new();
 
+    public ValidationSettings Validation { get; init; } = new();
+
     public MarkerProfile Markers { get; init; } = new();
 
     public int MaxFileSizeMb { get; init; } = 500;
 
-    public string EncodingName { get; init; } = "utf-8";
+    /// <summary>One of <see cref="IntakeEncodings.Names"/>: "auto" (the default), utf-8, windows-1252, iso-8859-1, utf-16le, utf-16be.</summary>
+    public string Encoding { get; init; } = IntakeEncodings.Auto;
 }
 
 /// <summary>
@@ -223,7 +232,8 @@ public sealed record ContainerInfo(
     HeaderGuess? HeaderGuess = null,
     int SkipLines = 0,
     KeyValueForm? KeyValueForm = null,
-    IReadOnlyList<string>? Reasons = null);
+    IReadOnlyList<string>? Reasons = null,
+    string? SubTypeVersion = null);
 
 public sealed record IntakeFileInfo(
     string Name,
@@ -240,7 +250,11 @@ public sealed record IntakeWarning(long? Line, string Message);
 /// <summary>
 /// The outcome of one intake run. <see cref="ItemId"/> ties the run to its <see cref="IntakeItem"/>
 /// for lineage. <see cref="File"/> is null when the file was not read to the end. After a cancel
-/// <see cref="Containers"/> holds the containers finished so far.
+/// <see cref="Containers"/> holds the containers finished so far. <see cref="EncodingUsed"/> is the
+/// encoding the file was decoded with (set when the file was read to the end); everything that
+/// decodes the file's bytes later uses it. <see cref="EncodingGuessed"/> is true when Auto chose
+/// windows-1252 because the bytes are not valid UTF-8, and <see cref="EncodingReason"/> then says so
+/// in words. <see cref="InvalidUtf8Seen"/> is true when the bytes have an invalid UTF-8 sequence.
 /// </summary>
 public sealed record IntakeResult(
     Guid RunId,
@@ -253,10 +267,18 @@ public sealed record IntakeResult(
     IReadOnlyList<IntakeWarning> Warnings,
     long ElapsedMs,
     bool Cancelled,
-    string? Error);
+    string? Error,
+    string? EncodingUsed = null,
+    bool EncodingGuessed = false,
+    bool InvalidUtf8Seen = false,
+    string? EncodingReason = null);
 
-/// <summary>Where a read is. The last report of a run equals the totals in the result.</summary>
-public sealed record IntakeProgress(long BytesRead, long FileSize, int ContainersFound, IntakePhase Phase);
+/// <summary>
+/// Where a read is. The last report of a run equals the totals in the result. While validating,
+/// <see cref="BytesRead"/> counts the container bytes checked so far and <see cref="ContainersValidated"/>
+/// the containers done ("Validating n of m containers", m being <see cref="ContainersFound"/>).
+/// </summary>
+public sealed record IntakeProgress(long BytesRead, long FileSize, int ContainersFound, IntakePhase Phase, int ContainersValidated = 0);
 
 /// <summary>Lines read back by offsets. <see cref="Error"/> says what went wrong and what to do; the list is then empty.</summary>
 public sealed record IntakeLines(IReadOnlyList<string> Lines, string? Error);

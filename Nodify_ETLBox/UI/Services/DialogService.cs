@@ -161,6 +161,39 @@ public class DialogService : IDialogService
         return viewModel.Choice;
     }
 
+    public void ShowIntakeStudio(IntakeStudioViewModel viewModel)
+    {
+        var owner = Application.Current.MainWindow;
+
+        var window = new IntakeStudioWindow
+        {
+            Owner = owner,
+            DataContext = viewModel,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+
+        // The view model asks about unsaved settings once and cancels a running scan; the window only closes.
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.Closing += (_, e) => e.Cancel = !viewModel.ConfirmClose();
+        window.ShowDialog();
+    }
+
+    public string? PickIntakeFile(string? currentPath)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Choose the file to scan",
+            CheckFileExists = true,
+            CheckPathExists = true,
+            Multiselect = false,
+            Filter = FileFilters.Intake
+        };
+
+        SetInitialFolder(dialog, currentPath);
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
     public void ShowError(string title, string message)
         => MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
 
@@ -183,7 +216,7 @@ public class DialogService : IDialogService
             CheckFileExists = true,
             CheckPathExists = true,
             Multiselect = false,
-            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            Filter = FileFilters.Csv
         };
 
         var folder = string.IsNullOrWhiteSpace(currentPath) ? null : Path.GetDirectoryName(currentPath);

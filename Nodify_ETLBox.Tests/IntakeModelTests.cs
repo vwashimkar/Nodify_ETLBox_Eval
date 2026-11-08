@@ -12,7 +12,7 @@ public class IntakeModelTests
 
         Assert.Equal(IntakeMode.AutoDetect, settings.Mode);
         Assert.Equal(500, settings.MaxFileSizeMb);
-        Assert.Equal("utf-8", settings.EncodingName);
+        Assert.Equal("auto", settings.Encoding);
         Assert.Equal("##### BEGIN ", settings.Markers.BeginPrefix);
         Assert.Equal(" #####", settings.Markers.BeginSuffix);
         Assert.Equal("##### END #####", settings.Markers.EndLine);
@@ -26,7 +26,7 @@ public class IntakeModelTests
         {
             Mode = IntakeMode.MarkersThenAutoDetect,
             MaxFileSizeMb = 12,
-            EncodingName = "windows-1252",
+            Encoding = "windows-1252",
             Markers = new MarkerProfile { BeginPrefix = "== ", BeginSuffix = " ==", EndLine = "-- end --", FieldSeparator = ';', KnownFormats = ["csv"] }
         };
 

@@ -17,7 +17,7 @@ public sealed class AutoDetector
 
     private readonly IntakeItem _item;
     private readonly DetectorSettings _settings;
-    private readonly Encoding _settingsEncoding;
+    private readonly Func<Encoding> _currentEncoding;
     private readonly char[] _delimiters;
     private readonly int _windowSize;
     private readonly List<ContainerInfo> _containers = [];
@@ -26,8 +26,8 @@ public sealed class AutoDetector
     private readonly List<Row> _window = [];
     private readonly List<(long Number, long Start, long End, string Text, bool Cut)> _quoted = [];
 
-    private Encoding? _headEncoding;
     private Encoding? _fileEncoding;
+    private bool _noBom;
     private Candidate? _candidate;
     private Region? _open;
     private int _blankRun;
@@ -35,11 +35,20 @@ public sealed class AutoDetector
     private int _reofferedWeak;
     private (long FirstLine, long StartByte, string? Name)? _separator;
 
-    public AutoDetector(IntakeItem item, DetectorSettings settings, Encoding settingsEncoding)
+    private readonly ValidationSettings _limits;
+
+    public AutoDetector(IntakeItem item, DetectorSettings settings, Encoding settingsEncoding, ValidationSettings? limits = null)
+        : this(item, settings, () => settingsEncoding, limits)
+    {
+    }
+
+    /// <summary>With the encoding of the bytes read so far, which an Auto read can change while it runs.</summary>
+    public AutoDetector(IntakeItem item, DetectorSettings settings, Func<Encoding> currentEncoding, ValidationSettings? limits = null)
     {
         _item = item;
         _settings = settings;
-        _settingsEncoding = settingsEncoding;
+        _currentEncoding = currentEncoding;
+        _limits = limits ?? new ValidationSettings();
         _delimiters = settings.DelimiterCandidates.Where(d => d.Length == 1).Select(d => d[0]).ToArray();
         // Title lines and weak lines between them can both precede a table, so room for both.
         _windowSize = 2 * settings.MaxPreambleLines + Math.Max(settings.MinTableLines, settings.MinKeyValueLines) + 2;
@@ -225,15 +234,17 @@ public sealed class AutoDetector
         if (candidate.IsJson)
         {
             var utf8 = encoding.CodePage == Encoding.UTF8.CodePage ? bytes : Encoding.Convert(encoding, Encoding.UTF8, bytes);
-            if (TryParseJson(utf8, out var badgerFish, out var error))
+            if (TryParseJson(utf8, out var badgerFishHits, out var error))
             {
                 var reasons = new List<string> { "balanced braces or brackets, and System.Text.Json parses the block" };
-                if (badgerFish)
+                string? jsonSubType = null;
+                if (badgerFishHits >= _settings.BadgerFishMinHits)
                 {
-                    reasons.Add("BadgerFish hint (Guessed): keys that start with @ and $ keys");
+                    jsonSubType = "badgerfish";
+                    reasons.Add($"sub-type badgerfish (Guessed): {badgerFishHits} objects have '@' attribute keys or a '$' text key");
                 }
 
-                Emit("json", candidate.FirstLine, candidate.LastLine, candidate.StartByte, candidate.EndByte, ContainerConfidence.Sure, reasons);
+                Emit("json", candidate.FirstLine, candidate.LastLine, candidate.StartByte, candidate.EndByte, ContainerConfidence.Sure, reasons, subType: jsonSubType);
                 return;
             }
 
@@ -260,37 +271,61 @@ public sealed class AutoDetector
         EmitText(candidate.FirstLine, candidate.LastLine, candidate.StartByte, candidate.EndByte, [$"starts like XML but does not parse: {xmlError}"]);
     }
 
-    private void EmitXml(Candidate candidate, string? subType)
+    /// <summary><paramref name="soapNamespace"/> is the SOAP namespace of the root Envelope, or null.</summary>
+    private void EmitXml(Candidate candidate, string? soapNamespace)
     {
         var reasons = new List<string> { "one root element, and XmlReader parses the block" };
-        if (subType is not null)
+        string? version = soapNamespace switch { SoapNamespaces.V11 => "1.1", SoapNamespaces.V12 => "1.2", _ => null };
+        if (version is not null)
         {
-            reasons.Add("the root is a SOAP Envelope (by its namespace)");
+            reasons.Add($"sub-type soap {version}: the root is an Envelope in the SOAP {version} namespace");
         }
 
-        Emit("xml", candidate.FirstLine, candidate.LastLine, candidate.StartByte, candidate.EndByte, ContainerConfidence.Sure, reasons, subType: subType);
+        Emit("xml", candidate.FirstLine, candidate.LastLine, candidate.StartByte, candidate.EndByte, ContainerConfidence.Sure, reasons,
+            subType: version is null ? null : "soap", subTypeVersion: version);
     }
 
-    private static bool TryParseJson(byte[] utf8, out bool badgerFish, out string? error)
+    /// <summary>
+    /// Parses the block and counts the objects that have a BadgerFish key (<c>@attribute</c> or the
+    /// <c>$</c> text key). The count stops after <see cref="DetectorSettings.BadgerFishMaxTokens"/>
+    /// tokens; the parse runs to the end.
+    /// </summary>
+    private bool TryParseJson(byte[] utf8, out int badgerFishHits, out string? error)
     {
-        badgerFish = false;
+        badgerFishHits = 0;
         error = null;
         try
         {
             var reader = new Utf8JsonReader(utf8, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Disallow });
-            var at = false;
-            var dollar = false;
+            var marked = new Stack<bool>();
+            long tokens = 0;
             while (reader.Read())
             {
-                if (reader.TokenType == JsonTokenType.PropertyName)
+                if (++tokens > _settings.BadgerFishMaxTokens)
                 {
-                    var name = reader.GetString() ?? string.Empty;
-                    at |= name.StartsWith('@');
-                    dollar |= name == "$";
+                    continue;
+                }
+
+                switch (reader.TokenType)
+                {
+                    case JsonTokenType.StartObject:
+                        marked.Push(false);
+                        break;
+                    case JsonTokenType.EndObject:
+                        badgerFishHits += marked.Pop() ? 1 : 0;
+                        break;
+                    case JsonTokenType.PropertyName when marked.Count > 0 && !marked.Peek():
+                        var name = reader.GetString() ?? string.Empty;
+                        if ((name.Length > 1 && name[0] == '@') || name == "$")
+                        {
+                            marked.Pop();
+                            marked.Push(true);
+                        }
+
+                        break;
                 }
             }
 
-            badgerFish = at && dollar;
             return true;
         }
         catch (JsonException ex)
@@ -300,9 +335,9 @@ public sealed class AutoDetector
         }
     }
 
-    private static bool TryParseXml(TextReader text, out string? subType, out string? error, out bool doctype)
+    private static bool TryParseXml(TextReader text, out string? soapNamespace, out string? error, out bool doctype)
     {
-        subType = null;
+        soapNamespace = null;
         error = null;
         doctype = false;
         var settings = new XmlReaderSettings
@@ -323,7 +358,7 @@ public sealed class AutoDetector
                     root = false;
                     if (reader.LocalName == "Envelope" && reader.NamespaceURI is "http://schemas.xmlsoap.org/soap/envelope/" or "http://www.w3.org/2003/05/soap-envelope")
                     {
-                        subType = "soap";
+                        soapNamespace = reader.NamespaceURI;
                     }
                 }
             }
@@ -356,12 +391,17 @@ public sealed class AutoDetector
         }
     }
 
-    /// <summary>The encoding of the file's bytes: its BOM decides, else the setting.</summary>
+    /// <summary>The encoding of the file's bytes: its BOM decides, else the encoding of the read so far.</summary>
     private Encoding FileEncoding()
     {
         if (_fileEncoding is not null)
         {
             return _fileEncoding;
+        }
+
+        if (_noBom)
+        {
+            return _currentEncoding();
         }
 
         var bom = new byte[3];
@@ -378,13 +418,17 @@ public sealed class AutoDetector
         _fileEncoding = length >= 2 && bom[0] == 0xFF && bom[1] == 0xFE ? new UnicodeEncoding(false, false)
             : length >= 2 && bom[0] == 0xFE && bom[1] == 0xFF ? new UnicodeEncoding(true, false)
             : length == 3 && bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF ? Encoding.UTF8
-            : _settingsEncoding;
-        return _fileEncoding;
+            : null;
+        _noBom = _fileEncoding is null;
+        return _fileEncoding ?? _currentEncoding();
     }
 
-    /// <summary>The indexer gives UTF-8 heads for a file with a BOM (UTF-16 lines are converted); else the setting's bytes.</summary>
+    /// <summary>The indexer gives UTF-8 heads for a UTF-8 or UTF-16 file (UTF-16 lines are converted); else the file's bytes.</summary>
     private Encoding HeadEncoding()
-        => _headEncoding ??= FileEncoding() is UnicodeEncoding || FileEncoding().CodePage == Encoding.UTF8.CodePage ? Encoding.UTF8 : _settingsEncoding;
+    {
+        var encoding = FileEncoding();
+        return encoding is UnicodeEncoding || encoding.CodePage == Encoding.UTF8.CodePage ? Encoding.UTF8 : encoding;
+    }
 
     // ---- Rows -----------------------------------------------------------------------------
 
@@ -812,7 +856,11 @@ public sealed class AutoDetector
         }
 
         var (main, tail) = region.Finish(_settings);
-        if (main is not null)
+        if (main is { Format: "text" } text && region.Kind == RegionKind.Text && TryYaml(text) is { } yaml)
+        {
+            Emit("yaml", text.FirstLine, text.LastLine, text.StartByte, text.EndByte, yaml.Confidence, yaml.Reasons);
+        }
+        else if (main is not null)
         {
             Emit(main.Value.Format, main.Value.FirstLine, main.Value.LastLine, main.Value.StartByte, main.Value.EndByte, main.Value.Confidence,
                 main.Value.Reasons, main.Value.Title, main.Value.Delimiter, main.Value.Header, main.Value.SkipLines, main.Value.Form);
@@ -824,6 +872,43 @@ public sealed class AutoDetector
         }
 
         _tableClosedInParagraph = inParagraph && main is { Format: "csv" or "tsv" };
+    }
+
+    /// <summary>
+    /// A text region is YAML when it has real YAML structure (<see cref="YamlShape.HasStructure"/>),
+    /// the YamlDotNet parser accepts it (parse only, with the limits of <see cref="ValidationSettings"/>)
+    /// and its root is a mapping or a sequence. Otherwise it stays text.
+    /// </summary>
+    private (ContainerConfidence Confidence, List<string> Reasons)? TryYaml(RegionResult text)
+    {
+        if (text.LastLine == text.FirstLine || text.EndByte - text.StartByte > _settings.MaxValidationMb * 1024L * 1024L)
+        {
+            return null;
+        }
+
+        var bytes = ReadSpan(text.StartByte, text.EndByte, out var encoding);
+        if (bytes is null)
+        {
+            return null;
+        }
+
+        var content = encoding.GetString(bytes).TrimStart('\uFEFF');
+        var lines = content.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        if (YamlShape.HasStructure(lines) is not { } structure)
+        {
+            return null;
+        }
+
+        var outcome = YamlCheck.Check(new StringReader(content), _limits, CancellationToken.None);
+        if (!outcome.Parsed || !outcome.RootIsCollection)
+        {
+            return null;
+        }
+
+        var sure = outcome.ExplicitDocument || lines.Any(l => l.StartsWith("%YAML", StringComparison.Ordinal));
+        return (sure ? ContainerConfidence.Sure : ContainerConfidence.Likely,
+            [$"YAML structure: {structure}", "the YamlDotNet parser accepts it (parse only) and its root is a mapping or a sequence",
+                sure ? "a --- document marker or a %YAML header" : "no --- document marker, so Likely"]);
     }
 
     private void EmitText(long first, long last, long start, long end, List<string> reasons, ContainerStatus status = ContainerStatus.Ok, string message = "")
@@ -843,6 +928,7 @@ public sealed class AutoDetector
         int skipLines = 0,
         KeyValueForm? form = null,
         string? subType = null,
+        string? subTypeVersion = null,
         ContainerStatus status = ContainerStatus.Ok,
         string message = "")
     {
@@ -864,7 +950,7 @@ public sealed class AutoDetector
         _containers.Add(new ContainerInfo(
             _containers.Count + 1, ContainerKind.Detected, format, name, string.Empty, null, null,
             first, last, last - first + 1, start, end, status, message, confidence,
-            subType, delimiter, header, skipLines, form, reasons));
+            subType, delimiter, header, skipLines, form, reasons, subTypeVersion));
     }
 
     // ---- Types ----------------------------------------------------------------------------
@@ -1050,7 +1136,8 @@ internal sealed class Region
 
         var header = window[skip].Fields[delimiter];
         var next = skip + 1 < window.Count ? window[skip + 1].Fields[delimiter] : (FieldSummary?)null;
-        _header = (!header.HasNumeric && next is { HasNumeric: true }) || (header.FirstEmpty && header.OthersAllText) ? HeaderGuess.Yes
+        _header = (!header.HasNumeric && next is { HasNumeric: true }) || (header.FirstEmpty && header.OthersAllText)
+                  || RowShape.IsColumnNumberHeader(RowShape.Split(window[skip].Text, _delimiterChar), header.Count) ? HeaderGuess.Yes
             : header.HasNumeric ? HeaderGuess.No
             : HeaderGuess.Unknown;
 

@@ -42,6 +42,15 @@ public interface IDialogService
     /// <summary>Asks "Save changes to &lt;name&gt;?" with Save, Don't save and Cancel (modal, owned by the main window).</summary>
     UnsavedChangesChoice AskUnsavedChanges(string projectName);
 
+    /// <summary>
+    /// Opens Intake Studio (modal, owned by the main window). Closing asks about unsaved settings
+    /// through the view model and cancels a running scan.
+    /// </summary>
+    void ShowIntakeStudio(IntakeStudioViewModel viewModel);
+
+    /// <summary>Asks for any file to scan, starting near <paramref name="currentPath"/>. Null when the user cancels.</summary>
+    string? PickIntakeFile(string? currentPath);
+
     /// <summary>Shows a message that says what went wrong and what to do next.</summary>
     void ShowError(string title, string message);
 }

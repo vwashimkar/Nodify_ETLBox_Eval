@@ -4,6 +4,7 @@
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:vm="clr-namespace:EtlDesigner.UI.ViewModels"
         xmlns:conv="clr-namespace:EtlDesigner.UI.Converters"
+        xmlns:controls="clr-namespace:EtlDesigner.UI.Controls"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="{Binding WindowTitle, Mode=OneWay}"
         Height="700"
@@ -19,6 +20,24 @@
         <SolidColorBrush x:Key="GraphConnectionBrush" Color="{DynamicResource accent}" />
         <SolidColorBrush x:Key="NodeInput.BorderBrush" Color="{DynamicResource accent}" />
         <SolidColorBrush x:Key="NodeOutput.BorderBrush" Color="{DynamicResource accent}" />
+
+        <!-- A node footer line that is hidden while it has no text. -->
+        <Style x:Key="NodeNoteText" TargetType="TextBlock">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Node footer lines that do not apply to a File intake node ("Idle | rows: 0", "Configured"). -->
+        <Style x:Key="HiddenForFileIntake" TargetType="FrameworkElement">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding NodeType, Mode=OneWay}" Value="FileIntake">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
 
         <!-- ===== Settings editors, chosen by SettingViewModel.Kind ===== -->
         <DataTemplate x:Key="TextSettingTemplate" DataType="{x:Type vm:SettingViewModel}">
@@ -278,6 +297,11 @@
                         Click="PaletteButton_Click"
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <TextBlock Text="Intake" FontWeight="Bold" Margin="0,8,0,8" />
+                <Button Content="File intake" Tag="FileIntake" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
             </StackPanel>
 
             <!-- ===== Center: Nodify editor. NOT wrapped in a ScrollViewer: Nodify owns pan/zoom. ===== -->
@@ -333,7 +357,9 @@
                 <!-- A node: title, typed input/output connectors, state footer -->
                 <nodify:NodifyEditor.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:NodeViewModel}">
+                        <!-- A double-click opens the node's dialog (File intake: Intake Studio); DoubleClickCommand is null for the others. -->
                         <nodify:Node Header="{Binding Title}"
+                                     controls:NodeDoubleClick.Command="{Binding DoubleClickCommand, Mode=OneWay}"
                                      Input="{Binding Inputs}"
                                      Output="{Binding Outputs}"
                                      Background="{DynamicResource NodeBodyBackground}"
@@ -396,12 +422,37 @@
 
                             <nodify:Node.Footer>
                                 <StackPanel Margin="4,2">
-                                    <StackPanel Orientation="Horizontal">
+                                    <!-- File intake: subtitle, file name (full path in the tooltip) and, after a scan, the totals.
+                                         Empty for the other nodes, so hidden. -->
+                                    <TextBlock Text="{Binding Subtitle, Mode=OneWay}"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-muted-brush}"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="170"
+                                               HorizontalAlignment="Left"
+                                               Style="{StaticResource NodeNoteText}" />
+                                    <TextBlock Text="{Binding IntakeFileText, Mode=OneWay}"
+                                               ToolTip="{Binding CanvasNoteToolTip, Mode=OneWay}"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-brush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxWidth="170"
+                                               HorizontalAlignment="Left"
+                                               Style="{StaticResource NodeNoteText}" />
+                                    <TextBlock Text="{Binding IntakeSummary, Mode=OneWay}"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-brush}"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="170"
+                                               HorizontalAlignment="Left"
+                                               Style="{StaticResource NodeNoteText}" />
+                                    <StackPanel Orientation="Horizontal" Style="{StaticResource HiddenForFileIntake}">
                                         <TextBlock Text="{Binding State}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                         <TextBlock Text=" | rows: " FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                         <TextBlock Text="{Binding RowCount}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding ConfigurationStatus}"
+                                               Style="{StaticResource HiddenForFileIntake}"
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-muted-brush}"
                                                Margin="0,2,0,0" />
@@ -444,6 +495,25 @@
                         </TextBlock>
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel>
+                                <!-- File intake: opens Intake Studio, the same command as a double-click on the node. -->
+                                <Button x:Name="OpenIntakeStudioButton"
+                                        Content="Open Intake Studio"
+                                        MinWidth="120"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,8"
+                                        Padding="8,2"
+                                        Command="{Binding Editor.SelectedNode.ConfigureCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="FileIntake">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                                 <ItemsControl ItemsSource="{Binding Editor.SelectedNode.Settings}"
                                               ItemTemplate="{StaticResource SettingRowTemplate}" />
                                 <Button Content="Load preview"
@@ -452,7 +522,7 @@
                                         Margin="0,8,0,0"
                                         Command="{Binding Editor.SelectedNode.LoadPreviewCommand}">
                                     <Button.Style>
-                                        <Style TargetType="Button">
+                                        <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
                                             <Setter Property="Visibility" Value="Collapsed" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="CsvFile">
@@ -468,7 +538,7 @@
                                         Margin="0,8,0,0"
                                         Command="{Binding Editor.SelectedNode.ConfigureCommand}">
                                     <Button.Style>
-                                        <Style TargetType="Button">
+                                        <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
                                             <Setter Property="Visibility" Value="Collapsed" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="ParseValue">

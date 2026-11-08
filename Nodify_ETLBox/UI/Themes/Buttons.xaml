@@ -1,0 +1,53 @@
+<!-- Theme-aware button, used by the main window's settings panel and by Intake Studio. Merged into
+     Themes/Light.xaml and Themes/Dark.xaml, so every window finds it. Colours come from the tokens
+     (DynamicResource), so it follows a theme switch. The Windows default button is light grey in
+     every theme. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Style x:Key="ThemedButton" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource surface-alt-brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource text-brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource border-brush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="{DynamicResource Thickness4}" />
+        <Setter Property="FontFamily" Value="{DynamicResource font-text}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{DynamicResource corner-radius}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          RecognizesAccessKey="True" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource accent-soft-brush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource accent-brush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource accent-brush}" />
+                <Setter Property="BorderThickness" Value="2" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource accent-brush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{DynamicResource surface-brush}" />
+                <Setter Property="Foreground" Value="{DynamicResource text-muted-brush}" />
+                <Setter Property="Opacity" Value="0.6" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>

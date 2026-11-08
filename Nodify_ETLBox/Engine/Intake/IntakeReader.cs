@@ -10,10 +10,6 @@ namespace EtlDesigner.Engine.Intake;
 /// </summary>
 public static class IntakeReader
 {
-
-
-    public const string Utf16SettingMessage = "UTF-16 and UTF-32 cannot be chosen as the encoding: a UTF-16 file is read when it starts with a byte order mark (BOM), which decides. Choose utf-8 or a one-byte encoding such as windows-1252.";
-
     private static readonly string ToolVersion = typeof(IntakeResult).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
 
     /// <summary>Runs <see cref="Read"/> off the calling thread.</summary>
@@ -29,28 +25,35 @@ public static class IntakeReader
         var clock = Stopwatch.StartNew();
         var warnings = new List<IntakeWarning>();
 
+        var tracker = EncodingTracker.For(settings.Encoding, out var encodingError);
+
         IntakeResult Finish(IntakeFileInfo? file, IReadOnlyList<ContainerInfo> containers, bool cancelled, string? error)
-            => new(Guid.NewGuid(), item.Id, startedUtc, DateTime.UtcNow, ToolVersion, file, containers, warnings, clock.ElapsedMilliseconds, cancelled, error);
+        {
+            var known = file is not null;
+            return new(Guid.NewGuid(), item.Id, startedUtc, DateTime.UtcNow, ToolVersion, file, containers, warnings, clock.ElapsedMilliseconds, cancelled, error,
+                known ? tracker!.Name : null, known && tracker!.Guessed, known && tracker!.InvalidUtf8Seen,
+                known && tracker!.Guessed ? IntakeEncodings.GuessReason : null);
+        }
 
         if (token.IsCancellationRequested)
         {
             return Finish(null, [], cancelled: true, null);
         }
 
-        var encoding = ResolveEncoding(settings.EncodingName, out var encodingError);
-        if (encoding is null)
+        if (tracker is null)
         {
             return Finish(null, [], cancelled: false, encodingError);
         }
 
         // Markers mode: the scanner alone. AutoDetect: the detector alone. MarkersThenAutoDetect: the
-        // scanner hands the lines between marker segments to the detector.
-        var detector = settings.Mode == IntakeMode.Markers ? null : new AutoDetector(item, settings.Detector, encoding);
-        var scanner = settings.Mode == IntakeMode.AutoDetect ? null : new MarkerScanner(settings.Markers, encoding, detector);
+        // scanner hands the lines between marker segments to the detector. Both decode with the
+        // encoding of the bytes read so far, which Auto can change from UTF-8 to windows-1252.
+        var detector = settings.Mode == IntakeMode.Markers ? null : new AutoDetector(item, settings.Detector, () => tracker.Current, settings.Validation);
+        var scanner = settings.Mode == IntakeMode.AutoDetect ? null : new MarkerScanner(settings.Markers, () => tracker.HeadEncoding, detector);
         IntakeLineHandler onLine = scanner is not null ? scanner.OnLine : detector!.OnLine;
         int Found() => (scanner?.ContainerCount ?? 0) + (detector?.ContainerCount ?? 0);
 
-        var outcome = LineIndexer.Scan(item, settings.MaxFileSizeMb, settings.EncodingName, onLine, Found, progress, token);
+        var outcome = LineIndexer.Scan(item, settings.MaxFileSizeMb, tracker, onLine, Found, progress, token);
 
         if (outcome.File is not null && outcome.Error is null)
         {
@@ -108,7 +111,7 @@ public static class IntakeReader
             return new IntakeLines([], $"The byte range {firstByte} to {lastByte} is not valid. Read the file again and use the offsets of that result.");
         }
 
-        var encoding = ResolveEncoding(encodingName, out var encodingError, allowUtf16: true);
+        var encoding = ResolveEncoding(encodingName, out var encodingError);
         if (encoding is null)
         {
             return new IntakeLines([], encodingError);
@@ -206,42 +209,21 @@ public static class IntakeReader
     }
 
     /// <summary>
-    /// The scan finds line ends on bytes, so a setting must keep ASCII as single bytes. UTF-16 is
-    /// read only when the file has a BOM, which decides; reading lines back accepts the names
-    /// utf-16le and utf-16be that <see cref="IntakeFileInfo.Encoding"/> gives such a file.
+    /// The encoding to decode a file's bytes with, by the name of <see cref="IntakeResult.EncodingUsed"/>
+    /// or <see cref="IntakeFileInfo.Encoding"/>. "auto" or no name means UTF-8 here: only a whole read
+    /// can tell Auto's choice.
     /// </summary>
-    private static Encoding? ResolveEncoding(string encodingName, out string? error, bool allowUtf16 = false)
+    internal static Encoding? ResolveEncoding(string? encodingName, out string? error)
     {
         error = null;
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
-        if (allowUtf16 && string.Equals(encodingName, "utf-16le", StringComparison.OrdinalIgnoreCase))
+        var encoding = string.IsNullOrWhiteSpace(encodingName) || IntakeEncodings.IsAuto(encodingName)
+            ? IntakeEncodings.Get(IntakeEncodings.Utf8)
+            : IntakeEncodings.Get(encodingName);
+        if (encoding is null)
         {
-            return new UnicodeEncoding(bigEndian: false, byteOrderMark: false);
+            error = IntakeEncodings.UnknownMessage;
         }
 
-        if (allowUtf16 && string.Equals(encodingName, "utf-16be", StringComparison.OrdinalIgnoreCase))
-        {
-            return new UnicodeEncoding(bigEndian: true, byteOrderMark: false);
-        }
-
-        try
-        {
-            var encoding = Encoding.GetEncoding(string.IsNullOrWhiteSpace(encodingName) ? "utf-8" : encodingName);
-            if (encoding.GetByteCount("\n") == 1)
-            {
-                return encoding;
-            }
-
-            error = Utf16SettingMessage;
-            return null;
-        }
-        catch (ArgumentException)
-        {
-            error = "Encoding name is unknown. Enter a valid encoding like utf-8 or windows-1252.";
-            return null;
-        }
+        return encoding;
     }
-
-
 }

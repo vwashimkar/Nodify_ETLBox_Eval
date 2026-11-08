@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EtlDesigner.Engine.Csv;
+using EtlDesigner.Engine.Intake;
 using EtlDesigner.Engine.Parsing;
 using EtlDesigner.Engine.Pipeline;
 
@@ -51,6 +52,53 @@ public static class ProjectNodeSettings
 
     public static OutputSettings ReadOutput(JsonElement settings)
         => SettingsJson.DeserializeOutputSettings(settings.GetRawText());
+
+    /// <summary>A File intake node: path, relativePath, mode, encoding and maxFileSizeMb.</summary>
+    public static JsonElement WriteFileIntake(FileIntakeNodeSettings settings, string? relativePath, JsonElement? loaded = null)
+    {
+        var json = new JsonObject { ["path"] = settings.Path };
+        if (relativePath is not null)
+        {
+            json[RelativePath] = relativePath;
+        }
+
+        json["mode"] = settings.Mode;
+        json["encoding"] = settings.Encoding;
+        json["maxFileSizeMb"] = settings.MaxFileSizeMb;
+        return Finish(json, loaded);
+    }
+
+    /// <summary>
+    /// A missing property takes its default. A mode or encoding this version does not know, or a
+    /// size limit that is not a whole number above 0, throws a <see cref="JsonException"/>, so the
+    /// node is kept in the file as an unknown node instead of losing the value.
+    /// </summary>
+    public static (FileIntakeNodeSettings Settings, string? RelativePath) ReadFileIntake(JsonElement settings)
+    {
+        var defaults = FileIntakeNodeSettings.Default;
+        string Text(string name, string fallback)
+            => !settings.TryGetProperty(name, out var e) ? fallback
+                : e.ValueKind == JsonValueKind.String ? e.GetString()! : throw new JsonException($"'{name}' must be text");
+
+        var mode = Text("mode", defaults.Mode);
+        if (!FileIntakeNodeSettings.Modes.Contains(mode))
+        {
+            throw new JsonException($"the mode '{mode}' is not known");
+        }
+
+        var encoding = IntakeEncodings.Normalize(Text("encoding", defaults.Encoding))
+            ?? throw new JsonException("the encoding is not known");
+
+        var size = defaults.MaxFileSizeMb;
+        if (settings.TryGetProperty("maxFileSizeMb", out var sizeElement)
+            && (sizeElement.ValueKind != JsonValueKind.Number || !sizeElement.TryGetInt32(out size) || size < 1))
+        {
+            throw new JsonException("'maxFileSizeMb' must be a whole number above 0");
+        }
+
+        return (new FileIntakeNodeSettings { Path = Text("path", ""), Mode = mode, Encoding = encoding, MaxFileSizeMb = size },
+            ReadRelativePath(settings));
+    }
 
     /// <summary>A legacy node: a plain key/value object with the keys of its setting rows.</summary>
     public static JsonElement WriteLegacy(IEnumerable<KeyValuePair<string, string>> values, string? relativePath, JsonElement? loaded = null)

@@ -5,9 +5,10 @@ namespace EtlDesigner.Engine.Intake;
 /// <summary>
 /// Marker mode (plan section 5 and the README of the intake test data). Takes the lines of one scan
 /// from <see cref="LineIndexer"/> and builds the containers. A problem in the file never stops the
-/// scan: it becomes a status on the container or a file-level warning.
+/// scan: it becomes a status on the container or a file-level warning. Heads are decoded with the
+/// encoding of the bytes read so far (UTF-8 for a UTF-16 file, whose heads the indexer converts).
 /// </summary>
-public sealed class MarkerScanner(MarkerProfile profile, Encoding encoding, AutoDetector? gapDetector = null)
+public sealed class MarkerScanner(MarkerProfile profile, Func<Encoding> headEncoding, AutoDetector? gapDetector = null)
 {
     public const string StrayEndMessage = "END marker without BEGIN (kept as plain text)";
 
@@ -17,9 +18,9 @@ public sealed class MarkerScanner(MarkerProfile profile, Encoding encoding, Auto
 
     private const string NoEndMessage = "no END marker; the segment runs to the end of the file";
 
-    private readonly byte _firstBeginByte = encoding.GetBytes(profile.BeginPrefix[..1])[0];
+    private readonly byte _firstBeginByte = headEncoding().GetBytes(profile.BeginPrefix[..1])[0];
 
-    private readonly byte _firstEndByte = encoding.GetBytes(profile.EndLine[..1])[0];
+    private readonly byte _firstEndByte = headEncoding().GetBytes(profile.EndLine[..1])[0];
 
     private readonly List<ContainerInfo> _containers = [];
 
@@ -45,7 +46,7 @@ public sealed class MarkerScanner(MarkerProfile profile, Encoding encoding, Auto
         // Almost every line stops here, so nothing is decoded for it.
         if (line.HeadIsWholeLine && !line.Head.IsEmpty && (line.Head[0] == _firstBeginByte || line.Head[0] == _firstEndByte))
         {
-            var text = encoding.GetString(line.Head).TrimEnd(' ', '\t');
+            var text = headEncoding().GetString(line.Head).TrimEnd(' ', '\t');
             isEnd = string.Equals(text, profile.EndLine, StringComparison.Ordinal);
             begin = isEnd ? null : ParseBegin(text);
         }

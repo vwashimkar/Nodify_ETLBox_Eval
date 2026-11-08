@@ -211,6 +211,21 @@ internal static class RowShape
         return tokens.Length > 0;
     }
 
+    /// <summary>
+    /// A plate grid header: an empty first cell, then the column numbers 1..n or 0..n-1. Only the
+    /// first <paramref name="count"/> fields count (trailing empty fields are left out).
+    /// </summary>
+    public static bool IsColumnNumberHeader(List<string> fields, int count)
+    {
+        if (count < 2 || fields[0].Length > 0)
+        {
+            return false;
+        }
+
+        var numbers = fields.Skip(1).Take(count - 1).ToArray();
+        return IsConsecutiveIntegers(numbers) && numbers[0] is "0" or "1";
+    }
+
     public static bool IsNumeric(string field)
         => field.Length > 0 && double.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out _);
 
