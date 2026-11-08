@@ -6,6 +6,7 @@ using EtlDesigner.Engine.Parsing;
 using EtlDesigner.Engine.Pipeline;
 using EtlDesigner.Engine.Project;
 using EtlDesigner.UI.Mvvm;
+using EtlDesigner.UI.Services;
 using EtlDesigner.UI.ViewModels;
 
 namespace EtlDesigner.UI.ViewModels;
@@ -348,7 +349,7 @@ public static class NodeFactory
             encoding.Choices.Add(new SettingChoice(name, IntakeEncodingLabel(name), true));
         }
 
-        node.Settings.Add(new SettingViewModel("FilePath", "File path", SettingKind.FilePath, required: false));
+        node.Settings.Add(new SettingViewModel("FilePath", "File path", SettingKind.FilePath, required: false) { FileFilter = FileFilters.Intake });
         node.Settings.Add(mode);
         node.Settings.Add(encoding);
         node.Settings.Add(new SettingViewModel("MaxFileSizeMb", "Size limit (MB)", SettingKind.Number, required: true,

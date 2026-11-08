@@ -187,7 +187,7 @@ public class DialogService : IDialogService
             CheckFileExists = true,
             CheckPathExists = true,
             Multiselect = false,
-            Filter = "All files (*.*)|*.*"
+            Filter = FileFilters.Intake
         };
 
         SetInitialFolder(dialog, currentPath);
@@ -216,7 +216,7 @@ public class DialogService : IDialogService
             CheckFileExists = true,
             CheckPathExists = true,
             Multiselect = false,
-            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            Filter = FileFilters.Csv
         };
 
         var folder = string.IsNullOrWhiteSpace(currentPath) ? null : Path.GetDirectoryName(currentPath);

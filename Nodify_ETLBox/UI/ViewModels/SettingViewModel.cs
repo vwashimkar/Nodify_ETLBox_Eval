@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Microsoft.Win32;
 using EtlDesigner.UI.Mvvm;
+using EtlDesigner.UI.Services;
 
 namespace EtlDesigner.UI.ViewModels;
 
@@ -93,6 +94,9 @@ public class SettingViewModel : ObservableObject
 
     public RelayCommand BrowseCommand { get; }
 
+    /// <summary>FilePath settings only: the file types the "..." button offers (see <see cref="FileFilters"/>).</summary>
+    public string FileFilter { get; init; } = FileFilters.Csv;
+
     private void Browse()
     {
         if (Kind != SettingKind.FilePath)
@@ -104,7 +108,7 @@ public class SettingViewModel : ObservableObject
             CheckFileExists = true,
             CheckPathExists = true,
             Multiselect = false,
-            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            Filter = FileFilter
         };
 
         if (dialog.ShowDialog() == true)
