@@ -53,6 +53,8 @@
     <Thickness x:Key="Thickness12">12</Thickness>
     <Thickness x:Key="Thickness16">16</Thickness>
     <Thickness x:Key="Thickness24">24</Thickness>
+    <!-- A compact list row: 4 left and right, 2 above and below. -->
+    <Thickness x:Key="ThicknessListRow">4,2</Thickness>
 
     <CornerRadius x:Key="corner-radius">4</CornerRadius>
 

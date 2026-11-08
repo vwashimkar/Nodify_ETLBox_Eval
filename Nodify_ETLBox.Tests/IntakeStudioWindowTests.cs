@@ -11,7 +11,7 @@ namespace Nodify_ETLBox.Tests;
 
 /// <summary>The real Intake Studio window, laid out (not shown) on the STA test thread (G4c).</summary>
 [Collection(WpfCollection.Name)]
-public sealed class IntakeStudioWindowTests
+public sealed partial class IntakeStudioWindowTests
 {
     private static readonly string[] Parts =
     [
@@ -96,7 +96,7 @@ public sealed class IntakeStudioWindowTests
     /// 1100 x 720 and 820 x 560, in reports/screens. Parts that do not fit inside the window's client
     /// area are written to g4c-clipping-&lt;theme&gt;.txt next to them (not a failure: the report says it).
     /// </summary>
-    [Theory]
+    [ScreensTheory]
     [InlineData(WpfTheme.Light)]
     [InlineData(WpfTheme.Dark)]
     public Task Screens_ForTheReport(WpfTheme theme)
@@ -136,6 +136,17 @@ public sealed class IntakeStudioWindowTests
                         Assert.True(new FileInfo(path).Length < 400 * 1024, $"{path} is 400 KB or more.");
                         Assert.True(WpfHost.DistinctColours(path) > 5, $"{path} looks blank.");
                     }
+                }
+
+                if (theme == WpfTheme.Dark)
+                {
+                    // The SOAP fault container (26), with its issue line, Dark, 96 DPI, 1100 x 720.
+                    WpfHost.Layout(window, 1100, 720);
+                    await Select(vm, window, 26);
+                    var fault = Path.Combine(folder, "g4d-studio-dark-fault.png");
+                    WpfHost.RenderPng(window, 96, fault);
+                    Assert.True(new FileInfo(fault).Length < 400 * 1024, $"{fault} is 400 KB or more.");
+                    Assert.True(WpfHost.DistinctColours(fault) > 5, $"{fault} looks blank.");
                 }
 
                 File.WriteAllLines(Path.Combine(folder, $"g4c-clipping-{theme.ToString().ToLowerInvariant()}.txt"),
@@ -183,4 +194,16 @@ public sealed class IntakeStudioWindowTests
                 window.Close();
             }
         });
+}
+
+/// <summary>The screens for a report: written only when INTAKE_SCREENS=1, otherwise skipped.</summary>
+public sealed class ScreensTheoryAttribute : TheoryAttribute
+{
+    public ScreensTheoryAttribute()
+    {
+        if (Environment.GetEnvironmentVariable("INTAKE_SCREENS") != "1")
+        {
+            Skip = "writes the report pictures: set INTAKE_SCREENS=1 to run it";
+        }
+    }
 }

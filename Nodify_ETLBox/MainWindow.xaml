@@ -504,7 +504,7 @@
                                         Padding="8,2"
                                         Command="{Binding Editor.SelectedNode.ConfigureCommand}">
                                     <Button.Style>
-                                        <Style TargetType="Button">
+                                        <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
                                             <Setter Property="Visibility" Value="Collapsed" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="FileIntake">
@@ -522,7 +522,7 @@
                                         Margin="0,8,0,0"
                                         Command="{Binding Editor.SelectedNode.LoadPreviewCommand}">
                                     <Button.Style>
-                                        <Style TargetType="Button">
+                                        <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
                                             <Setter Property="Visibility" Value="Collapsed" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="CsvFile">
@@ -538,7 +538,7 @@
                                         Margin="0,8,0,0"
                                         Command="{Binding Editor.SelectedNode.ConfigureCommand}">
                                     <Button.Style>
-                                        <Style TargetType="Button">
+                                        <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
                                             <Setter Property="Visibility" Value="Collapsed" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="ParseValue">

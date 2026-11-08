@@ -4,6 +4,7 @@
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="../UI/Themes/Tokens.Light.xaml" />
         <ResourceDictionary Source="Brushes.xaml" />
+        <ResourceDictionary Source="../UI/Themes/Buttons.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
     <Color x:Key="PanelBackgroundColor">#E9EEFE</Color>
