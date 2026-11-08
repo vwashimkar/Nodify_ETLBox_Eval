@@ -396,6 +396,38 @@ public sealed class IntakeEditSession
         return EditResult.Done;
     }
 
+    // ---- Plans ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A session that starts from a saved plan instead of the scan's containers, or null with the
+    /// plain reason (also written to the lineage log as <c>plan.rejected</c>). All containers are
+    /// checked again. <see cref="IsModified"/> is true; <see cref="Revert"/> goes back to the scan.
+    /// </summary>
+    public static IntakeEditSession? FromPlan(IntakeItem item, IntakeScanResult scan, IntakePlan plan, ILineageLog? log, string intakeId, out string message,
+        IntakeSettings? settings = null, EditSettings? edit = null)
+    {
+        var session = new IntakeEditSession(item, scan, log, intakeId, settings, edit);
+        if (!IntakePlan.TryApply(scan, plan, out var containers, out message))
+        {
+            session.Log("plan.rejected", new() { ["reason"] = message });
+            return null;
+        }
+
+        var validation = IntakeValidator.ValidateContainers(item, containers, Enumerable.Range(0, containers.Count).ToList(), session.EncodingName,
+            CancellationToken.None, session._settings);
+        if (validation.Error is not null)
+        {
+            message = validation.Error;
+            session.Log("plan.rejected", new() { ["reason"] = message });
+            return null;
+        }
+
+        session.Replace(0, session._containers.Count, [.. containers], [.. validation.Containers]);
+        session._state = ++session._nextState;
+        session.Log("plan.applied", new() { ["containers"] = containers.Count, ["confirmedByUser"] = containers.Count(c => c.ConfirmedByUser) });
+        return session;
+    }
+
     internal void Log(string eventName, Dictionary<string, object?> details)
     {
         _log?.Write(new LineageEvent(eventName, IntakeId, FileName, Sha256, details));
