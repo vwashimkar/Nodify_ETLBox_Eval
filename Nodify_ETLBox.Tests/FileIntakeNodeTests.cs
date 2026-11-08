@@ -411,4 +411,35 @@ public class FileIntakeStaticHandlerTests
             (NodeFactory.Labels, NodeFactory.FileIntakeCreated) = (labels, hook);
         }
     }
+
+    [Fact]
+    public void LabelsStartup_ReadsTheFile_WritesTheDefaultOnFirstUseOnly_AndSurvivesGarbage()
+    {
+        var (labels, hook) = (NodeFactory.Labels, NodeFactory.FileIntakeCreated);
+        var folder = Directory.CreateTempSubdirectory("labels-").FullName;
+        try
+        {
+            var path = Path.Combine(folder, "EtlDesigner", "labels.txt");
+            EtlDesigner.UI.Services.LabelsStartup.Install(path);
+            Assert.False(File.Exists(path));
+            Assert.Equal("File intake", NodeFactory.CreateFileIntake(new Point(0, 0)).Title);
+            Assert.True(File.Exists(path));
+
+            File.WriteAllText(path, "node.fileintake.title = My intake\n");
+            NodeFactory.CreateFileIntake(new Point(0, 0));
+            Assert.Equal("node.fileintake.title = My intake\n", File.ReadAllText(path));
+
+            EtlDesigner.UI.Services.LabelsStartup.Install(path);
+            Assert.Equal("My intake", NodeFactory.CreateFileIntake(new Point(0, 0)).Title);
+
+            File.WriteAllBytes(path, [0xFF, 0x00, 0x3D, 0x0A, 0xC3, 0x28, 0x3D, 0x3D, 0x0A]);
+            EtlDesigner.UI.Services.LabelsStartup.Install(path);
+            Assert.Equal("File intake", NodeFactory.CreateFileIntake(new Point(0, 0)).Title);
+        }
+        finally
+        {
+            (NodeFactory.Labels, NodeFactory.FileIntakeCreated) = (labels, hook);
+            ProjectEditorTests.DeleteTempFolder(folder);
+        }
+    }
 }

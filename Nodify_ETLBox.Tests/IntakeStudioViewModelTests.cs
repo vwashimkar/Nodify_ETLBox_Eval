@@ -182,7 +182,7 @@ public sealed class IntakeStudioViewModelTests : IDisposable
     {
         for (var round = 0; round < 20; round++)
         {
-            var path = LargeFile(2000);
+            var path = LargeFile(400);
             var vm = Studio(path);
             vm.ScanCommand.Execute(null);
             Assert.True(vm.IsScanning);
@@ -205,7 +205,7 @@ public sealed class IntakeStudioViewModelTests : IDisposable
     [Fact]
     public async Task ChangingASettingDuringAScan_StopsIt_AndShowsNothingOfIt()
     {
-        var vm = Studio(LargeFile(2000));
+        var vm = Studio(LargeFile(400));
         vm.ScanCommand.Execute(null);
 
         vm.Encoding = IntakeEncodings.Utf8;
