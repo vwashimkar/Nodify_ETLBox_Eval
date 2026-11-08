@@ -13,7 +13,7 @@ public sealed record IntakeScanProgress(IntakePhase Phase, int Percent, int Cont
 /// <summary>
 /// The outcome of a scan: the read (<see cref="Intake"/>) and the checks (<see cref="Validation"/>,
 /// null when the read did not finish). <see cref="Error"/> is one plain sentence; the scan never
-/// throws for a bad file. Not saved in project files.
+/// throws for a bad file. <see cref="Mode"/> is the reading mode of the scan. Not saved in project files.
 /// </summary>
 public sealed record IntakeScanResult(
     IntakeResult? Intake,
@@ -22,7 +22,8 @@ public sealed record IntakeScanResult(
     bool EncodingGuessed,
     long ElapsedMs,
     bool Cancelled,
-    string? Error);
+    string? Error,
+    IntakeMode Mode = IntakeMode.AutoDetect);
 
 /// <summary>
 /// One call for the UI: reads an <see cref="IntakeItem"/> (index, detect or markers, encoding) and
@@ -44,7 +45,7 @@ public sealed class IntakeScanService(IntakeSettings? settings = null)
     {
         var clock = Stopwatch.StartNew();
         IntakeScanResult Stop(IntakeResult? intake, IntakeValidationResult? validation, bool cancelled, string? error)
-            => new(intake, validation, intake?.EncodingUsed, intake?.EncodingGuessed ?? false, clock.ElapsedMilliseconds, cancelled, error);
+            => new(intake, validation, intake?.EncodingUsed, intake?.EncodingGuessed ?? false, clock.ElapsedMilliseconds, cancelled, error, _settings.Mode);
 
         if (item.Size > _settings.MaxFileSizeMb * 1024L * 1024L)
         {

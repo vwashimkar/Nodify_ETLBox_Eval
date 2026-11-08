@@ -32,9 +32,20 @@ public interface IRawArchive
 /// <summary>
 /// Records what happened in each run (plan section 10): input id and hash, containers, which layout
 /// and definition produced which output, counts, times, user and tool version. This is the lineage
-/// and data quality metadata DMBOK asks for. First implementation later: one JSON file per run.
+/// and data quality metadata DMBOK asks for. First implementation: <c>TextFileLineageLog</c>,
+/// one JSON line per event. An implementation never throws.
 /// </summary>
 public interface ILineageLog
 {
+    /// <summary>Writes an <c>intake.scanned</c> event for a read.</summary>
     void Record(IntakeResult result);
+
+    void Write(LineageEvent entry);
 }
+
+/// <summary>
+/// One lineage event. <see cref="File"/> is a file name only, never a folder path. <see cref="Details"/>
+/// holds counts, line numbers and names the user typed (cut to 80 characters), never file content,
+/// user or machine names. The log adds the event's id and UTC time.
+/// </summary>
+public sealed record LineageEvent(string Event, string IntakeId, string? File, string? Sha256, IReadOnlyDictionary<string, object?> Details);

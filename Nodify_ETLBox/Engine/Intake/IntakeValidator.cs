@@ -28,7 +28,27 @@ public static class IntakeValidator
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(result);
         settings ??= new IntakeSettings();
+        return Run(item, result.Containers, result.EncodingUsed ?? result.File?.Encoding ?? settings.Encoding, result.File?.Size ?? item.Size, progress, token, settings);
+    }
 
+    /// <summary>
+    /// Checks only the containers at <paramref name="indices"/> of <paramref name="containers"/>,
+    /// with the same checks as <see cref="Validate"/>. Only those containers' bytes are read. The
+    /// result lists them in the order of <paramref name="indices"/>; no progress is reported.
+    /// </summary>
+    public static IntakeValidationResult ValidateContainers(IntakeItem item, IReadOnlyList<ContainerInfo> containers, IReadOnlyList<int> indices,
+        string? encodingName, CancellationToken token, IntakeSettings? settings = null)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(containers);
+        ArgumentNullException.ThrowIfNull(indices);
+        settings ??= new IntakeSettings();
+        return Run(item, indices.Select(i => containers[i]).ToList(), encodingName ?? settings.Encoding, item.Size, null, token, settings);
+    }
+
+    private static IntakeValidationResult Run(IntakeItem item, IReadOnlyList<ContainerInfo> containers, string? encodingName, long fileSize,
+        IProgress<IntakeProgress>? progress, CancellationToken token, IntakeSettings settings)
+    {
         var clock = Stopwatch.StartNew();
         var lastReport = TimeSpan.Zero;
         var done = new List<ContainerValidation>();
@@ -36,10 +56,9 @@ public static class IntakeValidator
         long bytesChecked = 0;
         var cancelled = false;
         string? error = null;
-        var fileSize = result.File?.Size ?? item.Size;
-        var total = result.Containers.Count;
+        var total = containers.Count;
 
-        var encoding = IntakeReader.ResolveEncoding(result.EncodingUsed ?? result.File?.Encoding ?? settings.Encoding, out var encodingError);
+        var encoding = IntakeReader.ResolveEncoding(encodingName, out var encodingError);
         if (encoding is null)
         {
             error = encodingError;
@@ -49,7 +68,7 @@ public static class IntakeValidator
             Stream? stream = null;
             try
             {
-                foreach (var container in result.Containers)
+                foreach (var container in containers)
                 {
                     if (token.IsCancellationRequested)
                     {

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json.Serialization;
 
 namespace EtlDesigner.Engine.Intake;
 
@@ -209,7 +210,8 @@ public sealed record IntakeSettings
 /// auto-detector: <see cref="SubType"/> (for example soap), the table's <see cref="Delimiter"/>,
 /// <see cref="HeaderGuess"/> and <see cref="SkipLines"/> (title lines at the top of the region),
 /// the <see cref="KeyValueForm"/>, and <see cref="Reasons"/>, short texts that say why the format
-/// was chosen.
+/// was chosen. <see cref="ConfirmedByUser"/> is set by an edit in <see cref="IntakeEditSession"/>
+/// and written to JSON only when true.
 /// </summary>
 public sealed record ContainerInfo(
     int Order,
@@ -233,7 +235,8 @@ public sealed record ContainerInfo(
     int SkipLines = 0,
     KeyValueForm? KeyValueForm = null,
     IReadOnlyList<string>? Reasons = null,
-    string? SubTypeVersion = null);
+    string? SubTypeVersion = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool ConfirmedByUser = false);
 
 public sealed record IntakeFileInfo(
     string Name,
