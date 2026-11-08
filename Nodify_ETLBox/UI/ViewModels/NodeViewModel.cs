@@ -191,6 +191,21 @@ public class NodeViewModel : ObservableObject
         }
     }
 
+    /// <summary>File intake only: the file name, or "No file chosen" when the path is empty. Null for the other nodes.</summary>
+    public string? IntakeFileText
+    {
+        get
+        {
+            if (NodeType != NodeType.FileIntake)
+            {
+                return null;
+            }
+
+            var path = GetFileIntakeSettings().Path;
+            return string.IsNullOrWhiteSpace(path) ? NoFileChosenText : System.IO.Path.GetFileName(path.Trim());
+        }
+    }
+
     /// <summary>File intake only: the full path, for the tooltip of <see cref="CanvasNote"/>.</summary>
     public string? CanvasNoteToolTip
     {
@@ -205,6 +220,7 @@ public class NodeViewModel : ObservableObject
     internal void NotifyCanvasNoteChanged()
     {
         OnPropertyChanged(nameof(CanvasNote));
+        OnPropertyChanged(nameof(IntakeFileText));
         OnPropertyChanged(nameof(CanvasNoteToolTip));
     }
 
