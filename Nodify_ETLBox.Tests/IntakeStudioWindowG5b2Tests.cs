@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using EtlDesigner.Engine.Intake;
 using EtlDesigner.UI.ViewModels;
@@ -253,4 +254,54 @@ public sealed partial class IntakeStudioWindowTests
         }, () => new IntakeStudioViewModel(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") },
             confirm: q => { questions.Add(q); return false; }));
     }
+    [Theory]
+    [InlineData(WpfTheme.Light)]
+    [InlineData(WpfTheme.Dark)]
+    public Task G5b2_3B_CtrlC_AndCopyLine_PutTheLineTextOnTheClipboard(WpfTheme theme)
+        => WithScannedWindow(theme, 1100, 720, async (window, vm) =>
+        {
+            var preview = (ListBox)window.FindName("PreviewBox");
+            var menu = preview.ContextMenu!;
+            var item = (MenuItem)menu.Items[0];
+            Assert.Equal("Copy line", item.Header);
+            menu.PlacementTarget = preview;
+            menu.IsOpen = true;
+            await WpfHost.Settle();
+            Assert.False(item.IsEnabled, "Copy line is enabled with no line selected.");
+            menu.IsOpen = false;
+
+            var ctrlC = preview.InputBindings.OfType<KeyBinding>().Single(b => b.Key == Key.C && b.Modifiers == ModifierKeys.Control);
+            Assert.Same(vm.CopyPreviewLineCommand, ctrlC.Command);
+
+            // The test puts the user's clipboard text back afterwards.
+            var before = Clipboard.ContainsText() ? Clipboard.GetText() : null;
+            try
+            {
+                await ClickPreviewLine(window, 1);
+                var expected = vm.PreviewLines.Single(l => l.LineNumber == vm.PreviewRows[1].LineNumber).Text;
+
+                ctrlC.Command.Execute(ctrlC.CommandParameter);
+                Assert.Equal(expected, Clipboard.GetText());
+
+                Clipboard.Clear();
+                menu.IsOpen = true;
+                await WpfHost.Settle();
+                Assert.True(item.IsEnabled);
+                ((System.Windows.Automation.Provider.IInvokeProvider)new System.Windows.Automation.Peers.MenuItemAutomationPeer(item)
+                    .GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)!).Invoke();
+                await WpfHost.Settle();
+                Assert.Equal(expected, Clipboard.GetText());
+                Assert.False(expected.StartsWith(vm.PreviewRows[1].LineNumber.ToString(System.Globalization.CultureInfo.InvariantCulture) + "  ", StringComparison.Ordinal));
+            }
+            finally
+            {
+                menu.IsOpen = false;
+                if (before is not null)
+                {
+                    TextClipboardRestore(before);
+                }
+            }
+        });
+
+    private static void TextClipboardRestore(string text) => EtlDesigner.UI.Services.TextClipboard.TrySetText(text);
 }

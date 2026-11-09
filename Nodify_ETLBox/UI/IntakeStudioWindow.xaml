@@ -430,6 +430,16 @@
                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              AutomationProperties.Name="Preview">
+                        <!-- Ctrl+C and "Copy line" copy the selected line's text without its line number (a right-click selects the line first). -->
+                        <ListBox.InputBindings>
+                            <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyPreviewLineCommand, Mode=OneWay}" />
+                        </ListBox.InputBindings>
+                        <ListBox.ContextMenu>
+                            <ContextMenu x:Name="PreviewMenu" AutomationProperties.Name="Preview line">
+                                <MenuItem x:Name="CopyLineItem" Header="Copy line" InputGestureText="Ctrl+C"
+                                          Command="{Binding CopyPreviewLineCommand, Mode=OneWay}" AutomationProperties.Name="Copy line" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding Text, Mode=OneWay}" TextWrapping="NoWrap" />

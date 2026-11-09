@@ -33,6 +33,7 @@ public sealed partial class IntakeStudioViewModel
     private readonly ILineageLog? _lineage;
     private readonly Action<string?>? _savePlan;
     private readonly Func<string, bool>? _confirm;
+    private readonly Func<string, bool> _copyText;
     private string? _savedPlanJson;
     private IntakeEditSession? _session;
     private IntakeScanResult? _scanResult;
@@ -188,11 +189,37 @@ public sealed partial class IntakeStudioViewModel
         get => _selectedPreviewLine;
         set
         {
-            if (SetProperty(ref _selectedPreviewLine, value) && value is not null && !_syncingPreview)
+            if (!SetProperty(ref _selectedPreviewLine, value))
+            {
+                return;
+            }
+
+            CopyPreviewLineCommand.RaiseCanExecuteChanged();
+            if (value is not null && !_syncingPreview)
             {
                 SplitLine = value.LineNumber;
             }
         }
+    }
+
+    /// <summary>The text of the selected Preview line as it is in the file, without its line number; null when no line is selected.</summary>
+    public string? SelectedPreviewLineText
+        => SelectedPreviewLine is { } row ? PreviewLines.FirstOrDefault(l => l.LineNumber == row.LineNumber)?.Text : null;
+
+    /// <summary>Ctrl+C and "Copy line" in the Preview: copies <see cref="SelectedPreviewLineText"/>.</summary>
+    public RelayCommand CopyPreviewLineCommand { get; private set; } = null!;
+
+    private void CopyPreviewLine()
+    {
+        if (SelectedPreviewLineText is not { } text)
+        {
+            return;
+        }
+
+        var line = SelectedPreviewLine!.LineNumber.ToString(CultureInfo.InvariantCulture);
+        EditStatus = _copyText(text)
+            ? $"Copied line {line}."
+            : $"Line {line} could not be copied because another program is using the clipboard. Try again.";
     }
 
     private int SelectedIndex => SelectedContainer is { } row && _session is not null ? row.Number - 1 : -1;
@@ -225,6 +252,7 @@ public sealed partial class IntakeStudioViewModel
         RedoCommand = new RelayCommand(_ => Edit(_ => _session!.Redo(), _ => "Redid the change.", whole: true), _ => CanEdit && _session!.CanRedo);
         RevertCommand = new RelayCommand(_ => Edit(_ => _session!.Revert(), _ => "Back to the detected result.", whole: true),
             _ => CanEdit && _session!.IsModified);
+        CopyPreviewLineCommand = new RelayCommand(_ => CopyPreviewLine(), _ => SelectedPreviewLineText is not null);
     }
 
     private string FormatLabel(string? format) => FormatChoices.FirstOrDefault(c => c.Value == format)?.Label ?? format ?? string.Empty;

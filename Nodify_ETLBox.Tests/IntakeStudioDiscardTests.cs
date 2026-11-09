@@ -125,3 +125,46 @@ public sealed class IntakeStudioDiscardTests : IDisposable
         Assert.Equal(FileIntakeNodeSettings.MarkersMode, vm.Mode);
     }
 }
+
+/// <summary>G5b2 step 3b: copying the selected Preview line, without a window.</summary>
+public sealed class IntakeStudioCopyTests
+{
+    [Fact]
+    public async Task CopyLine_CopiesTheFileText_WithoutTheLineNumber_OnlyWhenALineIsSelected()
+    {
+        var copied = new List<string>();
+        var vm = new IntakeStudioViewModel(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") },
+            copyText: t => { copied.Add(t); return true; });
+        Assert.False(vm.CopyPreviewLineCommand.CanExecute(null));
+
+        await IntakeStudioEditTests.Scan(vm);
+        vm.SelectedContainer = vm.Containers.First(r => r.Info.Format == "csv");
+        await TestTimeout.Run(() => vm.PreviewTask!, TimeSpan.FromSeconds(30));
+        Assert.Null(vm.SelectedPreviewLine);
+        Assert.False(vm.CopyPreviewLineCommand.CanExecute(null));
+        vm.CopyPreviewLineCommand.Execute(null);
+        Assert.Empty(copied);
+
+        vm.SelectedPreviewLine = vm.PreviewRows[1];
+        Assert.True(vm.CopyPreviewLineCommand.CanExecute(null));
+        vm.CopyPreviewLineCommand.Execute(null);
+
+        var line = vm.PreviewLines.Single(l => l.LineNumber == vm.PreviewRows[1].LineNumber);
+        Assert.Equal([line.Text], copied);
+        Assert.NotEqual(vm.PreviewRows[1].Text, line.Text);
+        Assert.Equal(File.ReadAllLines(IntakeTestData.PathOf("i01_sample"))[line.LineNumber - 1], copied[0]);
+        Assert.Equal($"Copied line {line.LineNumber}.", vm.EditStatus);
+    }
+
+    [Fact]
+    public async Task CopyLine_WhenTheClipboardIsBusy_SaysSo()
+    {
+        var vm = new IntakeStudioViewModel(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") }, copyText: _ => false);
+        await IntakeStudioEditTests.Scan(vm);
+        vm.SelectedContainer = vm.Containers.First(r => r.Info.Format == "csv");
+        await TestTimeout.Run(() => vm.PreviewTask!, TimeSpan.FromSeconds(30));
+        vm.SelectedPreviewLine = vm.PreviewRows[0];
+        vm.CopyPreviewLineCommand.Execute(null);
+        Assert.Contains("could not be copied", vm.EditStatus);
+    }
+}

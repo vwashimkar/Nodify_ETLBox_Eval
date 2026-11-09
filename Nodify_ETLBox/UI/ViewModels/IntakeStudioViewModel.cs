@@ -76,7 +76,8 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         ILineageLog? lineage = null,
         string? savedPlanJson = null,
         Action<string?>? savePlan = null,
-        Func<string, bool>? confirm = null)
+        Func<string, bool>? confirm = null,
+        Func<string, bool>? copyText = null)
     {
         _savedSettings = settings ?? throw new ArgumentNullException(nameof(settings));
         _labels = labels ?? Labels.Empty;
@@ -89,6 +90,7 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         _savedPlanJson = savedPlanJson;
         _savePlan = savePlan;
         _confirm = confirm;
+        _copyText = copyText ?? TextClipboard.TrySetText;
 
         _filePath = settings.Path;
         _mode = settings.Mode;
