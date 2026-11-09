@@ -416,13 +416,19 @@ public sealed class IntakeStudioEditTests : IDisposable
         vm.MergeCommand.Execute(null);
         vm.UndoCommand.Execute(null);
         vm.SaveCommand.Execute(null);
-        var reopened = Studio(lineage: lineage, plan: plan);
+        var reopened = Studio(lineage: lineage, plan: plan, confirm: _ => true);
+        await Scan(reopened);
+        // G5b2: an edit thrown away by Scan again (answered Yes) is recorded before the new scan.
+        await Select(reopened, Table(reopened));
+        reopened.NewName = "Thrown away";
+        reopened.RenameCommand.Execute(null);
         await Scan(reopened);
 
         Assert.NotNull(lineage.FilePath);
         Assert.StartsWith(_folder, lineage.FilePath);
         var events = File.ReadAllLines(lineage.FilePath!).Select(l => JsonDocument.Parse(l).RootElement.GetProperty("event").GetString()).ToList();
-        Assert.Equal(["intake.scanned", "edit.split", "edit.merged", "edit.undone", "plan.saved", "intake.scanned", "plan.applied"], events);
+        Assert.Equal(["intake.scanned", "edit.split", "edit.merged", "edit.undone", "plan.saved", "intake.scanned", "plan.applied",
+            "edit.renamed", "edit.discarded", "intake.scanned", "plan.applied"], events);
         Assert.Null(vm.LineageNote);
     }
 

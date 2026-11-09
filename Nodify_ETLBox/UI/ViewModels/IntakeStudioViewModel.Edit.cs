@@ -375,7 +375,19 @@ public sealed partial class IntakeStudioViewModel
             return true;
         }
 
-        return _confirm?.Invoke(reason == DiscardReasonScan ? RescanQuestion : DiscardQuestion) ?? false;
+        if (!(_confirm?.Invoke(reason == DiscardReasonScan ? RescanQuestion : DiscardQuestion) ?? false))
+        {
+            return false;
+        }
+
+        // The decision is part of the lineage: which edits were thrown away, and why.
+        var session = _session!;
+        _lineage?.Write(new LineageEvent("edit.discarded", session.IntakeId, session.FileName, session.Sha256, new Dictionary<string, object?>
+        {
+            ["reason"] = reason,
+            ["changes"] = session.UndoSteps
+        }));
+        return true;
     }
 
     /// <summary>

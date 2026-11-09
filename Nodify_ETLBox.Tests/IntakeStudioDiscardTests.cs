@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using EtlDesigner.Engine.Intake;
 using EtlDesigner.UI.ViewModels;
 using Xunit;
@@ -123,6 +124,71 @@ public sealed class IntakeStudioDiscardTests : IDisposable
 
         Assert.Empty(questions);
         Assert.Equal(FileIntakeNodeSettings.MarkersMode, vm.Mode);
+    }
+    private static List<JsonElement> Events(TextFileLineageLog log)
+        => log.FilePath is null || !File.Exists(log.FilePath)
+            ? []
+            : File.ReadAllLines(log.FilePath).Select(l => JsonDocument.Parse(l).RootElement.Clone()).ToList();
+
+    public static TheoryData<string> Reasons => new() { "scan", "mode", "encoding", "file" };
+
+    [Theory]
+    [MemberData(nameof(Reasons))]
+    public async Task Discard_AnsweredYes_WritesOneEditDiscardedEvent_WithTheReasonAndTheChanges(string reason)
+    {
+        var log = Lineage();
+        var vm = Studio(_ => true, log);
+        await WithAnEdit(vm);
+        vm.SelectedContainer = vm.Containers.First(r => r.Info.Format == "csv");
+        vm.NewName = "Results again";
+        vm.RenameCommand.Execute(null);
+        var intakeId = vm.Session!.IntakeId;
+
+        if (reason == "scan")
+        {
+            await IntakeStudioEditTests.Scan(vm);
+        }
+        else
+        {
+            Change(vm, reason, NewValue(reason));
+        }
+
+        var discarded = Events(log).Where(e => e.GetProperty("event").GetString() == "edit.discarded").ToList();
+        var entry = Assert.Single(discarded);
+        Assert.Equal(reason, entry.GetProperty("details").GetProperty("reason").GetString());
+        Assert.Equal(2, entry.GetProperty("details").GetProperty("changes").GetInt32());
+        Assert.Equal(intakeId, entry.GetProperty("intakeId").GetString());
+        Assert.Equal("i01_sample.txt", entry.GetProperty("file").GetString());
+    }
+
+    [Theory]
+    [MemberData(nameof(Reasons))]
+    public async Task Discard_AnsweredNo_WritesNoEvent(string reason)
+    {
+        var log = Lineage();
+        var vm = Studio(_ => false, log);
+        await WithAnEdit(vm);
+
+        if (reason == "scan")
+        {
+            vm.ScanCommand.Execute(null);
+        }
+        else
+        {
+            Change(vm, reason, NewValue(reason));
+        }
+
+        Assert.DoesNotContain(Events(log), e => e.GetProperty("event").GetString() == "edit.discarded");
+    }
+
+    [Fact]
+    public async Task Discard_WithoutEdits_WritesNoEvent()
+    {
+        var log = Lineage();
+        var vm = Studio(_ => true, log);
+        await IntakeStudioEditTests.Scan(vm);
+        vm.Mode = FileIntakeNodeSettings.MarkersMode;
+        Assert.DoesNotContain(Events(log), e => e.GetProperty("event").GetString() == "edit.discarded");
     }
 }
 
