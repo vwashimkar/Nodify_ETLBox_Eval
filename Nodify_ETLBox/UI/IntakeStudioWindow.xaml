@@ -165,16 +165,20 @@
         </Border>
 
         <!-- ===== Middle: containers (left) and details with preview (right) ===== -->
-        <Grid Grid.Row="1" Margin="{DynamicResource Thickness8}">
+        <!-- The list starts 380 px wide (the Part column then shows about 14 characters at the minimum window size)
+             and the splitter moves it; the list keeps at least 300 px and the tabs at least 360 px. -->
+        <Grid x:Name="MiddleGrid" Grid.Row="1" Margin="{DynamicResource Thickness8}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="4*" MinWidth="280" />
+                <ColumnDefinition Width="380" MinWidth="300" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="6*" MinWidth="320" />
+                <ColumnDefinition Width="*" MinWidth="360" />
             </Grid.ColumnDefinitions>
 
             <DockPanel Grid.Column="0">
-                <DockPanel DockPanel.Dock="Top">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <!-- The title comes first; when the list is narrow the layout buttons wrap under it, so they never take its space. -->
+                <WrapPanel x:Name="ContainersTitleBar" DockPanel.Dock="Top">
+                    <TextBlock x:Name="ContainersTitle" Text="Containers" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal">
                         <Button x:Name="UndoButton" Style="{StaticResource ThemedButton}" Content="Undo" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource ThicknessListRow}"
                                 Command="{Binding UndoCommand, Mode=OneWay}" ToolTip="Undo the last layout change (Ctrl+Z)" AutomationProperties.Name="Undo layout change" />
                         <Button x:Name="RedoButton" Style="{StaticResource ThemedButton}" Content="Redo" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource ThicknessListRow}"
@@ -183,8 +187,7 @@
                                 Command="{Binding RevertCommand, Mode=OneWay}" ToolTip="Forget all layout changes and show the parts as the scan found them (can be undone)"
                                 AutomationProperties.Name="Back to detected result" />
                     </StackPanel>
-                    <TextBlock Text="Containers" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
-                </DockPanel>
+                </WrapPanel>
 
                 <!-- Column headers over the row columns: # narrow, Part takes the free width, then Lines and Status
                      with fixed widths and an 8 px gap before each. The last column keeps the width of the list's
@@ -262,7 +265,7 @@
                 </ListBox>
             </DockPanel>
 
-            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+            <GridSplitter x:Name="ListSplitter" Grid.Column="1" Width="8" AutomationProperties.Name="Resize the container list" HorizontalAlignment="Center" VerticalAlignment="Stretch"
                           Background="Transparent" ResizeBehavior="PreviousAndNext" />
 
             <Grid Grid.Column="2">
