@@ -179,7 +179,8 @@ public sealed partial class IntakeStudioWindowTests
 
                 await Select(vm, window, 12);
                 var row = vm.Containers.Single(r => r.Number == 12);
-                var preview = ((TextBox)window.FindName("PreviewBox")).Text;
+                // G5b: the Preview is a list of lines (a click chooses the split line), no longer one text box.
+                var preview = string.Join(Environment.NewLine, ((ListBox)window.FindName("PreviewBox")).Items.Cast<IntakePreviewRow>().Select(r => r.Text));
                 Assert.StartsWith(FormattableString.Invariant($"{row.Info.ContentFirstLine}  "), preview.TrimStart());
 
                 ((ComboBox)window.FindName("ModeBox")).SelectedValue = FileIntakeNodeSettings.MarkersMode;

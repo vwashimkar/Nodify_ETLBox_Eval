@@ -36,11 +36,13 @@ public partial class MainViewModel : ObservableObject
     private bool _isRunInProgress;
     private bool _isGenerating;
     private readonly IDialogService _dialogService;
+    private readonly EtlDesigner.Engine.Intake.ILineageLog? _lineageLog;
     private readonly HashSet<(Guid NodeId, CsvFileSettings Settings)> _columnReadsTried = new();
 
-    public MainViewModel(IDialogService? dialogService = null, IRecentProjects? recentProjects = null)
+    public MainViewModel(IDialogService? dialogService = null, IRecentProjects? recentProjects = null, EtlDesigner.Engine.Intake.ILineageLog? lineageLog = null)
     {
         _dialogService = dialogService ?? new DialogService();
+        _lineageLog = lineageLog;
         _recentProjects = recentProjects ?? new JsonRecentProjects();
         Editor = new EditorViewModel();
         _filteredJsonOutput = "";
@@ -506,7 +508,11 @@ public partial class MainViewModel : ObservableObject
                 NodeFactory.Labels,
                 _dialogService.PickIntakeFile,
                 save: node.SetFileIntakeSettings,
-                askUnsaved: () => _dialogService.AskUnsavedChanges($"the settings of {node.Title}"));
+                askUnsaved: () => _dialogService.AskUnsavedChanges($"the settings of {node.Title}"),
+                lineage: _lineageLog ?? AppLineage.Shared,
+                savedPlanJson: node.IntakePlanJson,
+                savePlan: json => node.IntakePlanJson = json,
+                confirm: question => _dialogService.AskYesNo("Intake Studio", question));
 
             _dialogService.ShowIntakeStudio(viewModel);
 

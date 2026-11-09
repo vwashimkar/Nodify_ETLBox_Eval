@@ -446,6 +446,12 @@
                                                MaxWidth="170"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
+                                    <TextBlock Text="{Binding IntakeLayoutText, Mode=OneWay}"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-muted-brush}"
+                                               MaxWidth="170"
+                                               HorizontalAlignment="Left"
+                                               Style="{StaticResource NodeNoteText}" />
                                     <StackPanel Orientation="Horizontal" Style="{StaticResource HiddenForFileIntake}">
                                         <TextBlock Text="{Binding State}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                         <TextBlock Text=" | rows: " FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />

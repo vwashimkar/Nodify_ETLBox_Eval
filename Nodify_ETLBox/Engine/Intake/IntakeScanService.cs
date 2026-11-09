@@ -13,7 +13,7 @@ public sealed record IntakeScanProgress(IntakePhase Phase, int Percent, int Cont
 /// <summary>
 /// The outcome of a scan: the read (<see cref="Intake"/>) and the checks (<see cref="Validation"/>,
 /// null when the read did not finish). <see cref="Error"/> is one plain sentence; the scan never
-/// throws for a bad file. Not saved in project files.
+/// throws for a bad file. <see cref="Mode"/> is the reading mode of the scan. Not saved in project files.
 /// </summary>
 public sealed record IntakeScanResult(
     IntakeResult? Intake,
@@ -22,29 +22,50 @@ public sealed record IntakeScanResult(
     bool EncodingGuessed,
     long ElapsedMs,
     bool Cancelled,
-    string? Error);
+    string? Error,
+    IntakeMode Mode = IntakeMode.AutoDetect);
 
 /// <summary>
 /// One call for the UI: reads an <see cref="IntakeItem"/> (index, detect or markers, encoding) and
 /// then checks every container. Runs off the calling thread. Progress comes about every 250 ms from
 /// the reader and the validator, and once at the end with 100. A cancel stops at the next line or
-/// container and closes the file before this returns.
+/// container and closes the file before this returns. With a <paramref name="log"/>, a finished scan
+/// writes one <c>intake.scanned</c> event; null means no logging.
 /// </summary>
-public sealed class IntakeScanService(IntakeSettings? settings = null)
+public sealed class IntakeScanService(IntakeSettings? settings = null, ILineageLog? log = null)
 {
     private readonly IntakeSettings _settings = settings ?? new IntakeSettings();
 
-    public Task<IntakeScanResult> ScanAsync(IntakeItem item, IProgress<IntakeScanProgress>? progress, CancellationToken token)
+    /// <param name="intakeId">The id the lineage event carries (the Studio session's id); null means the item's id.</param>
+    public Task<IntakeScanResult> ScanAsync(IntakeItem item, IProgress<IntakeScanProgress>? progress, CancellationToken token, string? intakeId = null)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return Task.Run(() => Scan(item, progress, token));
+        return Task.Run(() =>
+        {
+            var result = Scan(item, progress, token);
+            if (log is not null && result is { Intake.File: { } file, Validation: { } validation, Error: null, Cancelled: false })
+            {
+                log.Write(new LineageEvent("intake.scanned", intakeId ?? item.Id.ToString(), file.Name, file.Sha256, new Dictionary<string, object?>
+                {
+                    ["size"] = file.Size,
+                    ["mode"] = _settings.Mode.ToString(),
+                    ["encoding"] = result.EncodingUsed,
+                    ["guessed"] = result.EncodingGuessed,
+                    ["containers"] = result.Intake.Containers.Count,
+                    ["errors"] = validation.Errors,
+                    ["warnings"] = validation.Warnings
+                }));
+            }
+
+            return result;
+        });
     }
 
     private IntakeScanResult Scan(IntakeItem item, IProgress<IntakeScanProgress>? progress, CancellationToken token)
     {
         var clock = Stopwatch.StartNew();
         IntakeScanResult Stop(IntakeResult? intake, IntakeValidationResult? validation, bool cancelled, string? error)
-            => new(intake, validation, intake?.EncodingUsed, intake?.EncodingGuessed ?? false, clock.ElapsedMilliseconds, cancelled, error);
+            => new(intake, validation, intake?.EncodingUsed, intake?.EncodingGuessed ?? false, clock.ElapsedMilliseconds, cancelled, error, _settings.Mode);
 
         if (item.Size > _settings.MaxFileSizeMb * 1024L * 1024L)
         {

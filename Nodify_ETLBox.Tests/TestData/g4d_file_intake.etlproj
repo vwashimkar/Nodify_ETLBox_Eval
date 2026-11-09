@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "savedUtc": "2026-11-08T09:00:00Z",
+  "toolVersion": "1.0.0.0",
+  "projectName": "g4d_file_intake",
+  "nodes": [
+    {
+      "id": "5b0f6f7e-3c55-4c1e-9d0a-6f1d2a7b8c90",
+      "type": "FileIntake",
+      "name": "File intake",
+      "x": 10,
+      "y": 20,
+      "settings": {
+        "path": "C:\\nowhere\\i01_sample.txt",
+        "mode": "markers",
+        "encoding": "utf-8",
+        "maxFileSizeMb": 200
+      }
+    }
+  ],
+  "connections": [],
+  "view": {
+    "zoom": 1,
+    "offsetX": 0,
+    "offsetY": 0
+  }
+}

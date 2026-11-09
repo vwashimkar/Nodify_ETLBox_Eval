@@ -236,6 +236,7 @@ public partial class EditorViewModel
             case NodeType.FileIntake:
                 var (intake, intakeRelativePath) = ProjectNodeSettings.ReadFileIntake(settings);
                 node.SetFileIntakeSettings(intake with { Path = ProjectPaths.Resolve(intake.Path, intakeRelativePath, projectFilePath) });
+                node.IntakePlanJson = ProjectNodeSettings.ReadLayoutPlan(settings);
                 break;
 
             default:
@@ -355,7 +356,7 @@ public partial class EditorViewModel
 
             case NodeType.FileIntake:
                 var intake = node.GetFileIntakeSettings();
-                return ProjectNodeSettings.WriteFileIntake(intake, RelativePathFor(intake.Path, "path", loaded, projectFilePath), loaded);
+                return ProjectNodeSettings.WriteFileIntake(intake, RelativePathFor(intake.Path, "path", loaded, projectFilePath), loaded, node.IntakePlanJson);
 
             default:
                 var filePath = node.Settings.FirstOrDefault(s => s.Kind == SettingKind.FilePath);
@@ -406,7 +407,7 @@ public partial class EditorViewModel
     private void OnNodeChangedForDirty(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(NodeViewModel.Location) or nameof(NodeViewModel.Title)
-            or nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.ColumnSelection))
+            or nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.ColumnSelection) or nameof(NodeViewModel.IntakePlanJson))
         {
             MarkDirty();
         }

@@ -1,6 +1,9 @@
 <Window x:Class="Nodify_ETLBox.UI.IntakeStudioWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:EtlDesigner.UI.Controls"
+        controls:LayoutUndoKeys.Undo="{Binding UndoCommand, Mode=OneWay}"
+        controls:LayoutUndoKeys.Redo="{Binding RedoCommand, Mode=OneWay}"
         Title="Intake Studio"
         Width="1100"
         Height="720"
@@ -69,6 +72,44 @@
                 </Style.Triggers>
             </Style>
 
+            <!-- A Preview line: compact, and the clicked line highlighted with the same colours as a selected part. -->
+            <Style x:Key="PreviewRow" TargetType="ListBoxItem" BasedOn="{StaticResource ContainerRow}">
+                <Setter Property="Padding" Value="{DynamicResource ThicknessListRow}" />
+            </Style>
+
+            <!-- Edit tab: a disabled box looks disabled in both themes (the same opacity as a disabled button). -->
+            <Style x:Key="EditCombo" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" Value="0.6" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="EditBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
+                <Setter Property="Padding" Value="{DynamicResource ThicknessListRow}" />
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" Value="0.6" />
+                        <Setter Property="Foreground" Value="{DynamicResource text-muted-brush}" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="EditButton" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
+                <Setter Property="Padding" Value="{DynamicResource ThicknessListRow}" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+            </Style>
+            <Style x:Key="EditLabel" TargetType="TextBlock">
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
+            </Style>
+            <!-- The first label of an Edit row: one width, so the boxes of the rows line up. -->
+            <Style x:Key="EditRowLabel" TargetType="TextBlock" BasedOn="{StaticResource EditLabel}">
+                <Setter Property="Width" Value="72" />
+            </Style>
+
             <Style x:Key="SectionTitle" TargetType="TextBlock">
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
@@ -124,15 +165,29 @@
         </Border>
 
         <!-- ===== Middle: containers (left) and details with preview (right) ===== -->
-        <Grid Grid.Row="1" Margin="{DynamicResource Thickness8}">
+        <!-- The list starts 380 px wide (the Part column then shows about 14 characters at the minimum window size)
+             and the splitter moves it; the list keeps at least 300 px and the tabs at least 360 px. -->
+        <Grid x:Name="MiddleGrid" Grid.Row="1" Margin="{DynamicResource Thickness8}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="4*" MinWidth="280" />
+                <ColumnDefinition Width="380" MinWidth="300" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="6*" MinWidth="320" />
+                <ColumnDefinition Width="*" MinWidth="360" />
             </Grid.ColumnDefinitions>
 
             <DockPanel Grid.Column="0">
-                <TextBlock DockPanel.Dock="Top" Text="Containers" Style="{StaticResource SectionTitle}" />
+                <!-- The title comes first; when the list is narrow the layout buttons wrap under it, so they never take its space. -->
+                <WrapPanel x:Name="ContainersTitleBar" DockPanel.Dock="Top">
+                    <TextBlock x:Name="ContainersTitle" Text="Containers" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="UndoButton" Style="{StaticResource ThemedButton}" Content="Undo" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource ThicknessListRow}"
+                                Command="{Binding UndoCommand, Mode=OneWay}" ToolTip="Undo the last layout change (Ctrl+Z)" AutomationProperties.Name="Undo layout change" />
+                        <Button x:Name="RedoButton" Style="{StaticResource ThemedButton}" Content="Redo" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource ThicknessListRow}"
+                                Command="{Binding RedoCommand, Mode=OneWay}" ToolTip="Redo the layout change (Ctrl+Y)" AutomationProperties.Name="Redo layout change" />
+                        <Button x:Name="RevertButton" Style="{StaticResource ThemedButton}" Content="Back to detected result" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource ThicknessListRow}"
+                                Command="{Binding RevertCommand, Mode=OneWay}" ToolTip="Forget all layout changes and show the parts as the scan found them (can be undone)"
+                                AutomationProperties.Name="Back to detected result" />
+                    </StackPanel>
+                </WrapPanel>
 
                 <!-- Column headers over the row columns: # narrow, Part takes the free width, then Lines and Status
                      with fixed widths and an 8 px gap before each. The last column keeps the width of the list's
@@ -210,20 +265,20 @@
                 </ListBox>
             </DockPanel>
 
-            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+            <GridSplitter x:Name="ListSplitter" Grid.Column="1" Width="8" AutomationProperties.Name="Resize the container list" HorizontalAlignment="Center" VerticalAlignment="Stretch"
                           Background="Transparent" ResizeBehavior="PreviousAndNext" />
 
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <!-- Details keeps about 8 text rows (title plus 8 x 17 px plus padding), the Preview about 6 lines plus its scroll bar. -->
-                    <RowDefinition Height="2*" MinHeight="190" />
+                    <!-- Details keeps about 8 text rows (tab header plus 8 x 17 px plus padding), the Preview about 6 lines plus its scroll bar. -->
+                    <RowDefinition Height="2*" MinHeight="204" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="3*" MinHeight="150" />
                 </Grid.RowDefinitions>
 
-                <!-- Details: format, delimiter, header, skip lines, reasons, then the checks. -->
-                <DockPanel Grid.Row="0">
-                    <TextBlock DockPanel.Dock="Top" Text="Details" Style="{StaticResource SectionTitle}" />
+                <!-- Details (format, delimiter, header, skip lines, reasons, checks) and Edit (the review tools) as two tabs. -->
+                <TabControl x:Name="DetailsTabs" Grid.Row="0" AutomationProperties.Name="Details and edit">
+                    <TabItem x:Name="DetailsTab" Header="Details" AutomationProperties.Name="Details">
                     <Border x:Name="DetailsPanel" BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Padding="{DynamicResource Thickness8}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
@@ -271,26 +326,126 @@
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
-                </DockPanel>
+                    </TabItem>
+
+                    <TabItem x:Name="EditTab" Header="Edit" AutomationProperties.Name="Edit">
+                        <!-- Four compact rows that wrap when the pane is narrow; the ScrollViewer is only a safety net at the minimum size. -->
+                        <ScrollViewer x:Name="EditScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                            <Border Padding="{DynamicResource ThicknessListRow}">
+                                <StackPanel x:Name="EditPanel">
+                                    <TextBlock x:Name="EditIntro" Text="Choose a part on the left to change it. Every change can be undone."
+                                               ToolTip="Choose a part on the left to change it. Every change can be undone."
+                                               Foreground="{DynamicResource text-muted-brush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               Margin="{DynamicResource ThicknessListRow}" />
+
+                                    <WrapPanel x:Name="FormatRow">
+                                        <TextBlock Text="Format" Style="{StaticResource EditRowLabel}" />
+                                        <ComboBox x:Name="FormatBox" Width="200" Style="{StaticResource EditCombo}"
+                                                  ItemsSource="{Binding FormatChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding SelectedFormat, Mode=TwoWay}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
+                                                  AutomationProperties.Name="Format" />
+                                        <Button x:Name="ChangeFormatButton" Style="{StaticResource EditButton}" Content="Change format"
+                                                Command="{Binding ChangeFormatCommand, Mode=OneWay}" AutomationProperties.Name="Change format" />
+                                    </WrapPanel>
+
+                                    <WrapPanel x:Name="TableRow">
+                                        <TextBlock Text="Delimiter" Style="{StaticResource EditRowLabel}" />
+                                        <ComboBox x:Name="DelimiterBox" Width="110" Style="{StaticResource EditCombo}"
+                                                  ItemsSource="{Binding DelimiterChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding SelectedDelimiter, Mode=TwoWay}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
+                                                  AutomationProperties.Name="Delimiter" />
+                                        <TextBlock Text="Header" Style="{StaticResource EditLabel}" />
+                                        <!-- "(not set)" is drawn over the box while a table has no header choice; it is not one of the choices. -->
+                                        <Grid>
+                                            <ComboBox x:Name="HeaderBox" Width="90" Style="{StaticResource EditCombo}"
+                                                      ItemsSource="{Binding HeaderChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                      SelectedValue="{Binding SelectedHeader, Mode=TwoWay}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
+                                                      AutomationProperties.Name="Header" />
+                                            <TextBlock x:Name="HeaderPlaceholder" Text="(not set)" IsHitTestVisible="False" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                       Margin="{DynamicResource ThicknessPlaceholder}" Foreground="{DynamicResource text-muted-brush}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding SelectedHeader, Mode=OneWay}" Value="{x:Null}" />
+                                                                    <Condition Binding="{Binding IsTableSelected, Mode=OneWay}" Value="True" />
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Text="Skip lines" Style="{StaticResource EditLabel}" />
+                                        <TextBox x:Name="SkipLinesBox" Width="48" Style="{StaticResource EditBox}"
+                                                 Text="{Binding SkipLinesText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
+                                                 AutomationProperties.Name="Skip lines" />
+                                        <Button x:Name="ApplyOptionsButton" Style="{StaticResource EditButton}" Content="Apply options"
+                                                Command="{Binding ApplyOptionsCommand, Mode=OneWay}" ToolTip="Delimiter, header and skip lines apply to CSV, TSV and fixed-width tables"
+                                                ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="Apply table options" />
+                                    </WrapPanel>
+
+                                    <WrapPanel x:Name="NameRow">
+                                        <TextBlock Text="Name" Style="{StaticResource EditRowLabel}" />
+                                        <TextBox x:Name="NameBox" Width="200" Style="{StaticResource EditBox}"
+                                                 Text="{Binding NewName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
+                                                 AutomationProperties.Name="Name" />
+                                        <Button x:Name="RenameButton" Style="{StaticResource EditButton}" Content="Rename"
+                                                Command="{Binding RenameCommand, Mode=OneWay}" AutomationProperties.Name="Rename" />
+                                    </WrapPanel>
+
+                                    <WrapPanel x:Name="SplitRow">
+                                        <TextBlock Text="Split at line" Style="{StaticResource EditRowLabel}" />
+                                        <TextBox x:Name="SplitLineBox" Width="64" Style="{StaticResource EditBox}"
+                                                 Text="{Binding SplitLineText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
+                                                 ToolTip="Click a line in the Preview, or type a file line number" AutomationProperties.Name="Split line number" />
+                                        <Button x:Name="SplitButton" Style="{StaticResource EditButton}" Content="Split before the selected line"
+                                                Command="{Binding SplitCommand, Mode=OneWay}" ToolTip="{Binding SplitToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True"
+                                                AutomationProperties.Name="Split before the selected line" />
+                                        <Button x:Name="MergeButton" Style="{StaticResource EditButton}" Content="Merge with next part"
+                                                Command="{Binding MergeCommand, Mode=OneWay}" AutomationProperties.Name="Merge with next part" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+                        </ScrollViewer>
+                    </TabItem>
+                </TabControl>
 
                 <GridSplitter x:Name="DetailsSplitter" Grid.Row="1" Height="8" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                               Background="Transparent" ResizeBehavior="PreviousAndNext" />
 
-                <!-- Preview: file line numbers, read-only, selectable, no wrapping. -->
+                <!-- Preview: one row per line, starting with its file line number, no wrapping. A click chooses the split line. -->
                 <DockPanel Grid.Row="2">
                     <TextBlock DockPanel.Dock="Top" Text="Preview" Style="{StaticResource SectionTitle}" />
                     <TextBlock DockPanel.Dock="Bottom" Text="{Binding PreviewNote, Mode=OneWay}" TextWrapping="Wrap"
                                Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
-                    <TextBox x:Name="PreviewBox" Text="{Binding PreviewText, Mode=OneWay}"
-                             IsReadOnly="True"
-                             IsReadOnlyCaretVisible="True"
+                    <ListBox x:Name="PreviewBox" ItemsSource="{Binding PreviewRows, Mode=OneWay}"
+                             SelectedItem="{Binding SelectedPreviewLine, Mode=TwoWay}"
+                             ItemContainerStyle="{StaticResource PreviewRow}"
                              FontFamily="{DynamicResource font-data}"
                              FontSize="{DynamicResource font-body}"
-                             TextWrapping="NoWrap"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto"
-                             AutomationProperties.Name="Preview" />
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             AutomationProperties.Name="Preview">
+                        <!-- Ctrl+C and "Copy line" copy the selected line's text without its line number (a right-click selects the line first). -->
+                        <ListBox.InputBindings>
+                            <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyPreviewLineCommand, Mode=OneWay}" />
+                        </ListBox.InputBindings>
+                        <ListBox.ContextMenu>
+                            <ContextMenu x:Name="PreviewMenu" AutomationProperties.Name="Preview line">
+                                <MenuItem x:Name="CopyLineItem" Header="Copy line" InputGestureText="Ctrl+C"
+                                          Command="{Binding CopyPreviewLineCommand, Mode=OneWay}" AutomationProperties.Name="Copy line" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Text, Mode=OneWay}" TextWrapping="NoWrap" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </DockPanel>
             </Grid>
         </Grid>
@@ -304,7 +459,14 @@
                         Command="{Binding CloseCommand, Mode=OneWay}" />
             </StackPanel>
             <StackPanel>
-                <TextBlock x:Name="TotalsText" Text="{Binding TotalsText, Mode=OneWay}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                <DockPanel>
+                    <TextBlock x:Name="LayoutText" DockPanel.Dock="Right" Text="{Binding LayoutText, Mode=OneWay}" Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
+                    <TextBlock x:Name="TotalsText" Text="{Binding TotalsText, Mode=OneWay}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                </DockPanel>
+                <TextBlock x:Name="StatusLine" Text="{Binding EditStatus, Mode=OneWay}" TextWrapping="Wrap" Margin="{DynamicResource Thickness4}"
+                           Style="{StaticResource HiddenWhenEmpty}" AutomationProperties.LiveSetting="Polite" />
+                <TextBlock x:Name="LineageNoteText" Text="{Binding LineageNote, Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource text-muted-brush}"
+                           Margin="{DynamicResource Thickness4}" Style="{StaticResource HiddenWhenEmpty}" />
                 <Border Tag="{Binding Message, Mode=OneWay}" Style="{StaticResource HiddenWhenNull}"
                         BorderBrush="{DynamicResource border-brush}" BorderThickness="1"
                         Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}" Margin="{DynamicResource Thickness4}">
