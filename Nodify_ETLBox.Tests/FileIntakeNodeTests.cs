@@ -308,7 +308,7 @@ public sealed class FileIntakeNodeTests : IDisposable
     public void IntakeStudio_SaveWritesTheSettings_AndMarksTheProjectDirty_OnlyWhenSomethingChanged()
     {
         var dialogs = new ProjectEditorTests.FakeDialogs();
-        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent());
+        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent(), new IntakeStudioOpenTests.MemoryLineage());
         var node = AddIntake(main.Editor);
         main.Editor.MarkClean();
 
@@ -328,7 +328,7 @@ public sealed class FileIntakeNodeTests : IDisposable
     public void IntakeStudio_UnsavedChanges_AskOnce_AndDontSaveKeepsTheNode()
     {
         var dialogs = new ProjectEditorTests.FakeDialogs { Answer = EtlDesigner.UI.Services.UnsavedChangesChoice.DontSave };
-        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent());
+        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent(), new IntakeStudioOpenTests.MemoryLineage());
         var node = AddIntake(main.Editor);
         var closed = 0;
 
@@ -350,7 +350,7 @@ public sealed class FileIntakeNodeTests : IDisposable
     public void IntakeStudio_AScanWithTheNodesSettings_PutsTheTotalsOnTheNode_AScanWithUnsavedSettingsDoesNot()
     {
         var dialogs = new ProjectEditorTests.FakeDialogs();
-        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent());
+        var main = new MainViewModel(dialogs, new ProjectEditorTests.MemoryRecent(), new IntakeStudioOpenTests.MemoryLineage());
         var node = AddIntake(main.Editor);
         node.SetFileIntakeSettings(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") });
         main.Editor.MarkClean();

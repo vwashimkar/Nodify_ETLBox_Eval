@@ -304,4 +304,43 @@ public sealed partial class IntakeStudioWindowTests
         });
 
     private static void TextClipboardRestore(string text) => EtlDesigner.UI.Services.TextClipboard.TrySetText(text);
+    /// <summary>The G5b2 pictures for the report (only with INTAKE_SCREENS=1).</summary>
+    [ScreensTheory]
+    [InlineData(WpfTheme.Light)]
+    [InlineData(WpfTheme.Dark)]
+    public async Task G5b2_Screens_ForTheReport(WpfTheme theme)
+    {
+        var folder = Path.Combine(WpfHost.ReportsFolder(), "screens");
+        if (theme == WpfTheme.Dark)
+        {
+            await WithScannedWindow(theme, 1100, 720, (window, vm) =>
+            {
+                Assert.Equal(0, ((ScrollViewer)window.FindName("EditScroll")).ScrollableHeight, 1);
+                Save(window, Path.Combine(folder, "g5b2-edit-tab-dark-1100.png"));
+                return Task.CompletedTask;
+            });
+            return;
+        }
+
+        await WithScannedWindow(theme, 820, 560, (window, vm) =>
+        {
+            Save(window, Path.Combine(folder, "g5b2-edit-tab-light-820.png"));
+            return Task.CompletedTask;
+        });
+        await WithScannedWindow(theme, 1100, 720, async (window, vm) =>
+        {
+            await ClickPreviewLine(window, 1);
+            await Click(window, "SplitButton");
+            ((ListBox)window.FindName("ContainersList")).ScrollIntoView(vm.SelectedContainer!);
+            await WpfHost.Settle();
+            window.UpdateLayout();
+            Save(window, Path.Combine(folder, "g5b2-split-light-1100.png"));
+        });
+
+        static void Save(Window window, string path)
+        {
+            WpfHost.RenderPng(window, 96, path);
+            Assert.True(WpfHost.DistinctColours(path) > 5, $"{path} looks blank.");
+        }
+    }
 }
