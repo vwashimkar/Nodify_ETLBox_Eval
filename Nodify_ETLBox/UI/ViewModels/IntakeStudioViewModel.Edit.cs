@@ -18,6 +18,11 @@ public sealed partial class IntakeStudioViewModel
 {
     public const string SetByYouText = "Set by you";
     public const string RescanQuestion = "Scanning again will discard your changes. Scan anyway?";
+    public const string DiscardQuestion = "Changing this will discard your changes to the layout. Change anyway?";
+    public const string DiscardReasonScan = "scan";
+    public const string DiscardReasonMode = "mode";
+    public const string DiscardReasonEncoding = "encoding";
+    public const string DiscardReasonFile = "file";
     public const string UnreadablePlanText = "The saved layout could not be read.";
     public const string AutomaticResultText = "Showing the automatic result.";
     public const string PreviewShortText = "The preview shows the first 200 lines; type a line number to split further down.";
@@ -320,12 +325,39 @@ public sealed partial class IntakeStudioViewModel
     /// <summary>Scan with a confirmation when the layout has changes that are not saved (default answer No).</summary>
     private void ScanAgain()
     {
-        if (_session is { IsModified: true } && _layoutDirty && !(_confirm?.Invoke(RescanQuestion) ?? false))
+        if (!ConfirmDiscard(DiscardReasonScan))
         {
             return;
         }
 
         ScanTask = ScanAsync();
+    }
+
+    /// <summary>The layout has edits that are not saved: a new scan or a new setting would lose them.</summary>
+    private bool HasUnsavedLayoutEdits => _session is { IsModified: true } && _layoutDirty;
+
+    /// <summary>
+    /// True when nothing is lost or the user answers Yes (default No). <paramref name="reason"/> is
+    /// <see cref="DiscardReasonScan"/>, <see cref="DiscardReasonMode"/>, <see cref="DiscardReasonEncoding"/> or <see cref="DiscardReasonFile"/>.
+    /// </summary>
+    private bool ConfirmDiscard(string reason)
+    {
+        if (!HasUnsavedLayoutEdits)
+        {
+            return true;
+        }
+
+        return _confirm?.Invoke(reason == DiscardReasonScan ? RescanQuestion : DiscardQuestion) ?? false;
+    }
+
+    /// <summary>
+    /// A refused change: the box shows the kept value again. Raised now and once more after the binding
+    /// has finished its own update, because a ComboBox ignores a change raised during that update.
+    /// </summary>
+    private void KeepShownValue(string property)
+    {
+        OnPropertyChanged(property);
+        _context?.Post(_ => OnPropertyChanged(property), null);
     }
 
     /// <summary>Off the UI thread: the session, from the node's saved layout when it fits the file.</summary>

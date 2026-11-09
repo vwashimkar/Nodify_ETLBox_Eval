@@ -147,17 +147,28 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
     /// <summary>The window closes when this is raised. A close that was confirmed does not ask again.</summary>
     public event EventHandler? CloseRequested;
 
+    /// <summary>A change that would discard unsaved layout edits asks first; on No the old path stays.</summary>
     public string FilePath
     {
         get => _filePath;
         set
         {
-            if (SetProperty(ref _filePath, value ?? string.Empty))
+            value ??= string.Empty;
+            if (value == _filePath)
             {
-                OnPropertyChanged(nameof(FileName));
-                OnPropertyChanged(nameof(FileToolTip));
-                SettingChanged();
+                return;
             }
+
+            if (!ConfirmDiscard(DiscardReasonFile))
+            {
+                KeepShownValue(nameof(FilePath));
+                return;
+            }
+
+            SetProperty(ref _filePath, value);
+            OnPropertyChanged(nameof(FileName));
+            OnPropertyChanged(nameof(FileToolTip));
+            SettingChanged();
         }
     }
 
@@ -166,27 +177,49 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
 
     public string? FileToolTip => string.IsNullOrWhiteSpace(FilePath) ? null : FilePath;
 
+    /// <summary>A change that would discard unsaved layout edits asks first; on No the old value stays.</summary>
     public string Mode
     {
         get => _mode;
         set
         {
-            if (SetProperty(ref _mode, value ?? FileIntakeNodeSettings.AutoDetect))
+            value ??= FileIntakeNodeSettings.AutoDetect;
+            if (value == _mode)
             {
-                SettingChanged();
+                return;
             }
+
+            if (!ConfirmDiscard(DiscardReasonMode))
+            {
+                KeepShownValue(nameof(Mode));
+                return;
+            }
+
+            SetProperty(ref _mode, value);
+            SettingChanged();
         }
     }
 
+    /// <summary>A change that would discard unsaved layout edits asks first; on No the old value stays.</summary>
     public string Encoding
     {
         get => _encoding;
         set
         {
-            if (SetProperty(ref _encoding, value ?? IntakeEncodings.Auto))
+            value ??= IntakeEncodings.Auto;
+            if (value == _encoding)
             {
-                SettingChanged();
+                return;
             }
+
+            if (!ConfirmDiscard(DiscardReasonEncoding))
+            {
+                KeepShownValue(nameof(Encoding));
+                return;
+            }
+
+            SetProperty(ref _encoding, value);
+            SettingChanged();
         }
     }
 

@@ -226,4 +226,31 @@ public sealed partial class IntakeStudioWindowTests
             Assert.Equal(0, ((ScrollViewer)window.FindName("EditScroll")).ScrollableHeight, 1);
             return Task.CompletedTask;
         });
+    [Theory]
+    [InlineData(WpfTheme.Light)]
+    [InlineData(WpfTheme.Dark)]
+    public Task G5b2_3A_ModeChange_AnsweredNo_TheModeBoxShowsTheOldModeAgain(WpfTheme theme)
+    {
+        var questions = new List<string>();
+        return WithEditTab(theme, 1100, 720, async (window, vm) =>
+        {
+            await Scan(vm, window);
+            await SelectTable(vm, window);
+            vm.NewName = "Results";
+            await Click(window, "RenameButton");
+            Assert.True(vm.Session!.IsModified);
+
+            var modeBox = (ComboBox)window.FindName("ModeBox");
+            modeBox.SelectedValue = FileIntakeNodeSettings.MarkersMode;
+            await WpfHost.Settle();
+            window.UpdateLayout();
+
+            Assert.Equal([IntakeStudioViewModel.DiscardQuestion], questions);
+            Assert.Equal(FileIntakeNodeSettings.AutoDetect, vm.Mode);
+            Assert.Equal(FileIntakeNodeSettings.AutoDetect, modeBox.SelectedValue);
+            Assert.Equal("Auto-detect", ((SettingChoice)modeBox.SelectedItem).Label);
+            Assert.Contains(vm.Containers, r => r.Info.Name == "Results");
+        }, () => new IntakeStudioViewModel(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") },
+            confirm: q => { questions.Add(q); return false; }));
+    }
 }

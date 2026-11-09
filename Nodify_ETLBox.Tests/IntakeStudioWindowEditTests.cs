@@ -24,12 +24,13 @@ public sealed partial class IntakeStudioWindowTests
     private static readonly (double Width, double Height)[] Sizes = [(1100, 720), (820, 560)];
 
     /// <summary>The window at <paramref name="width"/> x <paramref name="height"/>, Edit tab open; the binding trace must stay empty.</summary>
-    private Task WithEditTab(WpfTheme theme, double width, double height, Func<IntakeStudioWindow, IntakeStudioViewModel, Task> check)
+    private Task WithEditTab(WpfTheme theme, double width, double height, Func<IntakeStudioWindow, IntakeStudioViewModel, Task> check,
+        Func<IntakeStudioViewModel>? create = null)
         => _wpf.RunAsync(async () =>
         {
             WpfHost.SetTheme(theme);
             using var trace = BindingTrace.Start();
-            var vm = Studio();
+            var vm = create?.Invoke() ?? Studio();
             var window = new IntakeStudioWindow { DataContext = vm };
             try
             {
