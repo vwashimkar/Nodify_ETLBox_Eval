@@ -55,6 +55,8 @@
     <Thickness x:Key="Thickness24">24</Thickness>
     <!-- A compact list row: 4 left and right, 2 above and below. -->
     <Thickness x:Key="ThicknessListRow">4,2</Thickness>
+    <!-- A placeholder text drawn over a box: in line with the box text. -->
+    <Thickness x:Key="ThicknessPlaceholder">9,0,0,0</Thickness>
 
     <CornerRadius x:Key="corner-radius">4</CornerRadius>
 

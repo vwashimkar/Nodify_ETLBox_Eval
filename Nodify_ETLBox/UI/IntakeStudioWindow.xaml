@@ -79,7 +79,7 @@
 
             <!-- Edit tab: a disabled box looks disabled in both themes (the same opacity as a disabled button). -->
             <Style x:Key="EditCombo" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
-                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
                         <Setter Property="Opacity" Value="0.6" />
@@ -87,7 +87,7 @@
                 </Style.Triggers>
             </Style>
             <Style x:Key="EditBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
                 <Setter Property="Padding" Value="{DynamicResource ThicknessListRow}" />
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
@@ -97,13 +97,17 @@
                 </Style.Triggers>
             </Style>
             <Style x:Key="EditButton" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
-                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
-                <Setter Property="Padding" Value="{DynamicResource Thickness4}" />
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
+                <Setter Property="Padding" Value="{DynamicResource ThicknessListRow}" />
                 <Setter Property="HorizontalAlignment" Value="Left" />
             </Style>
             <Style x:Key="EditLabel" TargetType="TextBlock">
                 <Setter Property="VerticalAlignment" Value="Center" />
-                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+                <Setter Property="Margin" Value="{DynamicResource ThicknessListRow}" />
+            </Style>
+            <!-- The first label of an Edit row: one width, so the boxes of the rows line up. -->
+            <Style x:Key="EditRowLabel" TargetType="TextBlock" BasedOn="{StaticResource EditLabel}">
+                <Setter Property="Width" Value="72" />
             </Style>
 
             <Style x:Key="SectionTitle" TargetType="TextBlock">
@@ -322,73 +326,86 @@
                     </TabItem>
 
                     <TabItem x:Name="EditTab" Header="Edit" AutomationProperties.Name="Edit">
+                        <!-- Four compact rows that wrap when the pane is narrow; the ScrollViewer is only a safety net at the minimum size. -->
                         <ScrollViewer x:Name="EditScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-                            <Border Padding="{DynamicResource Thickness4}">
-                                <Grid x:Name="EditPanel">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" MinWidth="120" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
+                            <Border Padding="{DynamicResource ThicknessListRow}">
+                                <StackPanel x:Name="EditPanel">
+                                    <TextBlock x:Name="EditIntro" Text="Choose a part on the left to change it. Every change can be undone."
+                                               ToolTip="Choose a part on the left to change it. Every change can be undone."
+                                               Foreground="{DynamicResource text-muted-brush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               Margin="{DynamicResource ThicknessListRow}" />
 
-                                    <TextBlock Grid.Row="0" Grid.ColumnSpan="3" Text="Choose a part on the left to change it. Every change can be undone."
-                                               Foreground="{DynamicResource text-muted-brush}" TextWrapping="Wrap" Margin="{DynamicResource Thickness4}" />
+                                    <WrapPanel x:Name="FormatRow">
+                                        <TextBlock Text="Format" Style="{StaticResource EditRowLabel}" />
+                                        <ComboBox x:Name="FormatBox" Width="200" Style="{StaticResource EditCombo}"
+                                                  ItemsSource="{Binding FormatChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding SelectedFormat, Mode=TwoWay}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
+                                                  AutomationProperties.Name="Format" />
+                                        <Button x:Name="ChangeFormatButton" Style="{StaticResource EditButton}" Content="Change format"
+                                                Command="{Binding ChangeFormatCommand, Mode=OneWay}" AutomationProperties.Name="Change format" />
+                                    </WrapPanel>
 
-                                    <TextBlock Grid.Row="1" Text="Format" Style="{StaticResource EditLabel}" />
-                                    <ComboBox x:Name="FormatBox" Grid.Row="1" Grid.Column="1" Style="{StaticResource EditCombo}"
-                                              ItemsSource="{Binding FormatChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                              SelectedValue="{Binding SelectedFormat, Mode=TwoWay}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
-                                              AutomationProperties.Name="Format" />
-                                    <Button x:Name="ChangeFormatButton" Grid.Row="1" Grid.Column="2" Style="{StaticResource EditButton}" Content="Change format"
-                                            Command="{Binding ChangeFormatCommand, Mode=OneWay}" AutomationProperties.Name="Change format" />
+                                    <WrapPanel x:Name="TableRow">
+                                        <TextBlock Text="Delimiter" Style="{StaticResource EditRowLabel}" />
+                                        <ComboBox x:Name="DelimiterBox" Width="110" Style="{StaticResource EditCombo}"
+                                                  ItemsSource="{Binding DelimiterChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  SelectedValue="{Binding SelectedDelimiter, Mode=TwoWay}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
+                                                  AutomationProperties.Name="Delimiter" />
+                                        <TextBlock Text="Header" Style="{StaticResource EditLabel}" />
+                                        <!-- "(not set)" is drawn over the box while a table has no header choice; it is not one of the choices. -->
+                                        <Grid>
+                                            <ComboBox x:Name="HeaderBox" Width="90" Style="{StaticResource EditCombo}"
+                                                      ItemsSource="{Binding HeaderChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                      SelectedValue="{Binding SelectedHeader, Mode=TwoWay}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
+                                                      AutomationProperties.Name="Header" />
+                                            <TextBlock x:Name="HeaderPlaceholder" Text="(not set)" IsHitTestVisible="False" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                       Margin="{DynamicResource ThicknessPlaceholder}" Foreground="{DynamicResource text-muted-brush}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding SelectedHeader, Mode=OneWay}" Value="{x:Null}" />
+                                                                    <Condition Binding="{Binding IsTableSelected, Mode=OneWay}" Value="True" />
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Text="Skip lines" Style="{StaticResource EditLabel}" />
+                                        <TextBox x:Name="SkipLinesBox" Width="48" Style="{StaticResource EditBox}"
+                                                 Text="{Binding SkipLinesText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
+                                                 AutomationProperties.Name="Skip lines" />
+                                        <Button x:Name="ApplyOptionsButton" Style="{StaticResource EditButton}" Content="Apply options"
+                                                Command="{Binding ApplyOptionsCommand, Mode=OneWay}" ToolTip="Delimiter, header and skip lines apply to CSV, TSV and fixed-width tables"
+                                                ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="Apply table options" />
+                                    </WrapPanel>
 
-                                    <TextBlock Grid.Row="2" Text="Delimiter" Style="{StaticResource EditLabel}" />
-                                    <ComboBox x:Name="DelimiterBox" Grid.Row="2" Grid.Column="1" Style="{StaticResource EditCombo}"
-                                              ItemsSource="{Binding DelimiterChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                              SelectedValue="{Binding SelectedDelimiter, Mode=TwoWay}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
-                                              AutomationProperties.Name="Delimiter" />
-                                    <TextBlock Grid.Row="3" Text="Header" Style="{StaticResource EditLabel}" />
-                                    <ComboBox x:Name="HeaderBox" Grid.Row="3" Grid.Column="1" Style="{StaticResource EditCombo}"
-                                              ItemsSource="{Binding HeaderChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                              SelectedValue="{Binding SelectedHeader, Mode=TwoWay}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
-                                              AutomationProperties.Name="Header" />
-                                    <TextBlock Grid.Row="4" Text="Skip lines" Style="{StaticResource EditLabel}" />
-                                    <TextBox x:Name="SkipLinesBox" Grid.Row="4" Grid.Column="1" Style="{StaticResource EditBox}"
-                                             Text="{Binding SkipLinesText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsTableSelected, Mode=OneWay}"
-                                             AutomationProperties.Name="Skip lines" />
-                                    <Button x:Name="ApplyOptionsButton" Grid.Row="4" Grid.Column="2" Style="{StaticResource EditButton}" Content="Apply options"
-                                            Command="{Binding ApplyOptionsCommand, Mode=OneWay}" ToolTip="Delimiter, header and skip lines apply to CSV, TSV and fixed-width tables"
-                                            ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="Apply table options" />
+                                    <WrapPanel x:Name="NameRow">
+                                        <TextBlock Text="Name" Style="{StaticResource EditRowLabel}" />
+                                        <TextBox x:Name="NameBox" Width="200" Style="{StaticResource EditBox}"
+                                                 Text="{Binding NewName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
+                                                 AutomationProperties.Name="Name" />
+                                        <Button x:Name="RenameButton" Style="{StaticResource EditButton}" Content="Rename"
+                                                Command="{Binding RenameCommand, Mode=OneWay}" AutomationProperties.Name="Rename" />
+                                    </WrapPanel>
 
-                                    <TextBlock Grid.Row="5" Text="Name" Style="{StaticResource EditLabel}" />
-                                    <TextBox x:Name="NameBox" Grid.Row="5" Grid.Column="1" Style="{StaticResource EditBox}"
-                                             Text="{Binding NewName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
-                                             AutomationProperties.Name="Name" />
-                                    <Button x:Name="RenameButton" Grid.Row="5" Grid.Column="2" Style="{StaticResource EditButton}" Content="Rename"
-                                            Command="{Binding RenameCommand, Mode=OneWay}" AutomationProperties.Name="Rename" />
-
-                                    <TextBlock Grid.Row="6" Text="Split at line" Style="{StaticResource EditLabel}" />
-                                    <TextBox x:Name="SplitLineBox" Grid.Row="6" Grid.Column="1" Style="{StaticResource EditBox}"
-                                             Text="{Binding SplitLineText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
-                                             ToolTip="Click a line in the Preview, or type a file line number" AutomationProperties.Name="Split line number" />
-                                    <Button x:Name="SplitButton" Grid.Row="6" Grid.Column="2" Style="{StaticResource EditButton}" Content="Split before the selected line"
-                                            Command="{Binding SplitCommand, Mode=OneWay}" ToolTip="{Binding SplitToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True"
-                                            AutomationProperties.Name="Split before the selected line" />
-
-                                    <Button x:Name="MergeButton" Grid.Row="7" Grid.Column="2" Style="{StaticResource EditButton}" Content="Merge with next part"
-                                            Command="{Binding MergeCommand, Mode=OneWay}" AutomationProperties.Name="Merge with next part" />
-                                </Grid>
+                                    <WrapPanel x:Name="SplitRow">
+                                        <TextBlock Text="Split at line" Style="{StaticResource EditRowLabel}" />
+                                        <TextBox x:Name="SplitLineBox" Width="64" Style="{StaticResource EditBox}"
+                                                 Text="{Binding SplitLineText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanEditSelected, Mode=OneWay}"
+                                                 ToolTip="Click a line in the Preview, or type a file line number" AutomationProperties.Name="Split line number" />
+                                        <Button x:Name="SplitButton" Style="{StaticResource EditButton}" Content="Split before the selected line"
+                                                Command="{Binding SplitCommand, Mode=OneWay}" ToolTip="{Binding SplitToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True"
+                                                AutomationProperties.Name="Split before the selected line" />
+                                        <Button x:Name="MergeButton" Style="{StaticResource EditButton}" Content="Merge with next part"
+                                                Command="{Binding MergeCommand, Mode=OneWay}" AutomationProperties.Name="Merge with next part" />
+                                    </WrapPanel>
+                                </StackPanel>
                             </Border>
                         </ScrollViewer>
                     </TabItem>
