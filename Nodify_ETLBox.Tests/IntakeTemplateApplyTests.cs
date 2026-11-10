@@ -99,7 +99,7 @@ public sealed class IntakeTemplateApplyTests : IDisposable
         Assert.Equal(TemplateMatch.Exact, other.SuggestTemplates(store).Single().Match);
         var result = other.ApplyTemplate(template);
         Assert.True(result.Ok, result.Message);
-        Assert.Equal("Applied 'Lab report': 4 of 4 parts matched.", result.Message);
+        Assert.Equal("Applied 'Lab report': 4 of 4 parts; none left as detected.", result.Message);
         Assert.Equal(Shape(s), Shape(other));
         var last = other.Containers[^1];
         Assert.Equal("Signature section", Lines(other, last)[0]);
@@ -117,9 +117,80 @@ public sealed class IntakeTemplateApplyTests : IDisposable
         var other = await SessionAsync(Report(9, section: "Approval block"));
         var result = other.ApplyTemplate(template);
         Assert.True(result.Ok, result.Message);
-        Assert.Equal("Applied 'Lab report': 3 of 4 parts matched, 1 skipped (no line 'Signature section' found).", result.Message);
+        Assert.Equal("Applied 'Lab report': 3 of 3 parts; none left as detected; 1 saved part could not be placed (no line 'Signature section' found).", result.Message);
         Assert.Equal(3, other.Containers.Count);
         Assert.Contains("Approval block", Lines(other, other.Containers[^1]));
+    }
+
+    /// <summary>
+    /// G5c2 step 1b: a template made from 3 repeats of a group applies to all 300 repeats of a file.
+    /// Names are kept as the template has them (the same name on every repeat, no number suffix).
+    /// </summary>
+    [Fact]
+    public async Task ARepeatingTemplate_IsAppliedToEveryRepeat()
+    {
+        static string Repeats(int copies) => string.Join("\n", Enumerable.Range(1, copies).Select(i => IntakeTemplateTests.Instrument(3 + i % 5, seed: i % 7 + 1)));
+        var s = await SessionAsync(Repeats(3));
+        Assert.Equal(9, s.Containers.Count);
+        for (var i = 0; i < 9; i += 3)
+        {
+            Assert.True(s.Rename(i, "Run header").Ok);
+            Assert.True(s.Rename(i + 1, "Results").Ok);
+            Assert.True(s.SetTableOptions(i + 1, header: "No").Ok);
+            Assert.True(s.Rename(i + 2, "Footer").Ok);
+        }
+
+        var store = Store();
+        var template = store.Get(s.SaveAsTemplate("Lab run", store).TemplateId!.Value)!;
+        Assert.Contains("*", template.Fingerprint.Text);
+
+        var big = await SessionAsync(Repeats(300));
+        Assert.Equal(900, big.Containers.Count);
+        Assert.Equal(TemplateMatch.Exact, big.SuggestTemplates(store).Single().Match);
+        var result = big.ApplyTemplate(template);
+        _output.WriteLine(result.Message);
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal("Applied 'Lab run': 900 of 900 parts; none left as detected.", result.Message);
+        Assert.Equal(900, big.Containers.Count);
+        Assert.Equal(300, big.Containers.Count(c => c.Name == "Run header" && c.Format == "keyvalue"));
+        Assert.Equal(300, big.Containers.Count(c => c.Name == "Results" && c.Format == "csv" && c.HeaderGuess == HeaderGuess.No));
+        Assert.Equal(300, big.Containers.Count(c => c.Name == "Footer" && c.Format == "text"));
+        foreach (var i in new[] { 0, 1, 2, 450, 451, 452, 897, 898, 899 })
+        {
+            Assert.Equal(s.Containers[i % 3].Name, big.Containers[i].Name);
+            Assert.True(big.Containers[i].ConfirmedByUser);
+        }
+
+        Assert.Equal(1, big.UndoSteps);
+        IntakeEditSessionTests.AssertEveryNonBlankLineInOneContainer(big, Repeats(300));
+    }
+
+    /// <summary>G5c2 step 1b: parts after the repeats are still placed, and a file with fewer repeats than the template works too.</summary>
+    [Fact]
+    public async Task ARepeatingTemplate_KeepsThePartsAfterTheRun_AndFitsFewerRepeats()
+    {
+        static string File(int copies) => string.Join("\n", Enumerable.Range(1, copies).Select(i => IntakeTemplateTests.Instrument(4, seed: i)))
+            + "\n{\n  \"summary\": 1\n}\n";
+        var s = await SessionAsync(File(3));
+        Assert.Equal("json", s.Containers[^1].Format);
+        Assert.True(s.Rename(s.Containers.Count - 1, "Summary").Ok);
+        for (var i = 1; i < 9; i += 3)
+        {
+            Assert.True(s.Rename(i, "Results").Ok);
+        }
+
+        var store = Store();
+        var template = store.Get(s.SaveAsTemplate("Lab run", store).TemplateId!.Value)!;
+        foreach (var copies in new[] { 2, 40 })
+        {
+            var other = await SessionAsync(File(copies));
+            var result = other.ApplyTemplate(template);
+            _output.WriteLine(result.Message);
+            Assert.True(result.Ok, result.Message);
+            Assert.Empty(result.Skipped);
+            Assert.Equal(copies, other.Containers.Count(c => c.Name == "Results"));
+            Assert.Equal("Summary", other.Containers[^1].Name);
+        }
     }
 
     /// <summary>Test (10): a template whose structure does not fit is refused and changes nothing.</summary>
@@ -275,19 +346,20 @@ public sealed class IntakeTemplateLargeTests(ITestOutputHelper output) : IDispos
         }
 
         var store = new FileTemplateStore(new TemplateSettings { Folder = Path.Combine(_folder, "templates") }, Path.Combine(_folder, "fallback"));
-        var small = await IntakeEditSessionTests.FileSessionAsync("i01_sample", IntakeMode.Markers);
-        Assert.True(small.Rename(1, "First note").Ok);
-        var id = small.SaveAsTemplate("i01 markers", store).TemplateId!.Value;
-        var bigTemplate = store.Get(id)! with { Id = Guid.NewGuid(), Name = "repeated" };
+        var threePath = Path.Combine(_folder, "i01_x3.txt");
+        File.WriteAllBytes(threePath, [.. sample, .. sample, .. sample]);
+        var small = MarkerSession(threePath);
+        foreach (var i in Enumerable.Range(0, small.Containers.Count).Where(i => small.Containers[i].Format == "csv").ToList())
+        {
+            Assert.True(small.Rename(i, "Table").Ok);
+        }
 
-        var item = new FileIntakeFactory().CreateItem(path);
-        var intake = IntakeReader.Read(item, IntakeTestData.Markers, null, CancellationToken.None);
-        var validation = new IntakeValidationResult(Guid.NewGuid(), intake.ItemId,
-            intake.Containers.Select(c => new ContainerValidation(c.Order, ContainerStatus.Ok, [], 0, false)).ToList(), 0, 0, 0, 0, false, null);
-        var scan = new IntakeScanResult(intake, validation, intake.EncodingUsed, false, 0, false, null, IntakeMode.Markers);
-        var s = new IntakeEditSession(item, scan, null, "x");
+        var id = small.SaveAsTemplate("i01 markers", store).TemplateId!.Value;
+        Assert.Contains("*", store.Get(id)!.Fingerprint.Text);
+
+        var s = MarkerSession(path);
         Assert.True(s.Containers.Count >= 36_000, $"{s.Containers.Count} containers");
-        Assert.True(store.Save(bigTemplate with { Fingerprint = s.AutomaticFingerprint() }).Ok);
+        var tables = s.Containers.Count(c => c.Format == "csv");
 
         var memory = LiveMemory.Bytes();
         var clock = Stopwatch.StartNew();
@@ -307,5 +379,18 @@ public sealed class IntakeTemplateLargeTests(ITestOutputHelper output) : IDispos
         Assert.True(suggestMs < 2000, $"suggest took {suggestMs} ms");
         Assert.True(applyMs < 2000, $"apply took {applyMs} ms");
         Assert.True(afterApply - memory < 300L * s.Containers.Count, $"suggest and apply added {afterApply - memory:N0} bytes");
+        Assert.Equal(tables, s.Containers.Count(c => c.Name == "Table"));
+        Assert.True(result.PartsApplied >= s.Containers.Count - 2, result.Message);
+        Assert.DoesNotContain(" of 19 ", result.Message);
+    }
+
+    private static IntakeEditSession MarkerSession(string path)
+    {
+        var item = new FileIntakeFactory().CreateItem(path);
+        var intake = IntakeReader.Read(item, IntakeTestData.Markers, null, CancellationToken.None);
+        var validation = new IntakeValidationResult(Guid.NewGuid(), intake.ItemId,
+            intake.Containers.Select(c => new ContainerValidation(c.Order, ContainerStatus.Ok, [], 0, false)).ToList(), 0, 0, 0, 0, false, null);
+        var scan = new IntakeScanResult(intake, validation, intake.EncodingUsed, false, 0, false, null, IntakeMode.Markers);
+        return new IntakeEditSession(item, scan, null, "x");
     }
 }

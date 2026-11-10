@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace EtlDesigner.Engine.Intake;
 
 /// <summary>The outcome of <see cref="IntakeEditSession.SaveAsTemplate"/>: the edit result and, when it worked, the new template's id.</summary>
@@ -5,8 +7,9 @@ public sealed record TemplateSaveResult(EditResult Result, Guid? TemplateId);
 
 /// <summary>
 /// The outcome of <see cref="IntakeEditSession.ApplyTemplate"/>. <see cref="Message"/> is one plain
-/// sentence. <see cref="Skipped"/> says, per template part that could not be placed, why; those
-/// lines stay as the detector found them.
+/// sentence. <see cref="PartsApplied"/> of the <see cref="PartsTotal"/> parts of the new layout come
+/// from the template; the others are left as detected. <see cref="Skipped"/> says, per template part
+/// (per repeat) that could not be placed, why; those lines stay as the detector found them.
 /// </summary>
 public sealed record TemplateApplyResult(bool Ok, string Message, int PartsApplied, int PartsTotal, IReadOnlyList<string> Skipped);
 
@@ -105,22 +108,38 @@ public sealed partial class IntakeEditSession
             }
         }
 
-        foreach (var part in template.Parts)
+        var reasons = new Dictionary<string, IReadOnlyList<string>>();
+        ContainerInfo Shaped(ContainerInfo c, TemplatePart part)
         {
+            var shaped = Shape(c, part);
+            var key = string.Join("\n", shaped.Reasons ?? []);
+            if (reasons.TryGetValue(key, out var shared))
+            {
+                return shaped with { Reasons = shared };
+            }
+
+            reasons[key] = shaped.Reasons ?? [];
+            return shaped;
+        }
+
+        void Place(TemplatePart part, bool repeat)
+        {
+            // In a repeat a numbered name of the detector ("csv-2") is not copied; the part keeps its own.
+            part = repeat && NumberedName(part.Name) ? part with { Name = "" } : part;
             var from = part.From ?? [];
             if (part.StartsInside)
             {
                 if (!lastPlaced || part.Anchor is null)
                 {
                     skipped.Add(part.Anchor is null ? "no line to split at" : $"no line '{part.Anchor}' found");
-                    continue;
+                    return;
                 }
 
                 var host = layout[^1];
                 if (AnchorLine(host, part.Anchor, settings) is not { } line || SplitParts(host, line, out _) is not { } pieces)
                 {
                     skipped.Add($"no line '{part.Anchor}' found");
-                    continue;
+                    return;
                 }
 
                 layout[^1] = pieces.Top;
@@ -131,10 +150,10 @@ public sealed partial class IntakeEditSession
                     bottom = MergedPart(bottom, auto[next], out _) ?? bottom;
                 }
 
-                layout.Add(Shape(bottom, part));
+                layout.Add(Shaped(bottom, part));
                 checks.Add(null);
                 applied++;
-                continue;
+                return;
             }
 
             var start = from.Count == 0 ? -1 : Find(signatures, next, from);
@@ -142,7 +161,7 @@ public sealed partial class IntakeEditSession
             {
                 skipped.Add($"no {part.Format} part found");
                 lastPlaced = false;
-                continue;
+                return;
             }
 
             var merged = auto[start];
@@ -155,15 +174,40 @@ public sealed partial class IntakeEditSession
             {
                 skipped.Add("its parts could not be merged");
                 lastPlaced = false;
-                continue;
+                return;
             }
 
             CopyAuto(start);
             next = start + from.Count;
-            layout.Add(Shape(merged, part));
-            checks.Add(null);
+            var shaped = Shaped(merged, part);
+            layout.Add(shaped);
+            // Only the name changed: the detector's check of these bytes still holds.
+            checks.Add(from.Count == 1 && SameChecks(shaped, auto[start]) ? _scanValidation[start] : null);
             applied++;
             lastPlaced = true;
+        }
+
+        foreach (var (unit, group) in TemplateSteps(template, settings))
+        {
+            foreach (var part in unit)
+            {
+                Place(part, group is not null);
+            }
+
+            // A repeating group of the template is applied to every following repeat of it in this file.
+            while (group is not null && next + group.Count <= auto.Count && Enumerable.Range(0, group.Count).All(k => Fits(signatures[next + k], group[k])))
+            {
+                var before = next;
+                foreach (var part in unit)
+                {
+                    Place(part, true);
+                }
+
+                if (next == before)
+                {
+                    break;
+                }
+            }
         }
 
         CopyAuto(auto.Count);
@@ -201,9 +245,11 @@ public sealed partial class IntakeEditSession
             ["partsSkipped"] = skipped.Count
         });
 
-        var message = $"Applied '{IntakeEditRules.Cut(template.Name)}': {applied} of {IntakeText.Count(template.Parts.Count, "part")} matched";
-        message += skipped.Count == 0 ? "." : $", {skipped.Count} skipped ({string.Join("; ", skipped.Distinct().Take(3))}).";
-        return new TemplateApplyResult(true, message, applied, template.Parts.Count, skipped);
+        var left = layout.Count - applied;
+        var message = $"Applied '{IntakeEditRules.Cut(template.Name)}': {applied.ToString("N0", CultureInfo.InvariantCulture)} of {IntakeText.Count(layout.Count, "part")}; "
+            + $"{(left == 0 ? "none" : left.ToString("N0", CultureInfo.InvariantCulture))} left as detected";
+        message += skipped.Count == 0 ? "." : $"; {IntakeText.Count(skipped.Count, "saved part")} could not be placed ({string.Join("; ", skipped.Distinct().Take(3))}).";
+        return new TemplateApplyResult(true, message, applied, layout.Count, skipped);
     }
 
     // ---- Template internals ----------------------------------------------------------------------
@@ -214,7 +260,10 @@ public sealed partial class IntakeEditSession
         {
             var tables = _scanContainers.Select(c => c.Format is "csv" or "tsv" ? c : c with { ContentStartByte = null }).ToList();
             var facts = PartFacts.Read(Item, tables, EncodingName);
-            _scanSignatures = _scanContainers.Select((c, i) => PartFacts.Signature(c, facts[i].Columns)).ToList();
+            // Equal signatures share one object (large files repeat a few signatures many times).
+            var shared = new Dictionary<PartSignature, PartSignature>();
+            _scanSignatures = _scanContainers.Select((c, i) => PartFacts.Signature(c, facts[i].Columns))
+                .Select(sig => shared.TryGetValue(sig, out var known) ? known : shared[sig] = sig).ToList();
             _scanColumnNames = facts.Where(f => f.Names is { Count: > 0 }).Select(f => f.Names!).ToList();
         }
 
@@ -268,6 +317,84 @@ public sealed partial class IntakeEditSession
 
         return new IntakeTemplate(IntakeTemplate.CurrentFormatVersion, Guid.NewGuid(), name, DateTime.UtcNow, AutomaticFingerprint(settings), parts);
     }
+
+    /// <summary>
+    /// The template's parts in order, as steps. A run of the template's automatic layout that repeats
+    /// (the same group as in its fingerprint) becomes one step: the parts made from its first repeat,
+    /// with the group, so they are applied to every repeat of the group in the new file; the parts made
+    /// from the other repeats are left out. Only when the parts of every repeat are the same as those of
+    /// the first (the user edited each repeat the same way); otherwise, or when the first repeat's parts
+    /// do not start and end on its boundaries (for example a merge across repeats), the run's parts are
+    /// applied once, in order, as before.
+    /// </summary>
+    private static List<(IReadOnlyList<TemplatePart> Unit, IReadOnlyList<PartSignature>? Group)> TemplateSteps(IntakeTemplate template, TemplateSettings settings)
+    {
+        var parts = template.Parts;
+        var source = new List<PartSignature>();
+        var startAt = new int[parts.Count];
+        for (var j = 0; j < parts.Count; j++)
+        {
+            var from = parts[j].From ?? [];
+            startAt[j] = source.Count;
+            source.AddRange(parts[j].StartsInside ? from.Skip(1) : from);
+        }
+
+        bool Boundary(int j, int position) => startAt[j] == position && !parts[j].StartsInside && parts[j].From is { Count: > 0 };
+
+        var steps = new List<(IReadOnlyList<TemplatePart>, IReadOnlyList<PartSignature>?)>();
+        var done = 0;
+        foreach (var (start, period, count) in IntakeFingerprint.Runs(source, settings).Where(r => r.Count > 1))
+        {
+            var u = Enumerable.Range(done, parts.Count - done).Where(j => Boundary(j, start)).DefaultIfEmpty(-1).First();
+            var v = u < 0 ? -1 : Enumerable.Range(u + 1, parts.Count - u - 1).Where(j => Boundary(j, start + period)).DefaultIfEmpty(-1).First();
+            if (v < 0)
+            {
+                continue;
+            }
+
+            var size = v - u;
+            var w = u + size * count;
+            if (w > parts.Count || (w < parts.Count && startAt[w] < start + period * count)
+                || Enumerable.Range(size, size * (count - 1)).Any(k => !SamePart(parts[u + k], parts[u + k % size])))
+            {
+                continue;
+            }
+
+            steps.AddRange(parts.Skip(done).Take(u - done).Select(p => ((IReadOnlyList<TemplatePart>)[p], (IReadOnlyList<PartSignature>?)null)));
+            steps.Add((parts.Skip(u).Take(v - u).ToList(), source.GetRange(start, period)));
+            done = w;
+        }
+
+        steps.AddRange(parts.Skip(done).Select(p => ((IReadOnlyList<TemplatePart>)[p], (IReadOnlyList<PartSignature>?)null)));
+        return steps;
+    }
+
+    /// <summary>
+    /// Two parts of different repeats are the same when they differ at most in the first line (used
+    /// only to place a split) and in the detector's numbered names ("text-3", "csv-12").
+    /// </summary>
+    private static bool SamePart(TemplatePart a, TemplatePart b)
+    {
+        static TemplatePart Plain(TemplatePart p) => p with
+        {
+            From = null,
+            ColumnNames = null,
+            Anchor = p.StartsInside ? p.Anchor : null,
+            Name = NumberedName(p.Name) ? "" : p.Name
+        };
+
+        return Plain(a) == Plain(b) && (a.From ?? []).SequenceEqual(b.From ?? []) && (a.ColumnNames ?? []).SequenceEqual(b.ColumnNames ?? []);
+    }
+
+    /// <summary>The detector's and the marker reader's default name: a format, a dash and a number.</summary>
+    private static bool NumberedName(string? name)
+        => name is { Length: > 2 } && name[^1] is >= '0' and <= '9' && name.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9') is { Length: > 1 } head
+           && head[^1] == '-' && head[..^1].All(ch => ch is >= 'a' and <= 'z' or '-');
+
+    /// <summary>True when the two containers differ at most in name, confirmation and reasons (their check is the same).</summary>
+    private static bool SameChecks(ContainerInfo a, ContainerInfo b)
+        => a.Format == b.Format && a.SubType == b.SubType && a.Delimiter == b.Delimiter && a.HeaderGuess == b.HeaderGuess && a.SkipLines == b.SkipLines
+           && a.KeyValueForm == b.KeyValueForm && a.ContentStartByte == b.ContentStartByte && a.ContentEndByte == b.ContentEndByte;
 
     private static bool Fits(PartSignature found, PartSignature wanted) => found.Format == wanted.Format && found.Delimiter == wanted.Delimiter;
 

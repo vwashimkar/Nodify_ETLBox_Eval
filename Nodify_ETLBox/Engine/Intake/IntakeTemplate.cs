@@ -108,9 +108,16 @@ public sealed record IntakeFingerprint(IReadOnlyList<FingerprintEntry> Entries)
     public static IntakeFingerprint Of(IReadOnlyList<PartSignature> layout, TemplateSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(layout);
+        return new IntakeFingerprint(Runs(layout, settings)
+            .Select(r => new FingerprintEntry(layout.Skip(r.Start).Take(r.Period).ToList(), r.Count > 1)).ToList());
+    }
+
+    /// <summary>The entries of <see cref="Of(IReadOnlyList{PartSignature}, TemplateSettings?)"/> as positions: where each starts, its group length and how often it repeats.</summary>
+    internal static List<(int Start, int Period, int Count)> Runs(IReadOnlyList<PartSignature> layout, TemplateSettings? settings = null)
+    {
         settings ??= new TemplateSettings();
         var minRun = Math.Max(2, settings.MinRepeatRun);
-        var entries = new List<FingerprintEntry>();
+        var runs = new List<(int Start, int Period, int Count)>();
         var i = 0;
         while (i < layout.Count)
         {
@@ -129,11 +136,11 @@ public sealed record IntakeFingerprint(IReadOnlyList<FingerprintEntry> Entries)
                 }
             }
 
-            entries.Add(new FingerprintEntry(layout.Skip(i).Take(bestPeriod).ToList(), bestCount > 1));
+            runs.Add((i, bestPeriod, bestCount));
             i += bestPeriod * bestCount;
         }
 
-        return new IntakeFingerprint(entries);
+        return runs;
     }
 
     /// <summary>The fingerprint of containers of <paramref name="item"/>; reads only the first lines of csv and tsv parts (for the column counts).</summary>
