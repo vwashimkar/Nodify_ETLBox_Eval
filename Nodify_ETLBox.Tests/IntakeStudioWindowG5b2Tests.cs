@@ -114,13 +114,14 @@ public sealed partial class IntakeStudioWindowTests
             Assert.False(WpfHost.IsVisibleInLayout(placeholder));
         });
     /// <summary>The window at <paramref name="width"/> x <paramref name="height"/> with i01 scanned and a table selected.</summary>
-    private Task WithScannedWindow(WpfTheme theme, double width, double height, Func<IntakeStudioWindow, IntakeStudioViewModel, Task> check)
+    private Task WithScannedWindow(WpfTheme theme, double width, double height, Func<IntakeStudioWindow, IntakeStudioViewModel, Task> check,
+        Func<IntakeStudioViewModel>? create = null)
         => WithEditTab(theme, width, height, async (window, vm) =>
         {
             await Scan(vm, window);
             await SelectTable(vm, window);
             await check(window, vm);
-        });
+        }, create);
 
     [Theory]
     [InlineData(WpfTheme.Light, 820, 560)]
@@ -254,26 +255,70 @@ public sealed partial class IntakeStudioWindowTests
         }, () => new IntakeStudioViewModel(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") },
             confirm: q => { questions.Add(q); return false; }));
     }
+    /// <summary>
+    /// Ctrl+C and "Copy line" in the real window, with the copy function injected (the same seam as the
+    /// view model tests), so another program holding the Windows clipboard cannot fail it (Task P3).
+    /// </summary>
     [Theory]
     [InlineData(WpfTheme.Light)]
     [InlineData(WpfTheme.Dark)]
-    public Task G5b2_3B_CtrlC_AndCopyLine_PutTheLineTextOnTheClipboard(WpfTheme theme)
-        => WithScannedWindow(theme, 1100, 720, async (window, vm) =>
+    public Task G5b2_3B_CtrlC_AndCopyLine_CallTheCopyFunctionWithTheLineText(WpfTheme theme)
+    {
+        var copied = new List<string>();
+        return WithScannedWindow(theme, 1100, 720, async (window, vm) =>
         {
             var preview = (ListBox)window.FindName("PreviewBox");
             var menu = preview.ContextMenu!;
             var item = (MenuItem)menu.Items[0];
             Assert.Equal("Copy line", item.Header);
-            menu.PlacementTarget = preview;
-            menu.IsOpen = true;
-            await WpfHost.Settle();
-            Assert.False(item.IsEnabled, "Copy line is enabled with no line selected.");
-            menu.IsOpen = false;
-
             var ctrlC = preview.InputBindings.OfType<KeyBinding>().Single(b => b.Key == Key.C && b.Modifiers == ModifierKeys.Control);
             Assert.Same(vm.CopyPreviewLineCommand, ctrlC.Command);
 
-            // The test puts the user's clipboard text back afterwards.
+            menu.PlacementTarget = preview;
+            try
+            {
+                menu.IsOpen = true;
+                await WpfHost.Settle();
+                Assert.False(item.IsEnabled, "Copy line is enabled with no line selected.");
+                Assert.False(ctrlC.Command.CanExecute(ctrlC.CommandParameter), "Ctrl+C is enabled with no line selected.");
+                menu.IsOpen = false;
+
+                await ClickPreviewLine(window, 1);
+                var expected = vm.PreviewLines.Single(l => l.LineNumber == vm.PreviewRows[1].LineNumber).Text;
+                Assert.True(ctrlC.Command.CanExecute(ctrlC.CommandParameter));
+
+                ctrlC.Command.Execute(ctrlC.CommandParameter);
+                Assert.Equal([expected], copied);
+
+                menu.IsOpen = true;
+                await WpfHost.Settle();
+                Assert.True(item.IsEnabled);
+                InvokeMenuItem(item);
+                await WpfHost.Settle();
+                Assert.Equal([expected, expected], copied);
+                Assert.False(expected.StartsWith(vm.PreviewRows[1].LineNumber.ToString(System.Globalization.CultureInfo.InvariantCulture) + "  ", StringComparison.Ordinal));
+            }
+            finally
+            {
+                menu.IsOpen = false;
+            }
+        }, () => new IntakeStudioViewModel(new FileIntakeNodeSettings { Path = IntakeTestData.PathOf("i01_sample") },
+            copyText: text => { copied.Add(text); return true; }));
+    }
+
+    /// <summary>The same through the real Windows clipboard (only with INTAKE_CLIPBOARD_TESTS=1). The user's clipboard text is put back.</summary>
+    [ClipboardTheory]
+    [InlineData(WpfTheme.Light)]
+    [InlineData(WpfTheme.Dark)]
+    public Task G5b2_3B_RealClipboard_CtrlC_AndCopyLine_PutTheLineTextOnTheClipboard(WpfTheme theme)
+        => WithScannedWindow(theme, 1100, 720, async (window, vm) =>
+        {
+            var preview = (ListBox)window.FindName("PreviewBox");
+            var menu = preview.ContextMenu!;
+            var item = (MenuItem)menu.Items[0];
+            var ctrlC = preview.InputBindings.OfType<KeyBinding>().Single(b => b.Key == Key.C && b.Modifiers == ModifierKeys.Control);
+            menu.PlacementTarget = preview;
+
             var before = Clipboard.ContainsText() ? Clipboard.GetText() : null;
             try
             {
@@ -286,12 +331,9 @@ public sealed partial class IntakeStudioWindowTests
                 Clipboard.Clear();
                 menu.IsOpen = true;
                 await WpfHost.Settle();
-                Assert.True(item.IsEnabled);
-                ((System.Windows.Automation.Provider.IInvokeProvider)new System.Windows.Automation.Peers.MenuItemAutomationPeer(item)
-                    .GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)!).Invoke();
+                InvokeMenuItem(item);
                 await WpfHost.Settle();
                 Assert.Equal(expected, Clipboard.GetText());
-                Assert.False(expected.StartsWith(vm.PreviewRows[1].LineNumber.ToString(System.Globalization.CultureInfo.InvariantCulture) + "  ", StringComparison.Ordinal));
             }
             finally
             {
@@ -300,8 +342,16 @@ public sealed partial class IntakeStudioWindowTests
                 {
                     TextClipboardRestore(before);
                 }
+                else
+                {
+                    Clipboard.Clear();
+                }
             }
         });
+
+    private static void InvokeMenuItem(MenuItem item)
+        => ((System.Windows.Automation.Provider.IInvokeProvider)new System.Windows.Automation.Peers.MenuItemAutomationPeer(item)
+            .GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)!).Invoke();
 
     private static void TextClipboardRestore(string text) => EtlDesigner.UI.Services.TextClipboard.TrySetText(text);
     /// <summary>The G5b2 pictures for the report (only with INTAKE_SCREENS=1).</summary>

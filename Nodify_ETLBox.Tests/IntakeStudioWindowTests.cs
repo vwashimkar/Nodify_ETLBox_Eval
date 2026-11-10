@@ -198,6 +198,18 @@ public sealed partial class IntakeStudioWindowTests
 }
 
 /// <summary>The screens for a report: written only when INTAKE_SCREENS=1, otherwise skipped.</summary>
+/// <summary>A test that uses the real Windows clipboard, which another program can hold; only with INTAKE_CLIPBOARD_TESTS=1.</summary>
+public sealed class ClipboardTheoryAttribute : TheoryAttribute
+{
+    public ClipboardTheoryAttribute()
+    {
+        if (Environment.GetEnvironmentVariable("INTAKE_CLIPBOARD_TESTS") != "1")
+        {
+            Skip = "uses the real Windows clipboard, which another program can hold: set INTAKE_CLIPBOARD_TESTS=1 to run it";
+        }
+    }
+}
+
 public sealed class ScreensTheoryAttribute : TheoryAttribute
 {
     public ScreensTheoryAttribute()
