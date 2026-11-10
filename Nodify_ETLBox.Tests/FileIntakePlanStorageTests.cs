@@ -65,7 +65,8 @@ public sealed class FileIntakePlanStorageTests : IDisposable
         Assert.Equal(NodeViewModel.LayoutEditedText, node.IntakeLayoutText);
 
         var text = Text(editor);
-        Assert.Equal(JsonObject.Parse(plan)!.ToJsonString(), Settings(text)[ProjectNodeSettings.LayoutPlan]!.ToJsonString());
+        // Since G5c1 the layout is one JSON string in the project.
+        Assert.Equal(plan, Settings(text)[ProjectNodeSettings.LayoutPlan]!.GetValue<string>());
 
         var loaded = Reopen(text);
         var again = loaded.Nodes.Single();

@@ -13,7 +13,7 @@ namespace EtlDesigner.Engine.Intake;
 /// rolled back and a plain message is returned. The original file is only read, never written.
 /// Each edit, undo, redo and revert is written to the lineage log. Not thread-safe: one UI thread.
 /// </summary>
-public sealed class IntakeEditSession
+public sealed partial class IntakeEditSession
 {
     public const string ChangedFileMessage = "The file has changed since it was read; read it again before editing.";
 
@@ -106,24 +106,7 @@ public sealed class IntakeEditSession
         }
 
         var old = _containers[index];
-        var changed = old with
-        {
-            Format = format,
-            SubType = null,
-            SubTypeVersion = null,
-            Reasons = ["Set by you."],
-            Confidence = ContainerConfidence.Sure,
-            ConfirmedByUser = true
-        };
-        changed = format switch
-        {
-            "csv" => changed with { Delimiter = old.Delimiter is "," or ";" or "|" or " " ? old.Delimiter : ",", KeyValueForm = null },
-            "tsv" => changed with { Delimiter = "\t", KeyValueForm = null },
-            "fixedwidth" => changed with { Delimiter = "space", KeyValueForm = null },
-            "keyvalue" => changed with { Delimiter = old.Format == "keyvalue" ? old.Delimiter : null, HeaderGuess = null },
-            _ => changed with { Delimiter = null, HeaderGuess = null, SkipLines = 0, KeyValueForm = null }
-        };
-
+        var changed = WithFormat(old, format);
         return Commit("edit.format_changed", index, 1, [changed], new() { ["from"] = old.Format, ["to"] = format });
     }
 
@@ -229,74 +212,12 @@ public sealed class IntakeEditSession
             return EditResult.Fail(problem);
         }
 
-        var old = _containers[index];
-        if (old is not { ContentFirstLine: { } first, ContentLastLine: { } last, ContentStartByte: { } start, ContentEndByte: { } end })
-        {
-            return EditResult.Fail("This container has no lines, so it cannot be split.");
-        }
-
-        if (atLine == first)
-        {
-            return EditResult.Fail("A container cannot be split at its first line; choose a line further down.");
-        }
-
-        if (atLine < first || atLine > last)
-        {
-            return EditResult.Fail($"Line {atLine} is not inside this container, which has lines {first} to {last}.");
-        }
-
-        if (end - start > _edit.MaxEditMb * 1024L * 1024L)
-        {
-            return EditResult.Fail($"This container is larger than the edit limit of {_edit.MaxEditMb} MB, so it cannot be split.");
-        }
-
-        var bytes = ContainerBytes.Read(Item, start, end, out var error);
-        if (bytes is null)
+        if (SplitParts(_containers[index], atLine, out var error) is not { } parts)
         {
             return EditResult.Fail(error!);
         }
 
-        var unit = IsUtf16 ? 2 : 1;
-        var lines = ContainerBytes.Lines(bytes, start, unit, EncodingName == IntakeEncodings.Utf16Be);
-        if (lines.Count != last - first + 1)
-        {
-            return EditResult.Fail(ChangedFileMessage);
-        }
-
-        var at = atLine;
-        if (lines[(int)(at - first)].Blank)
-        {
-            if (at == last || lines[(int)(at + 1 - first)].Blank)
-            {
-                return EditResult.Fail($"Line {atLine} is blank and is not followed by a line with text, so there is nothing to split off there.");
-            }
-
-            // The blank line stays with the first part.
-            at++;
-        }
-
-        var cut = (int)(at - first);
-        var top = old with
-        {
-            MarkerEndLine = null,
-            ContentLastLine = at - 1,
-            ContentLineCount = at - first,
-            ContentEndByte = lines[cut - 1].End,
-            ConfirmedByUser = true
-        };
-        var bottom = old with
-        {
-            Name = SecondName(old.Name),
-            MarkerBeginLine = null,
-            ContentFirstLine = at,
-            ContentLineCount = last - at + 1,
-            ContentStartByte = lines[cut].Start,
-            ConfirmedByUser = true
-        };
-
-        top = Redetect(top, bytes, 0, (int)(top.ContentEndByte!.Value - start), "Split by you.");
-        bottom = Redetect(bottom, bytes, (int)(bottom.ContentStartByte!.Value - start), (int)(end - bottom.ContentStartByte.Value), "Split by you.");
-        return Commit("edit.split", index, 1, [top, bottom], new() { ["atLine"] = at });
+        return Commit("edit.split", index, 1, [parts.Top, parts.Bottom], new() { ["atLine"] = parts.At });
     }
 
     /// <summary>Merges container <paramref name="index"/> with the next one. The lines between them go inside; the first one's name, format and options are kept.</summary>
@@ -312,41 +233,9 @@ public sealed class IntakeEditSession
             return EditResult.Fail("The last container has no next container to merge with.");
         }
 
-        var a = _containers[index];
-        var b = _containers[index + 1];
-        var first = a.ContentFirstLine ?? b.ContentFirstLine;
-        var last = b.ContentLastLine ?? a.ContentLastLine;
-        var start = a.ContentStartByte ?? b.ContentStartByte;
-        var end = b.ContentEndByte ?? a.ContentEndByte;
-        if (first is null || last is null || start is null || end is null)
+        if (MergedPart(_containers[index], _containers[index + 1], out var error) is not { } merged)
         {
-            return EditResult.Fail("Both containers are empty, so there is nothing to merge.");
-        }
-
-        var merged = a with
-        {
-            MarkerEndLine = b.MarkerEndLine,
-            ContentFirstLine = first,
-            ContentLastLine = last,
-            ContentLineCount = last.Value - first.Value + 1,
-            ContentStartByte = start,
-            ContentEndByte = end,
-            ConfirmedByUser = true
-        };
-
-        if (end.Value - start.Value <= _edit.MaxEditMb * 1024L * 1024L)
-        {
-            var bytes = ContainerBytes.Read(Item, start.Value, end.Value, out var error);
-            if (bytes is null)
-            {
-                return EditResult.Fail(error!);
-            }
-
-            merged = Redetect(merged, bytes, 0, bytes.Length, "Merged by you.");
-        }
-        else
-        {
-            merged = merged with { Confidence = ContainerConfidence.Guessed, Reasons = With(a.Reasons, "Merged by you.") };
+            return EditResult.Fail(error!);
         }
 
         return Commit("edit.merged", index, 2, [merged], []);
@@ -410,7 +299,7 @@ public sealed class IntakeEditSession
         IntakeSettings? settings = null, EditSettings? edit = null)
     {
         var session = new IntakeEditSession(item, scan, log, intakeId, settings, edit);
-        if (!IntakePlan.TryApply(scan, plan, out var containers, out message))
+        if (!IntakePlan.TryApply(item, scan, plan, out var containers, out message, session._settings, session._edit))
         {
             session.Log("plan.rejected", new() { ["reason"] = message });
             return null;
@@ -438,6 +327,157 @@ public sealed class IntakeEditSession
 
     // ---- Internals -----------------------------------------------------------------------------
 
+    /// <summary>The container with another format, by the rules of <see cref="ChangeFormat"/>.</summary>
+    internal static ContainerInfo WithFormat(ContainerInfo old, string format)
+    {
+        var changed = old with
+        {
+            Format = format,
+            SubType = null,
+            SubTypeVersion = null,
+            Reasons = ["Set by you."],
+            Confidence = ContainerConfidence.Sure,
+            ConfirmedByUser = true
+        };
+        changed = format switch
+        {
+            "csv" => changed with { Delimiter = old.Delimiter is "," or ";" or "|" or " " ? old.Delimiter : ",", KeyValueForm = null },
+            "tsv" => changed with { Delimiter = "\t", KeyValueForm = null },
+            "fixedwidth" => changed with { Delimiter = "space", KeyValueForm = null },
+            "keyvalue" => changed with { Delimiter = old.Format == "keyvalue" ? old.Delimiter : null, HeaderGuess = null },
+            _ => changed with { Delimiter = null, HeaderGuess = null, SkipLines = 0, KeyValueForm = null }
+        };
+
+        return changed;
+    }
+
+    /// <summary>The two parts of a split of <paramref name="old"/> before FILE line <paramref name="atLine"/> (see <see cref="Split"/>), or null with the reason.</summary>
+    private (ContainerInfo Top, ContainerInfo Bottom, long At)? SplitParts(ContainerInfo old, long atLine, out string? error)
+    {
+        error = null;
+        if (old is not { ContentFirstLine: { } first, ContentLastLine: { } last, ContentStartByte: { } start, ContentEndByte: { } end })
+        {
+            error = "This container has no lines, so it cannot be split.";
+            return null;
+        }
+
+        if (atLine == first)
+        {
+            error = "A container cannot be split at its first line; choose a line further down.";
+            return null;
+        }
+
+        if (atLine < first || atLine > last)
+        {
+            error = $"Line {atLine} is not inside this container, which has lines {first} to {last}.";
+            return null;
+        }
+
+        if (end - start > _edit.MaxEditMb * 1024L * 1024L)
+        {
+            error = $"This container is larger than the edit limit of {_edit.MaxEditMb} MB, so it cannot be split.";
+            return null;
+        }
+
+        var bytes = ContainerBytes.Read(Item, start, end, out error);
+        if (bytes is null)
+        {
+            return null;
+        }
+
+        var unit = IsUtf16 ? 2 : 1;
+        var lines = ContainerBytes.Lines(bytes, start, unit, EncodingName == IntakeEncodings.Utf16Be);
+        if (lines.Count != last - first + 1)
+        {
+            error = ChangedFileMessage;
+            return null;
+        }
+
+        var at = atLine;
+        if (lines[(int)(at - first)].Blank)
+        {
+            if (at == last || lines[(int)(at + 1 - first)].Blank)
+            {
+                error = $"Line {atLine} is blank and is not followed by a line with text, so there is nothing to split off there.";
+                return null;
+            }
+
+            // The blank line stays with the first part.
+            at++;
+        }
+
+        var cut = (int)(at - first);
+        var top = old with
+        {
+            MarkerEndLine = null,
+            ContentLastLine = at - 1,
+            ContentLineCount = at - first,
+            ContentEndByte = lines[cut - 1].End,
+            ConfirmedByUser = true
+        };
+        var bottom = old with
+        {
+            Name = SecondName(old.Name),
+            MarkerBeginLine = null,
+            ContentFirstLine = at,
+            ContentLineCount = last - at + 1,
+            ContentStartByte = lines[cut].Start,
+            ConfirmedByUser = true
+        };
+
+        top = Redetect(top, bytes, 0, (int)(top.ContentEndByte!.Value - start), "Split by you.");
+        bottom = Redetect(bottom, bytes, (int)(bottom.ContentStartByte!.Value - start), (int)(end - bottom.ContentStartByte.Value), "Split by you.");
+        return (top, bottom, at);
+    }
+
+    /// <summary>Container <paramref name="a"/> merged with the next one <paramref name="b"/> (see <see cref="Merge"/>), or null with the reason.</summary>
+    private ContainerInfo? MergedPart(ContainerInfo a, ContainerInfo b, out string? error)
+    {
+        error = null;
+        var first = a.ContentFirstLine ?? b.ContentFirstLine;
+        var last = b.ContentLastLine ?? a.ContentLastLine;
+        var start = a.ContentStartByte ?? b.ContentStartByte;
+        var end = b.ContentEndByte ?? a.ContentEndByte;
+        if (first is null || last is null || start is null || end is null)
+        {
+            error = "Both containers are empty, so there is nothing to merge.";
+                return null;
+        }
+
+        var merged = a with
+        {
+            MarkerEndLine = b.MarkerEndLine,
+            ContentFirstLine = first,
+            ContentLastLine = last,
+            ContentLineCount = last.Value - first.Value + 1,
+            ContentStartByte = start,
+            ContentEndByte = end,
+            ConfirmedByUser = true
+        };
+
+        if (end.Value - start.Value <= _edit.MaxEditMb * 1024L * 1024L)
+        {
+            var bytes = ContainerBytes.Read(Item, start.Value, end.Value, out error);
+            if (bytes is null)
+            {
+                return null;
+            }
+
+            merged = Redetect(merged, bytes, 0, bytes.Length, "Merged by you.");
+        }
+        else
+        {
+            merged = merged with { Confidence = ContainerConfidence.Guessed, Reasons = With(a.Reasons, "Merged by you.") };
+        }
+
+        return merged;
+    }
+
+    /// <summary>The settings of this session (its mode is the scan's).</summary>
+    internal IntakeSettings Settings => _settings;
+
+    internal EditSettings EditLimits => _edit;
+
     private bool IsUtf16 => EncodingName is IntakeEncodings.Utf16Le or IntakeEncodings.Utf16Be;
 
     private string? Problem(int index)
@@ -449,7 +489,7 @@ public sealed class IntakeEditSession
         return second.Length <= IntakeEditRules.MaxNameLength ? second : name[..(IntakeEditRules.MaxNameLength - 4)] + " (2)";
     }
 
-    private static IReadOnlyList<string> With(IReadOnlyList<string>? reasons, string reason) => [.. reasons ?? [], reason];
+    internal static IReadOnlyList<string> With(IReadOnlyList<string>? reasons, string reason) => [.. reasons ?? [], reason];
 
     /// <summary>
     /// Runs the detector (its public API, no rule changes) on the container's own bytes. When it
@@ -457,9 +497,13 @@ public sealed class IntakeEditSession
     /// container keeps its format and options and becomes Guessed. The range stays as it is.
     /// </summary>
     private ContainerInfo Redetect(ContainerInfo container, byte[] bytes, int offset, int length, string reason)
+        => Redetect(Item, _settings with { Mode = IntakeMode.AutoDetect, Encoding = EncodingName }, container, bytes, offset, length, reason);
+
+    /// <summary>The detector on a slice of bytes, as above; <paramref name="detect"/> is AutoDetect with the file's encoding. Also used to rebuild a saved plan.</summary>
+    internal static ContainerInfo Redetect(IntakeItem item, IntakeSettings detect, ContainerInfo container, byte[] bytes, int offset, int length, string reason)
     {
-        var slice = new IntakeItem(Guid.NewGuid(), "edit", Item.Name, length, DateTime.UtcNow, () => new MemoryStream(bytes, offset, length, writable: false));
-        var result = IntakeReader.Read(slice, _settings with { Mode = IntakeMode.AutoDetect, Encoding = EncodingName }, null, CancellationToken.None);
+        var slice = new IntakeItem(Guid.NewGuid(), "edit", item.Name, length, DateTime.UtcNow, () => new MemoryStream(bytes, offset, length, writable: false));
+        var result = IntakeReader.Read(slice, detect, null, CancellationToken.None);
         if (result.Error is not null || result.Cancelled || result.Containers.Count != 1)
         {
             return container with { Confidence = ContainerConfidence.Guessed, Reasons = With(container.Reasons, reason) };

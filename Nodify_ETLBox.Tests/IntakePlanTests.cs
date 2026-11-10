@@ -13,11 +13,22 @@ public class IntakePlanTests
         Assert.True(s.Split(0, 3).Ok);
         Assert.True(s.Rename(0, "Top rows").Ok);
         Assert.True(s.ChangeFormat(2, "keyvalue").Ok);
-        return (s, IntakePlan.FromSession(s, s.Scan));
+        return (s, V1(s));
+    }
+
+    /// <summary>The session as a version 1 plan, every field of every container, as G5a wrote it (FromSession writes version 2 since G5c1).</summary>
+    internal static IntakePlan V1(IntakeEditSession s)
+    {
+        var file = s.Scan.Intake!.File!;
+        return new IntakePlan(IntakePlan.FullFormatVersion, file.Sha256, file.Size, s.Scan.Intake.EncodingUsed ?? file.Encoding, s.Scan.Mode,
+            s.Containers.Select(c => new PlanContainer(
+                c.ContentFirstLine, c.ContentLastLine, c.Format, c.SubType, c.Delimiter, c.HeaderGuess, c.SkipLines, c.KeyValueForm, c.Name, c.ConfirmedByUser,
+                c.Kind, c.MarkerBeginLine, c.MarkerEndLine, c.ContentStartByte, c.ContentEndByte, c.Confidence, c.SubTypeVersion, c.Notes, c.Status, c.Message,
+                c.Reasons)).ToList());
     }
 
     /// <summary>Containers as JSON, so lists such as Reasons compare by content.</summary>
-    private static string Json(IEnumerable<ContainerInfo> containers) => System.Text.Json.JsonSerializer.Serialize(containers.ToList());
+    internal static string Json(IEnumerable<ContainerInfo> containers) => System.Text.Json.JsonSerializer.Serialize(containers.ToList());
 
     private static PlanContainer[] Copy(IntakePlan plan) => [.. plan.Containers];
 
@@ -49,7 +60,7 @@ public class IntakePlanTests
         var json = IntakePlanJson.Serialize(plan);
         Assert.NotNull(IntakePlanJson.Deserialize(json.Replace("\"formatVersion\": 1,", "\"formatVersion\": 1, \"comment\": \"later\","), out _));
 
-        Assert.Null(IntakePlanJson.Deserialize(json.Replace("\"formatVersion\": 1", "\"formatVersion\": 2"), out var error));
+        Assert.Null(IntakePlanJson.Deserialize(json.Replace("\"formatVersion\": 1", "\"formatVersion\": 3"), out var error));
         Assert.Equal("This layout was saved by a newer version of the tool; update the tool to use it.", error);
 
         Assert.Null(IntakePlanJson.Deserialize("{ not json", out error));
@@ -133,7 +144,7 @@ public class IntakePlanTests
     public async Task Apply_AFutureFormatVersion_IsRefused()
     {
         var (s, plan) = await EditedSampleAsync();
-        AssertRefused(s.Scan, plan with { FormatVersion = 2 }, "newer version");
+        AssertRefused(s.Scan, plan with { FormatVersion = 3 }, "newer version");
     }
 
     [Fact]
@@ -144,7 +155,9 @@ public class IntakePlanTests
         Assert.True(s.Split(big, s.Containers[big].ContentFirstLine!.Value + 2).Ok);
         Assert.True(s.Merge(0).Ok);
         Assert.True(s.Rename(1, "Second").Ok);
-        var json = IntakePlanJson.Serialize(IntakePlan.FromSession(s, s.Scan));
+        var plan = IntakePlan.FromSession(s, s.Scan);
+        Assert.Equal(2, plan.FormatVersion);
+        var json = IntakePlanJson.Serialize(plan);
 
         var (item, scan) = await IntakeEditSessionTests.ScanAsync(IntakeTestData.Item("i01_sample"));
         var fresh = IntakeEditSession.FromPlan(item, scan, IntakePlanJson.Deserialize(json, out _)!, null, "y", out var message);

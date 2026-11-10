@@ -56,7 +56,7 @@ public sealed partial class IntakeStudioViewModel
     private bool _syncingPreview;
 
     /// <summary>The session of the last scan and the message to show with it (a refused saved layout).</summary>
-    private sealed record LayoutStart(IntakeEditSession Session, IntakeScanResult Scan, string? Message);
+    private sealed record LayoutStart(IntakeEditSession Session, IntakeScanResult Scan, string? Message, bool PlanApplied = false);
 
     public IReadOnlyList<SettingChoice> FormatChoices { get; private set; } = [];
 
@@ -87,8 +87,8 @@ public sealed partial class IntakeStudioViewModel
     /// <summary>The plan JSON the node holds now (after a save in this dialog, the new one).</summary>
     public string? SavedPlanJson => _savedPlanJson;
 
-    /// <summary>True when a scan has finished and no scan runs: the edit area is usable.</summary>
-    public bool CanEdit => _session is not null && !IsScanning;
+    /// <summary>True when a scan has finished and no scan or template apply runs: the edit area is usable.</summary>
+    public bool CanEdit => _session is not null && !IsScanning && !IsTemplateBusy;
 
     /// <summary>A part is selected and can be edited.</summary>
     public bool CanEditSelected => CanEdit && SelectedIndex >= 0;
@@ -331,6 +331,8 @@ public sealed partial class IntakeStudioViewModel
 
     private void AfterLayoutChange()
     {
+        // The banner never shows after the layout was edited.
+        HideBanner();
         UpdateTotals();
         UpdateLayoutText();
         ShowLineageNote();
@@ -348,6 +350,8 @@ public sealed partial class IntakeStudioViewModel
         {
             command?.RaiseCanExecuteChanged();
         }
+
+        RaiseTemplateStates();
     }
 
     /// <summary>Scan with a confirmation when the layout has changes that are not saved (default answer No).</summary>
@@ -411,7 +415,7 @@ public sealed partial class IntakeStudioViewModel
             {
                 if (IntakeEditSession.FromPlan(item, scan, plan, _lineage, intakeId, out var refused, intakeSettings) is { } fromPlan)
                 {
-                    return new LayoutStart(fromPlan, scan, null);
+                    return new LayoutStart(fromPlan, scan, null, PlanApplied: true);
                 }
 
                 message = $"{refused} {AutomaticResultText}";
@@ -457,6 +461,7 @@ public sealed partial class IntakeStudioViewModel
         _layoutDirty = false;
         LayoutText = null;
         EditStatus = null;
+        ClearTemplateResult();
         RaiseEditStates();
     }
 

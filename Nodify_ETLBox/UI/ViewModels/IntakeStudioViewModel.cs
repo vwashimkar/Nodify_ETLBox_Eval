@@ -77,7 +77,9 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         string? savedPlanJson = null,
         Action<string?>? savePlan = null,
         Func<string, bool>? confirm = null,
-        Func<string, bool>? copyText = null)
+        Func<string, bool>? copyText = null,
+        ITemplateStore? templates = null,
+        TemplateSettings? templateSettings = null)
     {
         _savedSettings = settings ?? throw new ArgumentNullException(nameof(settings));
         _labels = labels ?? Labels.Empty;
@@ -91,6 +93,8 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         _savePlan = savePlan;
         _confirm = confirm;
         _copyText = copyText ?? TextClipboard.TrySetText;
+        _templates = templates;
+        _templateSettings = templateSettings ?? new TemplateSettings();
 
         _filePath = settings.Path;
         _mode = settings.Mode;
@@ -110,6 +114,7 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         SaveCommand = new RelayCommand(_ => Save(), _ => HasUnsavedChanges);
         CloseCommand = new RelayCommand(_ => RequestClose());
         CreateEditCommands();
+        CreateTemplateCommands();
         EscapeCommand = new RelayCommand(_ =>
         {
             if (IsScanning)
@@ -363,6 +368,7 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         }
 
         ClearResult();
+        _applyCancel?.Cancel();
         var version = ++_scanVersion;
         var settings = CurrentSettings;
         var cancel = new CancellationTokenSource();
@@ -424,9 +430,18 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         IsScanning = false;
         IsCancelVisible = false;
         Apply(result, item, settings, start);
+        if (start is not null && ReferenceEquals(_session, start.Session))
+        {
+            AfterScanTemplates(start, version);
+        }
     }
 
-    public void Cancel() => _scanCancel?.Cancel();
+    /// <summary>Cancels a running scan and a running template apply.</summary>
+    public void Cancel()
+    {
+        _scanCancel?.Cancel();
+        _applyCancel?.Cancel();
+    }
 
     /// <summary>Writes the settings to the node. Only a change is written.</summary>
     public void Save()
