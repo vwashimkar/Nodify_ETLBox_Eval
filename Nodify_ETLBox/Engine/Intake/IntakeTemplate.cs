@@ -35,6 +35,18 @@ public sealed record TemplateSettings
 
     /// <summary>An anchor (the first line of a part) is cut to this many characters.</summary>
     public int MaxAnchorLength { get; init; } = 80;
+
+    /// <summary>
+    /// When fewer than this share of the column names (of table parts with a header on both sides)
+    /// are equal, a structural match is downgraded: Exact becomes Close, similarity at most 0.9.
+    /// </summary>
+    public double ColumnNameMatchMin { get; init; } = 0.5;
+
+    /// <summary>The most column names kept per table part.</summary>
+    public int MaxColumnNames { get; init; } = 64;
+
+    /// <summary>A column name is cut to this many characters.</summary>
+    public int MaxColumnNameLength { get; init; } = 40;
 }
 
 /// <summary>Where template files are kept.</summary>
@@ -220,7 +232,8 @@ public sealed record TemplatePart(
     int? Columns = null,
     string? Anchor = null,
     IReadOnlyList<PartSignature>? From = null,
-    bool StartsInside = false);
+    bool StartsInside = false,
+    IReadOnlyList<string>? ColumnNames = null);
 
 /// <summary>
 /// A corrected layout kept per instrument (plan section 6), recognised on a new file by its
@@ -303,8 +316,11 @@ public enum TemplateMatch
     Exact
 }
 
-/// <summary>A template and how well its fingerprint fits a file's automatic layout.</summary>
-public sealed record TemplateCandidate(IntakeTemplate Template, double Similarity, TemplateMatch Match);
+/// <summary>
+/// A template and how well its fingerprint fits a file's automatic layout. <see cref="NamesDiffer"/>
+/// is true when the structure fits but the column names do not; <see cref="Reason"/> then says so in one sentence.
+/// </summary>
+public sealed record TemplateCandidate(IntakeTemplate Template, double Similarity, TemplateMatch Match, bool NamesDiffer = false, string? Reason = null);
 
 /// <summary>Finds the templates whose structure fits the automatic layout of a new file.</summary>
 public static class IntakeTemplateMatcher
@@ -313,19 +329,58 @@ public static class IntakeTemplateMatcher
     /// At most <see cref="TemplateSettings.MaxCandidates"/> candidates, best first (ties by name):
     /// Exact when the fingerprints are equal, Close at or above <see cref="TemplateSettings.CloseThreshold"/>,
     /// else None. <paramref name="scanLayout"/> must be the fingerprint of the detector's result, never of an edited layout.
+    /// <paramref name="fileColumnNames"/> are the header names of the file's csv and tsv parts that have
+    /// a header, in file order; when given, an Exact or Close candidate whose names differ (see
+    /// <see cref="ColumnNamesAgree"/>) becomes Close with a similarity of at most 0.9.
     /// </summary>
-    public static IReadOnlyList<TemplateCandidate> Match(IntakeFingerprint scanLayout, IEnumerable<IntakeTemplate> templates, TemplateSettings? settings = null)
+    public static IReadOnlyList<TemplateCandidate> Match(IntakeFingerprint scanLayout, IEnumerable<IntakeTemplate> templates, TemplateSettings? settings = null,
+        IReadOnlyList<IReadOnlyList<string>>? fileColumnNames = null)
     {
         ArgumentNullException.ThrowIfNull(scanLayout);
         ArgumentNullException.ThrowIfNull(templates);
         settings ??= new TemplateSettings();
         return templates
             .Select(t => (Template: t, Similarity: IntakeFingerprint.Similarity(scanLayout, t.Fingerprint, settings)))
-            .Select(x => new TemplateCandidate(x.Template, x.Similarity,
-                x.Template.Fingerprint.Text == scanLayout.Text ? TemplateMatch.Exact : x.Similarity >= settings.CloseThreshold ? TemplateMatch.Close : TemplateMatch.None))
+            .Select(x => Candidate(x.Template, x.Similarity,
+                x.Template.Fingerprint.Text == scanLayout.Text ? TemplateMatch.Exact : x.Similarity >= settings.CloseThreshold ? TemplateMatch.Close : TemplateMatch.None,
+                fileColumnNames, settings))
             .OrderByDescending(c => c.Similarity).ThenBy(c => c.Template.Name, StringComparer.CurrentCultureIgnoreCase)
             .Take(Math.Max(0, settings.MaxCandidates))
             .ToList();
+    }
+
+    public const string NamesDifferReason = "The column names are different.";
+
+    private static TemplateCandidate Candidate(IntakeTemplate template, double similarity, TemplateMatch match,
+        IReadOnlyList<IReadOnlyList<string>>? fileColumnNames, TemplateSettings settings)
+    {
+        if (match == TemplateMatch.None || fileColumnNames is null || ColumnNamesAgree(template, fileColumnNames, settings))
+        {
+            return new TemplateCandidate(template, similarity, match);
+        }
+
+        return new TemplateCandidate(template, Math.Min(similarity, 0.9), TemplateMatch.Close, true, NamesDifferReason);
+    }
+
+    /// <summary>
+    /// The k-th table part with names of the template is compared with the k-th of the file, name
+    /// by name in column order (trimmed, case ignored). True when there is nothing to compare, or
+    /// when the equal names are at least <see cref="TemplateSettings.ColumnNameMatchMin"/> of all
+    /// compared positions (the longer list of each pair counts).
+    /// </summary>
+    public static bool ColumnNamesAgree(IntakeTemplate template, IReadOnlyList<IReadOnlyList<string>> fileColumnNames, TemplateSettings? settings = null)
+    {
+        settings ??= new TemplateSettings();
+        var mine = template.Parts.Where(p => p.ColumnNames is { Count: > 0 }).Select(p => p.ColumnNames!).ToList();
+        var theirs = fileColumnNames.Where(n => n is { Count: > 0 }).ToList();
+        int equal = 0, total = 0;
+        foreach (var (a, b) in mine.Zip(theirs))
+        {
+            total += Math.Max(a.Count, b.Count);
+            equal += a.Zip(b).Count(p => string.Equals(p.First.Trim(), p.Second.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        return total == 0 || (double)equal / total >= settings.ColumnNameMatchMin;
     }
 }
 
@@ -338,9 +393,12 @@ internal static class PartFacts
 {
     public const int MaxHeadBytes = 64 * 1024;
 
-    public static (string? FirstLine, int? Columns)[] Read(IntakeItem item, IReadOnlyList<ContainerInfo> parts, string encodingName)
+    /// <summary>Also the header names of csv and tsv parts whose header guess is Yes (cut by the settings' limits).</summary>
+    public static (string? FirstLine, int? Columns, IReadOnlyList<string>? Names)[] Read(IntakeItem item, IReadOnlyList<ContainerInfo> parts, string encodingName,
+        TemplateSettings? settings = null)
     {
-        var facts = new (string?, int?)[parts.Count];
+        settings ??= new TemplateSettings();
+        var facts = new (string?, int?, IReadOnlyList<string>?)[parts.Count];
         var encoding = IntakeReader.ResolveEncoding(encodingName, out _) ?? Encoding.UTF8;
         try
         {
@@ -356,10 +414,14 @@ internal static class PartFacts
                 IntakeReader.MoveTo(stream, start);
                 var length = stream.ReadAtLeast(buffer.AsSpan(0, (int)Math.Min(MaxHeadBytes, end - start)), (int)Math.Min(MaxHeadBytes, end - start), false);
                 var lines = encoding.GetString(buffer, 0, length).TrimStart('﻿').Split(["\r\n", "\r", "\n"], StringSplitOptions.None);
-                int? columns = part.Format is "csv" or "tsv" && part.Delimiter is { Length: 1 } d && part.SkipLines < lines.Length - (end - start > length ? 1 : 0)
-                    ? Fields(lines[part.SkipLines], d[0]).Count
+                var header = part.Format is "csv" or "tsv" && part.Delimiter is { Length: 1 } d && part.SkipLines < lines.Length - (end - start > length ? 1 : 0)
+                    ? Fields(lines[part.SkipLines], d[0])
                     : null;
-                facts[i] = (lines[0], columns);
+                var names = header is not null && part.HeaderGuess == HeaderGuess.Yes
+                    ? header.Take(settings.MaxColumnNames).Select(n => n.Trim().Trim('"').Trim())
+                        .Select(n => n.Length <= settings.MaxColumnNameLength ? n : n[..settings.MaxColumnNameLength]).ToList()
+                    : null;
+                facts[i] = (lines[0], header?.Count, names);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)

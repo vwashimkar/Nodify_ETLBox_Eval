@@ -219,30 +219,37 @@ public sealed class IntakeTemplateApplyTests : IDisposable
         var names = Directory.GetFiles(IntakeTestData.Folder, "i*.txt").Select(Path.GetFileNameWithoutExtension).Select(n => (Name: n!, Path: IntakeTestData.PathOf(n!)))
             .Concat(Directory.GetFiles(Path.Combine(IntakeTestData.Folder, "real"), "r*.*").Where(p => !p.EndsWith(".md")).Select(p => (Name: Path.GetFileNameWithoutExtension(p)[..3], Path: p)))
             .OrderBy(n => n.Name).ToList();
-        var prints = new List<(string Name, IntakeFingerprint Print)>();
+        // Since G5c2 the templates are real saved templates (with column names), matched through the session.
+        var store = Store();
+        var sessions = new List<(string Name, IntakeEditSession Session, IntakeFingerprint Print)>();
         foreach (var (name, path) in names)
         {
             var (item, scan) = await IntakeEditSessionTests.ScanAsync(new FileIntakeFactory().CreateItem(path));
-            prints.Add((name, new IntakeEditSession(item, scan, null, name).AutomaticFingerprint()));
+            var session = new IntakeEditSession(item, scan, null, name);
+            Assert.True(session.SaveAsTemplate(name, store).Result.Ok);
+            sessions.Add((name, session, session.AutomaticFingerprint()));
         }
 
-        var templates = prints.Select(p => new IntakeTemplate(1, Guid.NewGuid(), p.Name, DateTime.UtcNow, p.Print, [])).ToList();
-        foreach (var (name, print) in prints)
+        var all = new TemplateSettings { MaxCandidates = 100 };
+        foreach (var (name, session, print) in sessions)
         {
-            var found = IntakeTemplateMatcher.Match(print, templates.Where(t => t.Name != name), new TemplateSettings { MaxCandidates = 100 })
-                .Where(c => c.Match != TemplateMatch.None).Select(c => $"{c.Template.Name} {c.Match} {c.Similarity:0.00}");
+            var found = session.SuggestTemplates(store, all).Where(c => c.Template.Name != name && c.Match != TemplateMatch.None)
+                .Select(c => $"{c.Template.Name} {c.Match} {c.Similarity:0.00}{(c.NamesDiffer ? " (names differ)" : "")}");
             _output.WriteLine($"{name} ({print.Entries.Count} entries): {string.Join(", ", found.DefaultIfEmpty("none"))}");
         }
 
-        var tierA = prints.Where(p => p.Name.StartsWith("i08") || p.Name.StartsWith("i09") || p.Name.StartsWith("i10")).ToList();
+        var tierA = sessions.Where(p => p.Name.StartsWith("i08") || p.Name.StartsWith("i09") || p.Name.StartsWith("i10")).ToList();
         foreach (var a in tierA)
         {
             foreach (var b in tierA.Where(b => b.Name != a.Name && b.Print.Text != a.Print.Text))
             {
-                var match = IntakeTemplateMatcher.Match(a.Print, [templates.Single(t => t.Name == b.Name)]).Single();
+                var match = a.Session.SuggestTemplates(store, all).Single(c => c.Template.Name == b.Name);
                 Assert.True(match.Match == TemplateMatch.None, $"{a.Name} matches {b.Name}: {match.Match} {match.Similarity}");
             }
         }
+
+        var r09 = sessions.Single(x => x.Name == "r09").Session.SuggestTemplates(store, all).Single(c => c.Template.Name == "r12");
+        Assert.NotEqual(TemplateMatch.Exact, r09.Match);
     }
 }
 

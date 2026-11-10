@@ -14,6 +14,7 @@ public sealed record TemplateApplyResult(bool Ok, string Message, int PartsAppli
 public sealed partial class IntakeEditSession
 {
     private IReadOnlyList<PartSignature>? _scanSignatures;
+    private IReadOnlyList<IReadOnlyList<string>>? _scanColumnNames;
 
     /// <summary>The fingerprint of the scan's automatic layout (never of the edited one). Reads the first line of each csv and tsv part once.</summary>
     public IntakeFingerprint AutomaticFingerprint(TemplateSettings? settings = null) => IntakeFingerprint.Of(ScanSignatures(), settings);
@@ -49,7 +50,7 @@ public sealed partial class IntakeEditSession
     public IReadOnlyList<TemplateCandidate> SuggestTemplates(ITemplateStore store, TemplateSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(store);
-        var candidates = IntakeTemplateMatcher.Match(AutomaticFingerprint(settings), store.List(), settings);
+        var candidates = IntakeTemplateMatcher.Match(AutomaticFingerprint(settings), store.List(), settings, ScanColumnNames());
         foreach (var c in candidates.Where(c => c.Match != TemplateMatch.None))
         {
             Log("template.suggested", new()
@@ -78,7 +79,7 @@ public sealed partial class IntakeEditSession
         ArgumentNullException.ThrowIfNull(template);
         settings ??= new TemplateSettings();
         var id = template.Id.ToString("D");
-        var match = IntakeTemplateMatcher.Match(AutomaticFingerprint(settings), [template], settings).Single();
+        var match = IntakeTemplateMatcher.Match(AutomaticFingerprint(settings), [template], settings, ScanColumnNames()).Single();
         if (match.Match == TemplateMatch.None)
         {
             var reason = $"The saved layout '{IntakeEditRules.Cut(template.Name)}' does not fit this file, so nothing was changed.";
@@ -214,9 +215,17 @@ public sealed partial class IntakeEditSession
             var tables = _scanContainers.Select(c => c.Format is "csv" or "tsv" ? c : c with { ContentStartByte = null }).ToList();
             var facts = PartFacts.Read(Item, tables, EncodingName);
             _scanSignatures = _scanContainers.Select((c, i) => PartFacts.Signature(c, facts[i].Columns)).ToList();
+            _scanColumnNames = facts.Where(f => f.Names is { Count: > 0 }).Select(f => f.Names!).ToList();
         }
 
         return _scanSignatures;
+    }
+
+    /// <summary>The header names of the scan's csv and tsv parts with a header, in file order (never logged).</summary>
+    private IReadOnlyList<IReadOnlyList<string>> ScanColumnNames()
+    {
+        ScanSignatures();
+        return _scanColumnNames!;
     }
 
     /// <summary>
@@ -226,7 +235,7 @@ public sealed partial class IntakeEditSession
     private IntakeTemplate BuildTemplate(string name, TemplateSettings settings)
     {
         var autoSignatures = ScanSignatures();
-        var facts = PartFacts.Read(Item, _containers, EncodingName);
+        var facts = PartFacts.Read(Item, _containers, EncodingName, settings);
         var parts = new List<TemplatePart>(_containers.Count);
         var cursor = 0;
         for (var i = 0; i < _containers.Count; i++)
@@ -254,7 +263,7 @@ public sealed partial class IntakeEditSession
 
             var anchor = PartFacts.Anchor(facts[i].FirstLine, i > 0 ? _containers[i - 1] : null, i > 0 ? facts[i - 1].Columns : null, settings.MaxAnchorLength);
             parts.Add(new TemplatePart(c.Format, c.Name, c.Delimiter, c.HeaderGuess, c.SkipLines, c.KeyValueForm,
-                c.Format is "csv" or "tsv" ? facts[i].Columns : null, anchor, from, startsInside));
+                c.Format is "csv" or "tsv" ? facts[i].Columns : null, anchor, from, startsInside, facts[i].Names));
         }
 
         return new IntakeTemplate(IntakeTemplate.CurrentFormatVersion, Guid.NewGuid(), name, DateTime.UtcNow, AutomaticFingerprint(settings), parts);
