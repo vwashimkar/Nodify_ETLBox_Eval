@@ -412,6 +412,75 @@
                             </Border>
                         </ScrollViewer>
                     </TabItem>
+
+                    <TabItem x:Name="TemplatesTab" Header="Templates" AutomationProperties.Name="Templates">
+                        <!-- Saved layouts: the list scrolls by itself; the rows under it wrap when the pane is narrow. -->
+                        <Border Padding="{DynamicResource ThicknessListRow}">
+                            <Grid x:Name="TemplatesPanel">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" x:Name="TemplatesHeader" Margin="{DynamicResource ThicknessListRow}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="72" />
+                                        <ColumnDefinition Width="88" />
+                                        <ColumnDefinition Width="56" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="1" Text="Parts" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="2" Text="Created" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="3" Text="Match" FontWeight="SemiBold" />
+                                </Grid>
+                                <ListBox Grid.Row="1" x:Name="TemplatesList" ItemsSource="{Binding Templates, Mode=OneWay}" SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}"
+                                         IsEnabled="{Binding CanUseTemplates, Mode=OneWay}" ItemContainerStyle="{StaticResource ContainerRow}"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="Saved layouts">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="72" />
+                                                    <ColumnDefinition Width="88" />
+                                                    <ColumnDefinition Width="56" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name, Mode=OneWay}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Parts, Mode=OneWay}" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Created, Mode=OneWay}" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Match, Mode=OneWay}" FontWeight="SemiBold" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <WrapPanel Grid.Row="2" x:Name="TemplateSaveRow">
+                                    <TextBlock Text="Name" Style="{StaticResource EditRowLabel}" />
+                                    <TextBox x:Name="TemplateNameBox" Width="200" Style="{StaticResource EditBox}"
+                                             Text="{Binding TemplateName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanUseTemplates, Mode=OneWay}"
+                                             ToolTip="The name to save or rename to, 1 to 80 characters" AutomationProperties.Name="Saved layout name" />
+                                    <Button x:Name="SaveTemplateButton" Style="{StaticResource EditButton}" Content="Save current layout as template"
+                                            Command="{Binding SaveTemplateCommand, Mode=OneWay}" AutomationProperties.Name="Save current layout as template" />
+                                    <Button x:Name="RenameTemplateButton" Style="{StaticResource EditButton}" Content="Rename"
+                                            Command="{Binding RenameTemplateCommand, Mode=OneWay}" ToolTip="Rename the selected saved layout to the name in the box"
+                                            ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="Rename saved layout" />
+                                </WrapPanel>
+                                <WrapPanel Grid.Row="3" x:Name="TemplateActionRow">
+                                    <Button x:Name="ApplyTemplateButton" Style="{StaticResource EditButton}" Content="Apply to this file"
+                                            Command="{Binding ApplyTemplateCommand, Mode=OneWay}" ToolTip="Apply the selected saved layout to this file (one step to undo)"
+                                            ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="Apply to this file" />
+                                    <Button x:Name="DeleteTemplateButton" Style="{StaticResource EditButton}" Content="Delete"
+                                            Command="{Binding DeleteTemplateCommand, Mode=OneWay}" ToolTip="Delete the selected saved layout"
+                                            ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="Delete saved layout" />
+                                </WrapPanel>
+                                <TextBlock Grid.Row="4" x:Name="TemplateStatusText" Text="{Binding TemplateStatus, Mode=OneWay}" TextWrapping="Wrap"
+                                           Margin="{DynamicResource ThicknessListRow}" Style="{StaticResource HiddenWhenEmpty}" AutomationProperties.LiveSetting="Polite" />
+                            </Grid>
+                        </Border>
+                    </TabItem>
                 </TabControl>
 
                 <GridSplitter x:Name="DetailsSplitter" Grid.Row="1" Height="8" HorizontalAlignment="Stretch" VerticalAlignment="Center"
@@ -463,6 +532,26 @@
                     <TextBlock x:Name="LayoutText" DockPanel.Dock="Right" Text="{Binding LayoutText, Mode=OneWay}" Foreground="{DynamicResource text-muted-brush}" Margin="{DynamicResource Thickness4}" />
                     <TextBlock x:Name="TotalsText" Text="{Binding TotalsText, Mode=OneWay}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
                 </DockPanel>
+                <!-- The banner: a saved layout fits this file. Slim, above the status line, takes no space while hidden. -->
+                <Border x:Name="TemplateBanner" Tag="{Binding BannerText, Mode=OneWay}" Style="{StaticResource HiddenWhenNull}"
+                        BorderBrush="{DynamicResource accent-brush}" BorderThickness="1" Background="{DynamicResource accent-soft-brush}"
+                        Padding="{DynamicResource ThicknessListRow}" Margin="{DynamicResource Thickness4}"
+                        AutomationProperties.Name="Saved layout suggestion">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="BannerApplyButton" Style="{StaticResource ThemedButton}" Content="Apply" MinWidth="72"
+                                    Margin="{DynamicResource Thickness4}" Padding="{DynamicResource ThicknessListRow}"
+                                    Command="{Binding ApplyBannerCommand, Mode=OneWay}" ToolTip="Apply this saved layout to the file (one step to undo)"
+                                    AutomationProperties.Name="Apply saved layout" />
+                            <Button x:Name="BannerDismissButton" Style="{StaticResource ThemedButton}" Content="Not now" MinWidth="72"
+                                    Margin="{DynamicResource Thickness4}" Padding="{DynamicResource ThicknessListRow}"
+                                    Command="{Binding DismissBannerCommand, Mode=OneWay}" ToolTip="Hide this suggestion until the next scan"
+                                    AutomationProperties.Name="Not now" />
+                        </StackPanel>
+                        <TextBlock x:Name="BannerText" Text="{Binding BannerText, Mode=OneWay}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   Margin="{DynamicResource Thickness4}" AutomationProperties.LiveSetting="Polite" />
+                    </DockPanel>
+                </Border>
                 <TextBlock x:Name="StatusLine" Text="{Binding EditStatus, Mode=OneWay}" TextWrapping="Wrap" Margin="{DynamicResource Thickness4}"
                            Style="{StaticResource HiddenWhenEmpty}" AutomationProperties.LiveSetting="Polite" />
                 <TextBlock x:Name="LineageNoteText" Text="{Binding LineageNote, Mode=OneWay}" TextWrapping="Wrap" Foreground="{DynamicResource text-muted-brush}"
