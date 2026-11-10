@@ -58,8 +58,8 @@ public static class ProjectNodeSettings
 
     /// <summary>
     /// A File intake node: path, relativePath, mode, encoding and maxFileSizeMb, and the saved layout
-    /// (<paramref name="layoutPlanJson"/>) as a JSON value when there is one. The layout is written as
-    /// it is and never merged with the loaded one.
+    /// (<paramref name="layoutPlanJson"/>) as one JSON string when there is one (projects before G5c1
+    /// hold it as a JSON object; both are read). The layout is written as it is and never merged with the loaded one.
     /// </summary>
     public static JsonElement WriteFileIntake(FileIntakeNodeSettings settings, string? relativePath, JsonElement? loaded = null, string? layoutPlanJson = null)
     {
@@ -79,7 +79,8 @@ public static class ProjectNodeSettings
         }
 
         var withPlan = JsonNode.Parse(finished.GetRawText())!.AsObject();
-        withPlan[LayoutPlan] = JsonNode.Parse(layoutPlanJson);
+        // One JSON string, so the project writer's indentation does not grow the layout (G5c1).
+        withPlan[LayoutPlan] = JsonValue.Create(layoutPlanJson);
         return JsonSerializer.SerializeToElement(withPlan);
     }
 
@@ -90,7 +91,7 @@ public static class ProjectNodeSettings
     /// </summary>
     public static string? ReadLayoutPlan(JsonElement settings)
         => settings.ValueKind == JsonValueKind.Object && settings.TryGetProperty(LayoutPlan, out var plan) && plan.ValueKind != JsonValueKind.Null
-            ? plan.GetRawText()
+            ? plan.ValueKind == JsonValueKind.String ? plan.GetString() : plan.GetRawText()
             : null;
 
     /// <summary>

@@ -410,7 +410,7 @@ public sealed class IntakeEditSession
         IntakeSettings? settings = null, EditSettings? edit = null)
     {
         var session = new IntakeEditSession(item, scan, log, intakeId, settings, edit);
-        if (!IntakePlan.TryApply(scan, plan, out var containers, out message))
+        if (!IntakePlan.TryApply(item, scan, plan, out var containers, out message, session._settings, session._edit))
         {
             session.Log("plan.rejected", new() { ["reason"] = message });
             return null;
@@ -438,6 +438,11 @@ public sealed class IntakeEditSession
 
     // ---- Internals -----------------------------------------------------------------------------
 
+    /// <summary>The settings of this session (its mode is the scan's).</summary>
+    internal IntakeSettings Settings => _settings;
+
+    internal EditSettings EditLimits => _edit;
+
     private bool IsUtf16 => EncodingName is IntakeEncodings.Utf16Le or IntakeEncodings.Utf16Be;
 
     private string? Problem(int index)
@@ -449,7 +454,7 @@ public sealed class IntakeEditSession
         return second.Length <= IntakeEditRules.MaxNameLength ? second : name[..(IntakeEditRules.MaxNameLength - 4)] + " (2)";
     }
 
-    private static IReadOnlyList<string> With(IReadOnlyList<string>? reasons, string reason) => [.. reasons ?? [], reason];
+    internal static IReadOnlyList<string> With(IReadOnlyList<string>? reasons, string reason) => [.. reasons ?? [], reason];
 
     /// <summary>
     /// Runs the detector (its public API, no rule changes) on the container's own bytes. When it
@@ -457,9 +462,13 @@ public sealed class IntakeEditSession
     /// container keeps its format and options and becomes Guessed. The range stays as it is.
     /// </summary>
     private ContainerInfo Redetect(ContainerInfo container, byte[] bytes, int offset, int length, string reason)
+        => Redetect(Item, _settings with { Mode = IntakeMode.AutoDetect, Encoding = EncodingName }, container, bytes, offset, length, reason);
+
+    /// <summary>The detector on a slice of bytes, as above; <paramref name="detect"/> is AutoDetect with the file's encoding. Also used to rebuild a saved plan.</summary>
+    internal static ContainerInfo Redetect(IntakeItem item, IntakeSettings detect, ContainerInfo container, byte[] bytes, int offset, int length, string reason)
     {
-        var slice = new IntakeItem(Guid.NewGuid(), "edit", Item.Name, length, DateTime.UtcNow, () => new MemoryStream(bytes, offset, length, writable: false));
-        var result = IntakeReader.Read(slice, _settings with { Mode = IntakeMode.AutoDetect, Encoding = EncodingName }, null, CancellationToken.None);
+        var slice = new IntakeItem(Guid.NewGuid(), "edit", item.Name, length, DateTime.UtcNow, () => new MemoryStream(bytes, offset, length, writable: false));
+        var result = IntakeReader.Read(slice, detect, null, CancellationToken.None);
         if (result.Error is not null || result.Cancelled || result.Containers.Count != 1)
         {
             return container with { Confidence = ContainerConfidence.Guessed, Reasons = With(container.Reasons, reason) };
