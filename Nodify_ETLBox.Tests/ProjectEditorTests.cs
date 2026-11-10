@@ -699,9 +699,31 @@ public sealed class ProjectEditorTests : IDisposable
         BuildC01(main.Editor, CreateCsv());
         main.SaveProject();
 
+        // The refresh of the small C01 file can end before the test looks at IsRefreshing after the
+        // open (Task P3), so every change of IsRefreshing on the opened nodes is recorded instead.
+        var refreshing = new List<(NodeViewModel Node, bool Value)>();
+        main.Editor.Nodes.CollectionChanged += (_, e) =>
+        {
+            foreach (NodeViewModel node in e.NewItems ?? Array.Empty<NodeViewModel>())
+            {
+                node.PropertyChanged += (_, p) =>
+                {
+                    if (p.PropertyName == nameof(NodeViewModel.IsRefreshing))
+                    {
+                        lock (refreshing) { refreshing.Add((node, node.IsRefreshing)); }
+                    }
+                };
+            }
+        };
+
         await main.OpenProjectAsync(dialogs.PathToSave);
-        Assert.Contains(main.Editor.Nodes, n => n.IsRefreshing);
         await Settled(main);
+
+        var csv = main.Editor.Nodes.Single(n => n.NodeType == NodeType.CsvFile);
+        lock (refreshing)
+        {
+            Assert.Equal(new[] { true, false }, refreshing.Where(r => r.Node == csv).Select(r => r.Value));
+        }
 
         Assert.All(main.Editor.Nodes, n => Assert.Equal("Configured", n.ConfigurationStatus));
         Assert.All(main.Editor.Nodes, n => Assert.False(n.IsRefreshing));
