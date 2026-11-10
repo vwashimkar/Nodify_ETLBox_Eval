@@ -92,8 +92,16 @@ public class ExecuteViewModelTests
 
             Assert.True(vm.IsLicenceMessage);
             Assert.Equal(PipelineRunner.LicenceLimitMessage(vm.Counts.Read), vm.Message);
-            Assert.Equal(ExecuteViewModel.ShownRows, vm.OutputRowsView!.Count);
-            Assert.Equal($"Showing the first 200 of {vm.Result!.Rows.Count:N0} rows", vm.OutputNote);
+            // Without a valid licence the stop point varies (ETLBox reads ahead), so any number of rows
+            // up to the limit can arrive, even none. Promised: the rows read are kept, and the grid
+            // shows the first of them (at most 200) with a note that matches.
+            var kept = vm.Result!.Rows.Count;
+            var shown = vm.OutputRowsView!.Count;
+            Assert.InRange(shown, 0, ExecuteViewModel.ShownRows);
+            Assert.Equal(Math.Min(kept, ExecuteViewModel.ShownRows), shown);
+            Assert.Equal(kept == 0 ? ExecuteViewModel.NoRowsText
+                : kept > ExecuteViewModel.ShownRows ? $"Showing the first 200 of {kept:N0} rows"
+                : $"Showing all {kept:N0} rows", vm.OutputNote);
         }
         finally
         {
