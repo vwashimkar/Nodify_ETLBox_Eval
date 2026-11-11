@@ -86,6 +86,14 @@ public static partial class PipelineRunner
         return await RunStepsAsync(definition, onRecord => new CsvRecordReader().ReadAsync(settings, onRecord, token), progress, stopwatch);
     }
 
+    /// <summary>The step of a guided pipeline (task G7a) instead of ParseValue; left null otherwise (PipelineRunner.Part.cs).</summary>
+    /// <exception cref="ArgumentException">The guided settings cannot run on these columns.</exception>
+    static partial void PrepareGuided(PipelineDefinition definition, IReadOnlyList<string> keptColumns,
+        ref Func<ParseValueRecord, RecordOutcome>? step, ref IReadOnlyList<string>? columns);
+
+    /// <summary>Sets <paramref name="guided"/> for a guided pipeline (PipelineRunner.Part.cs).</summary>
+    static partial void IsGuidedDefinition(PipelineDefinition definition, ref bool guided);
+
     /// <summary>Starts the run of a CSV part pipeline and sets <paramref name="run"/>; leaves it null otherwise (PipelineRunner.Part.cs).</summary>
     static partial void RunCsvPart(PipelineDefinition definition, string? filePath, IProgress<PipelineProgress>? progress, CancellationToken token,
         ref Task<PipelineResult>? run);
@@ -108,7 +116,8 @@ public static partial class PipelineRunner
         var flagged = new List<RecordIssue>();
         IReadOnlyList<string> outputColumns = Array.Empty<string>();
         int read = 0, parsed = 0, flaggedRecords = 0;
-        ParseValueStep? step = null;
+        Func<ParseValueRecord, RecordOutcome>? step = null;
+        var guided = false;
         int[]? keptIndexes = null;
         IReadOnlyList<string>? keptColumns = null;
         string? setupError = null;
@@ -139,8 +148,21 @@ public static partial class PipelineRunner
                     keptColumns = selection.KeptColumns(record.Columns);
                     var position = record.Columns.Select((c, i) => (c, i)).GroupBy(p => p.c).ToDictionary(g => g.Key, g => g.First().i);
                     keptIndexes = keptColumns.Select(c => position[c]).ToArray();
-                    step = ParseValueTransform.Prepare(keptColumns, definition.ParseValue);
-                    outputColumns = step.OutputColumns;
+                    Func<ParseValueRecord, RecordOutcome>? guidedStep = null;
+                    IReadOnlyList<string>? guidedColumns = null;
+                    PrepareGuided(definition, keptColumns, ref guidedStep, ref guidedColumns);
+                    if (guidedStep is not null)
+                    {
+                        guided = true;
+                        step = guidedStep;
+                        outputColumns = guidedColumns!;
+                    }
+                    else
+                    {
+                        var parseStep = ParseValueTransform.Prepare(keptColumns, definition.ParseValue);
+                        step = parseStep.Process;
+                        outputColumns = parseStep.OutputColumns;
+                    }
                 }
                 catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
                 {
@@ -156,7 +178,7 @@ public static partial class PipelineRunner
                 values[keptColumns![i]] = record.Values[keptIndexes[i]];
             }
 
-            var result = step.Process(new ParseValueRecord(record.RecordNumber, values));
+            var result = step(new ParseValueRecord(record.RecordNumber, values));
             if (result.Reject is not null)
             {
                 rejects.Add(AtFileLine(result.Reject, record.FileLine));
@@ -204,7 +226,11 @@ public static partial class PipelineRunner
 
         if (setupError is not null)
         {
-            return Result($"The file does not match the ParseValue settings: {setupError}");
+            var isGuided = guided;
+            IsGuidedDefinition(definition, ref isGuided);
+            return Result(isGuided
+                ? $"The file does not match the pipeline settings: {setupError}"
+                : $"The file does not match the ParseValue settings: {setupError}");
         }
 
         if (outcome.LicenceLimitReached)

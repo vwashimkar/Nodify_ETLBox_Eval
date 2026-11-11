@@ -67,6 +67,7 @@
 	  <EmbeddedResource Include="Engine\Csv\CsvRecordReader.Part.cs" />
 	  <EmbeddedResource Include="Engine\Pipeline\PipelineDefinition.Part.cs" />
 	  <EmbeddedResource Include="Engine\Pipeline\PipelineRunner.Part.cs" />
+	  <EmbeddedResource Include="Engine\Pipeline\ColumnSplit.cs" />
 	  <EmbeddedResource Include="Engine\Intake\AutoDetector.cs" />
 	  <EmbeddedResource Include="Engine\Intake\CsvPartLocator.cs" />
 	  <EmbeddedResource Include="Engine\Intake\CsvPartSelector.cs" />

@@ -17,6 +17,17 @@ public static partial class PipelineRunner
         }
     }
 
+    static partial void IsGuidedDefinition(PipelineDefinition definition, ref bool guided) => guided |= definition.Guided is not null;
+
+    static partial void PrepareGuided(PipelineDefinition definition, IReadOnlyList<string> keptColumns,
+        ref Func<ParseValueRecord, RecordOutcome>? step, ref IReadOnlyList<string>? columns)
+    {
+        if (definition.Guided is { } guided)
+        {
+            (step, columns) = ColumnSplit.Prepare(keptColumns, guided);
+        }
+    }
+
     /// <summary>
     /// Finds the part (<see cref="CsvPartLocator"/>), then reads exactly its bytes and runs the same steps as a
     /// whole file. A part that is not found stops the run with the locator's one sentence, in the same shape as

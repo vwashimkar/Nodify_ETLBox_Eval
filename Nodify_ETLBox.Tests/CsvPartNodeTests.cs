@@ -156,7 +156,8 @@ public sealed class CsvPartNodeTests : IDisposable
         if (target.Inputs.Count > 0)
         {
             G6cCanvas.Connect(editor, part.Outputs[0], target.Inputs[0]);
-            if (other == NodeType.ParseValue)
+            // G7a: a CSV part also feeds DotNetObject directly (a guided pipeline).
+            if (other is NodeType.ParseValue or NodeType.DotNetObject)
             {
                 Assert.Single(editor.Connections);
             }
@@ -165,7 +166,7 @@ public sealed class CsvPartNodeTests : IDisposable
                 Assert.Empty(editor.Connections);
                 Assert.Equal(other == NodeType.CsvPart
                     ? ["CSV part: the input accepts only a File intake node. Connect the output of a File intake node."]
-                    : ["CSV part: the output feeds only a ParseValue node. Connect it to the input of a ParseValue node."], editor.Issues);
+                    : ["CSV part: the output feeds only a ParseValue or DotNetObject node. Connect it to the input of one of those."], editor.Issues);
             }
         }
     }

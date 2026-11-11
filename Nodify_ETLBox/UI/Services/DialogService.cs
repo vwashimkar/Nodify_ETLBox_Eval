@@ -189,6 +189,23 @@ public class DialogService : IDialogService
         window.ShowDialog();
     }
 
+    public void ShowGuidedBuilder(GuidedBuilderViewModel viewModel)
+    {
+        var owner = Application.Current.MainWindow;
+
+        var window = new GuidedBuilderWindow
+        {
+            Owner = owner,
+            DataContext = viewModel,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.Closing += (_, _) => viewModel.CancelCommand.Execute(null);
+        window.ShowDialog();
+    }
+
     public void ShowCsvPartSettings(CsvPartSettingsViewModel viewModel)
     {
         var owner = Application.Current.MainWindow;

@@ -143,7 +143,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>The Execute button's tooltip: the reason it is disabled, or what it does.</summary>
     public string ExecuteHint => ExecuteBlockedReason ?? ExecuteReadyHint;
 
-    public const string ExecutePartChainReason = "Execute needs exactly File intake -> CSV part -> ParseValue -> DotNetObject on the canvas, connected in that order.";
+    public const string ExecutePartChainReason = "Execute needs exactly File intake -> CSV part -> ParseValue -> DotNetObject, or File intake -> CSV part -> DotNetObject, on the canvas, connected in that order.";
 
     /// <summary>
     /// The graph must be exactly CsvFile -> ParseValue -> DotNetObject (three nodes, two connections),
@@ -167,6 +167,12 @@ public partial class MainViewModel : ObservableObject
         if (part is not null)
         {
             var intake = Editor.FileIntakeOf(part);
+            if (parse is null && nodes.Count == 2 && output is not null && intake is not null
+                && Editor.Connections.Count == 2 && Linked(intake, part) && Linked(part, output))
+            {
+                return TryBuildGuidedDefinition(part, output, out definition, out reason);
+            }
+
             if (nodes.Count != 3 || parse is null || output is null || intake is null
                 || Editor.Connections.Count != 3 || !Linked(intake, part) || !Linked(part, parse) || !Linked(parse, output))
             {
@@ -284,7 +290,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.CsvPartSelectorJson))
+        if (e.PropertyName is nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.CsvPartSelectorJson) or nameof(NodeViewModel.ColumnSplit))
         {
             ClearSuccessfulPipelineRun();
         }
@@ -851,7 +857,7 @@ public partial class MainViewModel : ObservableObject
 
     internal static bool IsInsideProjectFolder(string folderPath) => OutputFolderCheck.IsInsideProject(folderPath);
 
-    private static string SanitizeAssemblyName(string selectedName)
+    internal static string SanitizeAssemblyName(string selectedName)
     {
         if (string.IsNullOrWhiteSpace(selectedName))
         {

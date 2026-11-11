@@ -1,0 +1,322 @@
+<Window x:Class="Nodify_ETLBox.UI.GuidedBuilderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:EtlDesigner.UI.Controls"
+        controls:FileDrop.Command="{Binding DropFileCommand, Mode=OneWay}"
+        Title="Build a reader"
+        Width="1000"
+        Height="680"
+        MinWidth="820"
+        MinHeight="560"
+        ResizeMode="CanResize"
+        Background="{DynamicResource surface-brush}"
+        Foreground="{DynamicResource text-brush}"
+        FontFamily="{DynamicResource font-text}"
+        FontSize="{DynamicResource font-body}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/DialogStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+            <Style x:Key="Title" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="{DynamicResource font-title}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+            </Style>
+
+            <Style x:Key="Line" TargetType="TextBlock">
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+                <Style.Triggers>
+                    <Trigger Property="Text" Value="">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </Trigger>
+                    <Trigger Property="Text" Value="{x:Null}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="MutedLine" TargetType="TextBlock" BasedOn="{StaticResource Line}">
+                <Setter Property="Foreground" Value="{DynamicResource text-muted-brush}" />
+            </Style>
+
+            <Style x:Key="Action" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+                <Setter Property="Padding" Value="{DynamicResource Thickness8}" />
+                <Setter Property="MinWidth" Value="96" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+            </Style>
+
+            <!-- The technical text behind a plain sentence; hidden while there is none. -->
+            <Style x:Key="Details" TargetType="Expander">
+                <Setter Property="Header" Value="Details" />
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+                <Setter Property="Foreground" Value="{DynamicResource text-muted-brush}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Null}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Next is hidden on the last step. -->
+            <Style x:Key="NextAction" TargetType="Button" BasedOn="{StaticResource Action}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsLastStep, Mode=OneWay}" Value="True">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="DataRows" TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+                <Setter Property="IsReadOnly" Value="True" />
+                <Setter Property="AutoGenerateColumns" Value="True" />
+                <Setter Property="CanUserAddRows" Value="False" />
+                <Setter Property="HeadersVisibility" Value="Column" />
+                <Setter Property="FontFamily" Value="{DynamicResource font-data}" />
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+                <Setter Property="MinHeight" Value="120" />
+            </Style>
+
+            <Style x:Key="Page" TargetType="TabItem">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Padding="{DynamicResource Thickness8}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ===== Step bar ===== -->
+            <ItemsControl x:Name="StepBar" Grid.Row="0" ItemsSource="{Binding StepItems, Mode=OneWay}" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border x:Name="StepChip" BorderThickness="1" BorderBrush="{DynamicResource border-brush}" CornerRadius="{DynamicResource corner-radius}"
+                                Padding="{DynamicResource Thickness8}" Margin="{DynamicResource Thickness4}">
+                            <TextBlock x:Name="StepText" Text="{Binding Text, Mode=OneWay}" Foreground="{DynamicResource text-muted-brush}" />
+                        </Border>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsDone, Mode=OneWay}" Value="True">
+                                <Setter TargetName="StepText" Property="Foreground" Value="{DynamicResource text-brush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsCurrent, Mode=OneWay}" Value="True">
+                                <Setter TargetName="StepChip" Property="Background" Value="{DynamicResource accent-soft-brush}" />
+                                <Setter TargetName="StepChip" Property="BorderBrush" Value="{DynamicResource accent-brush}" />
+                                <Setter TargetName="StepText" Property="Foreground" Value="{DynamicResource text-brush}" />
+                                <Setter TargetName="StepText" Property="FontWeight" Value="SemiBold" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- ===== The pages, one per step; the tab headers are hidden ===== -->
+            <TabControl x:Name="Pages" Grid.Row="1" SelectedIndex="{Binding StepIndex, Mode=OneWay}" Margin="{DynamicResource Thickness4}">
+
+                <!-- 1 File -->
+                <TabItem x:Name="FilePage" Style="{StaticResource Page}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="{DynamicResource Thickness8}">
+                            <TextBlock Text="Which file did your instrument export?" Style="{StaticResource Title}" />
+                            <TextBlock Text="Browse for the file, or drop it on this window. It is only read, never changed." Style="{StaticResource MutedLine}" />
+                            <WrapPanel>
+                                <Button x:Name="BrowseButton" Content="Browse..." Style="{StaticResource Action}" Command="{Binding BrowseCommand, Mode=OneWay}" />
+                                <TextBlock x:Name="FileNameText" Text="{Binding FileName, Mode=OneWay}" ToolTip="{Binding FilePath, Mode=OneWay}" VerticalAlignment="Center"
+                                           FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" TextTrimming="CharacterEllipsis" />
+                            </WrapPanel>
+                            <DockPanel Visibility="{Binding IsScanning, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                <Button x:Name="CancelScanButton" DockPanel.Dock="Right" Content="Cancel" Style="{StaticResource Action}" Command="{Binding CancelCommand, Mode=OneWay}"
+                                        Visibility="{Binding IsCancelVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                                <StackPanel>
+                                    <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" Height="{DynamicResource spacing-8}" Margin="{DynamicResource Thickness4}" />
+                                    <TextBlock Text="{Binding ProgressText, Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                                </StackPanel>
+                            </DockPanel>
+                            <TextBlock x:Name="FileMessageText" Text="{Binding FileMessage, Mode=OneWay}" Style="{StaticResource Line}" />
+                            <TextBlock x:Name="KnownLayoutLine" Text="{Binding KnownLayoutText, Mode=OneWay}" Style="{StaticResource Line}" FontWeight="SemiBold" />
+                            <Expander Style="{StaticResource Details}" Tag="{Binding FileDetails, Mode=OneWay}">
+                                <TextBlock Text="{Binding FileDetails, Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                            </Expander>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- 2 Table -->
+                <TabItem x:Name="TablePage" Style="{StaticResource Page}">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="2*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0">
+                            <TextBlock x:Name="TableMessageText" Text="{Binding TableMessage, Mode=OneWay}" Style="{StaticResource Title}" />
+                            <TextBlock Text="{Binding SelectedTable.Summary, Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                            <WrapPanel>
+                                <Button x:Name="UseSuggestionButton" Content="Use the suggested table" Style="{StaticResource Action}" Command="{Binding UseSuggestionCommand, Mode=OneWay}"
+                                        Visibility="{Binding HasSuggestion, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            </WrapPanel>
+                            <Expander Style="{StaticResource Details}" Tag="{Binding SelectedTable.Details, Mode=OneWay, FallbackValue={x:Null}}">
+                                <TextBlock Text="{Binding SelectedTable.Details, Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                            </Expander>
+                        </StackPanel>
+                        <DataGrid x:Name="TablePreviewGrid" Grid.Row="1" Style="{StaticResource DataRows}" ItemsSource="{Binding TablePreview, Mode=OneWay}" />
+                        <TextBlock Grid.Row="2" Text="Tables in this file" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                        <ListBox x:Name="TablesList" Grid.Row="3" ItemsSource="{Binding Tables, Mode=OneWay}" SelectedItem="{Binding SelectedTable, Mode=TwoWay}"
+                                 DisplayMemberPath="Summary" Margin="{DynamicResource Thickness4}" />
+                        <Button x:Name="AdvancedButton" Grid.Row="4" Content="Advanced: open Intake Studio" Style="{StaticResource Action}"
+                                Command="{Binding AdvancedCommand, Mode=OneWay}"
+                                ToolTip="Split, merge or change parts of the file; the layout comes back here when you close Intake Studio." />
+                    </Grid>
+                </TabItem>
+
+                <!-- 3 Columns -->
+                <TabItem x:Name="ColumnsPage" Style="{StaticResource Page}">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="280" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <TextBlock Text="Which columns do you need?" Style="{StaticResource Title}" />
+                                <ItemsControl x:Name="ColumnsList" ItemsSource="{Binding Columns, Mode=OneWay}" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsKept, Mode=TwoWay}" Margin="{DynamicResource Thickness4}" ToolTip="{Binding Sample, Mode=OneWay}">
+                                                <TextBlock Text="{Binding Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                            </CheckBox>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <CheckBox x:Name="SplitBox" Content="Split a column into parts" IsChecked="{Binding SplitEnabled, Mode=TwoWay}" Margin="{DynamicResource Thickness8}" />
+                                <StackPanel x:Name="SplitPanel" Visibility="{Binding SplitEnabled, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Column" Style="{StaticResource MutedLine}" />
+                                    <ComboBox x:Name="SplitColumnBox" ItemsSource="{Binding KeptColumns, Mode=OneWay}" SelectedItem="{Binding SplitColumn, Mode=TwoWay}" Margin="{DynamicResource Thickness4}" />
+                                    <TextBlock Text="Split at" Style="{StaticResource MutedLine}" />
+                                    <ComboBox x:Name="SeparatorBox" ItemsSource="{Binding SeparatorChoices, Mode=OneWay}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                              SelectedValue="{Binding SelectedSeparator, Mode=TwoWay}" Margin="{DynamicResource Thickness4}" />
+                                    <TextBox x:Name="OtherSeparatorBox" Text="{Binding OtherSeparator, UpdateSourceTrigger=PropertyChanged}" Margin="{DynamicResource Thickness4}"
+                                             Visibility="{Binding IsOtherSeparator, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                                    <TextBlock Text="Names of the parts, separated by commas" Style="{StaticResource MutedLine}" />
+                                    <TextBox x:Name="PartNamesBox" Text="{Binding PartNamesText, UpdateSourceTrigger=PropertyChanged}" Margin="{DynamicResource Thickness4}" />
+                                </StackPanel>
+                                <TextBlock x:Name="ColumnsProblemText" Text="{Binding ColumnsProblem, Mode=OneWay}" Style="{StaticResource Line}" Foreground="{DynamicResource warning-brush}" />
+                            </StackPanel>
+                        </ScrollViewer>
+                        <DockPanel Grid.Column="1">
+                            <TextBlock DockPanel.Dock="Top" Text="The first rows as the reader will give them" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+                            <DataGrid x:Name="ColumnsPreviewGrid" Style="{StaticResource DataRows}" ItemsSource="{Binding ColumnsPreview, Mode=OneWay}" />
+                        </DockPanel>
+                    </Grid>
+                </TabItem>
+
+                <!-- 4 Try it -->
+                <TabItem x:Name="TryPage" Style="{StaticResource Page}">
+                    <Grid Margin="{DynamicResource Thickness8}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Text="Try the reader on the sample file" Style="{StaticResource Title}" />
+                            <WrapPanel>
+                                <Button x:Name="TryButton" Content="Try on the sample file" Style="{StaticResource Action}" Command="{Binding TryCommand, Mode=OneWay}" />
+                                <Button x:Name="CancelTryButton" Content="Cancel" Style="{StaticResource Action}" Command="{Binding CancelCommand, Mode=OneWay}"
+                                        Visibility="{Binding IsTrying, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            </WrapPanel>
+                            <ProgressBar IsIndeterminate="True" Height="{DynamicResource spacing-4}" Margin="{DynamicResource Thickness4}"
+                                         Visibility="{Binding IsTrying, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock x:Name="TryMessageText" Text="{Binding TryMessage, Mode=OneWay}" Style="{StaticResource Line}" FontWeight="SemiBold" />
+                            <TextBlock x:Name="TryCountsLine" Text="{Binding TryCountsText, Mode=OneWay}" Style="{StaticResource Line}" />
+                            <ItemsControl ItemsSource="{Binding TryReasons, Mode=OneWay}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Expander Style="{StaticResource Details}" Tag="{Binding TryDetails, Mode=OneWay}">
+                                <TextBlock Text="{Binding TryDetails, Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                            </Expander>
+                        </StackPanel>
+                        <DataGrid x:Name="TryRowsGrid" Grid.Row="1" Style="{StaticResource DataRows}" ItemsSource="{Binding TryRows, Mode=OneWay}" />
+                        <StackPanel Grid.Row="2">
+                            <WrapPanel>
+                                <Button x:Name="TestOtherButton" Content="Test on another file..." Style="{StaticResource Action}" Command="{Binding TestOtherCommand, Mode=OneWay}"
+                                        ToolTip="Choose a second file of the same instrument; the reader looks for the same table in it." />
+                                <TextBlock x:Name="OtherFileLine" Text="{Binding OtherFileText, Mode=OneWay}" Style="{StaticResource Line}" VerticalAlignment="Center" />
+                            </WrapPanel>
+                            <Expander Style="{StaticResource Details}" Tag="{Binding OtherFileDetails, Mode=OneWay}">
+                                <TextBlock Text="{Binding OtherFileDetails, Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                            </Expander>
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+
+                <!-- 5 Save as DLL -->
+                <TabItem x:Name="SavePage" Style="{StaticResource Page}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="{DynamicResource Thickness8}">
+                            <TextBlock Text="Save the reader as a DLL" Style="{StaticResource Title}" />
+                            <TextBlock Text="Name" Style="{StaticResource MutedLine}" />
+                            <TextBox x:Name="DllNameBox" Text="{Binding Dll.AssemblyName, UpdateSourceTrigger=PropertyChanged, FallbackValue=''}" Margin="{DynamicResource Thickness4}" />
+                            <TextBlock Text="{Binding Dll.AssemblyNameError, Mode=OneWay, FallbackValue=''}" Style="{StaticResource Line}" Foreground="{DynamicResource warning-brush}" />
+                            <TextBlock Text="Folder" Style="{StaticResource MutedLine}" />
+                            <DockPanel>
+                                <Button x:Name="BrowseFolderButton" DockPanel.Dock="Right" Content="Browse..." Style="{StaticResource Action}" Command="{Binding BrowseFolderCommand, Mode=OneWay}" />
+                                <TextBox x:Name="FolderBox" Text="{Binding Dll.OutputFolder, UpdateSourceTrigger=PropertyChanged, FallbackValue=''}" Margin="{DynamicResource Thickness4}" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding Dll.OutputFolderError, Mode=OneWay, FallbackValue=''}" Style="{StaticResource Line}" Foreground="{DynamicResource warning-brush}" />
+                            <Button x:Name="CreateDllButton" Content="Create DLL" Style="{StaticResource Action}" Command="{Binding CreateDllCommand, Mode=OneWay}" />
+                            <TextBlock x:Name="SaveMessageText" Text="{Binding SaveMessage, Mode=OneWay}" Style="{StaticResource Line}" FontWeight="SemiBold" />
+                            <ItemsControl x:Name="WrittenFilesList" ItemsSource="{Binding WrittenFiles, Mode=OneWay}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Mode=OneWay}" Style="{StaticResource Line}" FontFamily="{DynamicResource font-data}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding TemplateText, Mode=OneWay}" Style="{StaticResource MutedLine}" />
+                            <WrapPanel Margin="{DynamicResource Thickness8}">
+                                <Button x:Name="SaveSetupButton" Content="Save this setup..." Style="{StaticResource Action}" Command="{Binding SaveSetupCommand, Mode=OneWay}"
+                                        ToolTip="Save everything you chose as a project file, to open it again later." />
+                                <Button x:Name="OpenCanvasButton" Content="Open in the canvas (Advanced)" Style="{StaticResource Action}" Command="{Binding OpenCanvasCommand, Mode=OneWay}"
+                                        ToolTip="Close this window; the reader is on the canvas behind it." />
+                            </WrapPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+
+            <!-- ===== Back / Next ===== -->
+            <DockPanel Grid.Row="2">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="BackButton" Content="Back" Style="{StaticResource Action}" Command="{Binding BackCommand, Mode=OneWay}" />
+                    <Button x:Name="NextButton" Content="Next" Style="{StaticResource NextAction}" Command="{Binding NextCommand, Mode=OneWay}" ToolTip="{Binding NextToolTip, Mode=OneWay}"
+                            IsDefault="True" />
+                </StackPanel>
+                <TextBlock x:Name="NextProblemText" Text="{Binding NextProblem, Mode=OneWay}" Style="{StaticResource MutedLine}" VerticalAlignment="Center" />
+            </DockPanel>
+        </Grid>
+    </Border>
+</Window>

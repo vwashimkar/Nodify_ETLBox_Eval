@@ -29,10 +29,24 @@ public sealed partial record PipelineDefinition
         return new PipelineDefinition(mirror, columns, parseValue, output) { CsvPart = csvPart };
     }
 
+    /// <summary>
+    /// A guided pipeline (task G7a): CSV part -> DotNetObject without ParseValue, with an optional column split. Null for
+    /// every other pipeline. When set, <see cref="ParseValue"/> is <see cref="GuidedSteps.UnusedParseValue"/> and is not run.
+    /// </summary>
+    public GuidedSteps? Guided { get; init; }
+
+    /// <summary>A guided pipeline: the part's kept columns, split by <paramref name="split"/> when given, straight to the output.</summary>
+    public static PipelineDefinition ForGuided(string exampleFile, CsvPartSelector csvPart, CsvColumnSelection columns,
+        ColumnSplitSettings? split, OutputSettings output)
+        => ForCsvPart(exampleFile, csvPart, columns, GuidedSteps.UnusedParseValue, output) with { Guided = new GuidedSteps(split) };
+
     partial void PartEquals(PipelineDefinition other, ref bool equal)
-        => equal = CsvPart is null
-            ? other.CsvPart is null
-            : other.CsvPart is not null && CsvPartSelectorJson.Serialize(CsvPart) == CsvPartSelectorJson.Serialize(other.CsvPart);
+        => equal = (CsvPart is null
+                       ? other.CsvPart is null
+                       : other.CsvPart is not null && CsvPartSelectorJson.Serialize(CsvPart) == CsvPartSelectorJson.Serialize(other.CsvPart))
+                   && (Guided is null
+                       ? other.Guided is null
+                       : other.Guided is not null && ColumnSplit.Serialize(Guided) == ColumnSplit.Serialize(other.Guided));
 }
 
 public static partial class PipelineDefinitionValidator
@@ -41,6 +55,11 @@ public static partial class PipelineDefinitionValidator
 
     /// <summary>The node types of a CSV part pipeline; the File intake node in front of the CSV part is allowed.</summary>
     public static readonly IReadOnlyList<string> ExpectedPartChain = new[] { "CsvPart", "ParseValue", "DotNetObject" };
+
+    public const string WrongGuidedShape = "Pipeline: the pipeline needs exactly CSV part -> DotNetObject.";
+
+    /// <summary>The node types of a guided pipeline (task G7a): no ParseValue.</summary>
+    public static readonly IReadOnlyList<string> ExpectedGuidedChain = new[] { "CsvPart", "DotNetObject" };
 
     static partial void ValidatePart(PipelineDefinition? definition, IReadOnlyList<string>? keptColumns, IReadOnlyList<string>? graphChain,
         List<string> messages, ref bool handled)
@@ -52,13 +71,25 @@ public static partial class PipelineDefinitionValidator
 
         handled = true;
         var chain = graphChain is { Count: > 0 } && graphChain[0] == "FileIntake" ? graphChain.Skip(1).ToList() : graphChain;
-        if (chain is not null && !chain.SequenceEqual(ExpectedPartChain, StringComparer.Ordinal))
+        var guided = definition.Guided;
+        if (chain is not null && !chain.SequenceEqual(guided is null ? ExpectedPartChain : ExpectedGuidedChain, StringComparer.Ordinal))
         {
-            messages.Add(WrongPartShape);
+            messages.Add(guided is null ? WrongPartShape : WrongGuidedShape);
         }
 
         messages.AddRange(CsvPartMessages(part, definition.CsvFile.Path).Select(m => $"CSV part: {m}"));
-        messages.AddRange(ParseValueValidator.Validate(definition.ParseValue, keptColumns).Select(m => $"ParseValue: {m}"));
+        if (guided is not null)
+        {
+            if (guided.Split is { } split)
+            {
+                messages.AddRange(ColumnSplit.Validate(split, keptColumns).Select(m => $"CSV part: {m}"));
+            }
+        }
+        else
+        {
+            messages.AddRange(ParseValueValidator.Validate(definition.ParseValue, keptColumns).Select(m => $"ParseValue: {m}"));
+        }
+
         messages.AddRange(OutputSettings.Validate(definition.Output).Select(m => $"DotNetObject: {m}"));
     }
 
@@ -135,4 +166,19 @@ public static partial class SettingsJson
                        ?? throw new JsonException(error ?? CsvPartSelectorJson.UnreadableMessage);
         definition = definition with { CsvPart = selector };
     }
+
+    static partial void WriteGuided(PipelineDefinition definition, ref JsonElement? guided)
+    {
+        if (definition.Guided is null)
+        {
+            return;
+        }
+
+        using var document = JsonDocument.Parse(ColumnSplit.Serialize(definition.Guided));
+        guided = document.RootElement.Clone();
+    }
+
+    static partial void ReadGuided(JsonElement guided, CsvFileSettings csvFile, CsvColumnSelection columns, OutputSettings output,
+        ref PipelineDefinition? definition)
+        => definition = new PipelineDefinition(csvFile, columns, GuidedSteps.UnusedParseValue, output) { Guided = ColumnSplit.Deserialize(guided.GetRawText()) };
 }

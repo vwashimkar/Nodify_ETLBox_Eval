@@ -238,6 +238,8 @@
                 </Border>
             </Popup>
             <Separator />
+            <Button x:Name="GuidedButton" Content="Guided" Width="70" Command="{Binding GuidedCommand}"
+                    ToolTip="Build a reader step by step: file, table, columns, try it, save as DLL." />
             <Button Content="Run" Width="60" Command="{Binding RunCommand}" />
             <Button Content="Execute" Width="70" Command="{Binding ExecuteCommand}"
                     ToolTip="{Binding ExecuteHint, Mode=OneWay}"

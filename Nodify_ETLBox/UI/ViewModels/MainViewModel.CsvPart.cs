@@ -213,6 +213,43 @@ public partial class MainViewModel
         (_lineageLog ?? AppLineage.Shared).Write(new LineageEvent("pipeline.executed", Guid.NewGuid().ToString("D"), facts.FileName, facts.Sha256, details));
     }
 
+    /// <summary>
+    /// File intake -> CSV part -> DotNetObject (task G7a): no ParseValue; the CSV part's column choice and its
+    /// optional split. Both nodes Configured and without Issues lines, and the definition valid.
+    /// </summary>
+    private bool TryBuildGuidedDefinition(NodeViewModel part, NodeViewModel output, out PipelineDefinition? definition, out string? reason)
+    {
+        definition = null;
+        foreach (var node in new[] { part, output })
+        {
+            if (!string.Equals(node.ConfigurationStatus, "Configured", StringComparison.Ordinal))
+            {
+                reason = $"Configure every node first: {node.Title} is not configured. See the Issues tab.";
+                return false;
+            }
+
+            if (Editor.Issues.Any(i => i.StartsWith(node.Title + ":", StringComparison.Ordinal)))
+            {
+                reason = $"Fix the issues of {node.Title} in the Issues tab first.";
+                return false;
+            }
+        }
+
+        var built = PipelineDefinition.ForGuided(Editor.CsvPartFilePath(part)!, part.CsvPartSelector!, part.ColumnSelection, part.ColumnSplit,
+            output.GetOutputSettings());
+        var problems = PipelineDefinitionValidator.Validate(built, part.KnownColumns is { } known ? part.ColumnSelection.KeptColumns(known) : null,
+            ["FileIntake", "CsvPart", "DotNetObject"]);
+        if (problems.Count > 0)
+        {
+            reason = problems[0];
+            return false;
+        }
+
+        definition = built;
+        reason = null;
+        return true;
+    }
+
     /// <summary>Two selectors choose the same part when they are equal apart from the template's id and creation time (new on each build).</summary>
     internal static bool SamePart(string json, CsvPartSelector selector)
     {

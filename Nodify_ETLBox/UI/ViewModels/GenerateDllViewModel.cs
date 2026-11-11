@@ -227,6 +227,19 @@ public sealed class GenerateDllViewModel : ObservableObject
 
     private static IReadOnlyList<BakedSetting> BuildSummary(PipelineDefinition definition)
     {
+        if (definition.Guided is { } guided)
+        {
+            // A guided pipeline (task G7a) has no ParseValue: its rows are the kept columns, split when set.
+            var steps = guided.Split is { } split
+                ? $"Split '{split.Column}' at '{(split.Separator == "\t" ? "tab" : split.Separator)}' into {string.Join(", ", split.PartNames)}"
+                : "No splitting";
+            return new[]
+            {
+                new BakedSetting("Rows", steps),
+                new BakedSetting("Output type", ObjectKinds.Get(definition.Output.Kind).DisplayName)
+            };
+        }
+
         var parse = definition.ParseValue;
         var levels = string.Join("  ", parse.DelimiterLevels.Select((l, i) => $"L{i + 1} \"{l.Delimiter}\" {l.Mode}"));
         var slots = string.Join("; ", parse.Slots.Select(s => $"{s.Name}: {string.Join(", ", s.Columns)}"));

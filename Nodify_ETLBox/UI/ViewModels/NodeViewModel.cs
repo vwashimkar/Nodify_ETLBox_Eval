@@ -279,6 +279,25 @@ public class NodeViewModel : ObservableObject
     /// <summary><see cref="ColumnSelection"/> is changed in place; this tells the listeners that it was.</summary>
     public void NotifyColumnSelectionChanged() => OnPropertyChanged(nameof(ColumnSelection));
 
+    private EtlDesigner.Engine.Pipeline.ColumnSplitSettings? _columnSplit;
+
+    /// <summary>
+    /// CSV part only: the column split of a guided pipeline (task G7a, CSV part -> DotNetObject), or null. Saved
+    /// in the project; it is not run when the CSV part feeds a ParseValue node (an Issues line says so).
+    /// </summary>
+    public EtlDesigner.Engine.Pipeline.ColumnSplitSettings? ColumnSplit
+    {
+        get => _columnSplit;
+        set
+        {
+            if (!Equals(EtlDesigner.Engine.Pipeline.ColumnSplit.SerializeOrNull(_columnSplit), EtlDesigner.Engine.Pipeline.ColumnSplit.SerializeOrNull(value)))
+            {
+                _columnSplit = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     /// <summary>
     /// CsvFile and CSV part: the column names as last read with the current settings, or null when not
     /// known (never read, or a setting changed since). A CSV part's columns come from the run's reader.

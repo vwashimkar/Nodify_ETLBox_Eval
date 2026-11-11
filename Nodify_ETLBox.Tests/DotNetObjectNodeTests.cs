@@ -70,7 +70,7 @@ public class DotNetObjectNodeTests
         Connect(editor, other.Outputs[0], output.Inputs[0]);
 
         Assert.Empty(editor.Connections);
-        Assert.Equal(["DotNetObject: the input accepts only a ParseValue node. Connect the output of a ParseValue node."], editor.Issues);
+        Assert.Equal(["DotNetObject: the input accepts only a ParseValue or CSV part node. Connect the output of one of those."], editor.Issues);
     }
 
     [Fact]

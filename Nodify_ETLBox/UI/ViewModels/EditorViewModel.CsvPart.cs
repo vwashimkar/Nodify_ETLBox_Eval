@@ -18,7 +18,10 @@ public partial class EditorViewModel
 
     public const string CsvPartNoFile = "The File intake node has no file yet. Choose a file in the File intake node.";
 
-    public const string CsvPartNotToParseValue = "Connect the output of this node to a ParseValue node.";
+    public const string CsvPartNotToParseValue = "Connect the output of this node to a ParseValue or DotNetObject node.";
+
+    /// <summary>A column split runs only in a guided pipeline (CSV part -> DotNetObject).</summary>
+    public const string CsvPartSplitWithParseValue = "The column split runs only when this node feeds a DotNetObject node directly; remove the split or the ParseValue node.";
 
     public const string CsvPartReady = "Ready";
 
@@ -87,9 +90,22 @@ public partial class EditorViewModel
 
             node.KnownColumns = messages.Count == 0 && read is { Result.Ok: true } ? read.Result.Columns : null;
 
-            if (!Connections.Any(c => c.Source.ParentNode == node && c.Target.ParentNode.NodeType == NodeType.ParseValue))
+            var feedsParseValue = Connections.Any(c => c.Source.ParentNode == node && c.Target.ParentNode.NodeType == NodeType.ParseValue);
+            if (!feedsParseValue && !Connections.Any(c => c.Source.ParentNode == node && c.Target.ParentNode.NodeType == NodeType.DotNetObject))
             {
                 messages.Add(CsvPartNotToParseValue);
+            }
+
+            if (node.ColumnSplit is { } split)
+            {
+                if (feedsParseValue)
+                {
+                    messages.Add(CsvPartSplitWithParseValue);
+                }
+                else
+                {
+                    messages.AddRange(EtlDesigner.Engine.Pipeline.ColumnSplit.Validate(split, node.KnownColumns is { } known ? node.ColumnSelection.KeptColumns(known) : null));
+                }
             }
 
             if (parts.Count > 1)

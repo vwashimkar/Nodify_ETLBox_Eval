@@ -243,6 +243,11 @@ public partial class EditorViewModel
             case NodeType.CsvPart:
                 // An unreadable selector is kept as text and gives an Issues line; it is never dropped.
                 node.CsvPartSelectorJson = ProjectNodeSettings.ReadCsvPartSelector(settings);
+                var partColumns = ProjectNodeSettings.ReadCsvPartColumns(settings);
+                node.ColumnSelection.Mode = partColumns.Mode;
+                node.ColumnSelection.Names.Clear();
+                node.ColumnSelection.Names.AddRange(partColumns.Names);
+                node.ColumnSplit = ProjectNodeSettings.ReadCsvPartSplit(settings);
                 break;
 
             default:
@@ -365,7 +370,7 @@ public partial class EditorViewModel
                 return ProjectNodeSettings.WriteFileIntake(intake, RelativePathFor(intake.Path, "path", loaded, projectFilePath), loaded, node.IntakePlanJson);
 
             case NodeType.CsvPart:
-                return ProjectNodeSettings.WriteCsvPart(node.CsvPartSelectorJson, loaded);
+                return ProjectNodeSettings.WriteCsvPart(node.CsvPartSelectorJson, loaded, node.ColumnSelection, node.ColumnSplit);
 
             default:
                 var filePath = node.Settings.FirstOrDefault(s => s.Kind == SettingKind.FilePath);
@@ -417,7 +422,7 @@ public partial class EditorViewModel
     {
         if (e.PropertyName is nameof(NodeViewModel.Location) or nameof(NodeViewModel.Title)
             or nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.ColumnSelection) or nameof(NodeViewModel.IntakePlanJson)
-            or nameof(NodeViewModel.CsvPartSelectorJson))
+            or nameof(NodeViewModel.CsvPartSelectorJson) or nameof(NodeViewModel.ColumnSplit))
         {
             MarkDirty();
         }

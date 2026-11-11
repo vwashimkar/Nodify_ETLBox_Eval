@@ -298,7 +298,7 @@ public sealed class ProjectEditorTests : IDisposable
         Assert.Equal(2, loaded.Connections.Count);
         var issue = Assert.Single(loaded.Issues, i => i.StartsWith("Project:"));
         Assert.Contains("was not restored", issue);
-        Assert.Contains("accepts only a ParseValue node", issue);
+        Assert.Contains("accepts only a ParseValue or CSV part node", issue);
 
         loaded.Validate();
         Assert.Contains(issue, loaded.Issues);

@@ -64,6 +64,11 @@ public interface IDialogService
     {
     }
 
+    /// <summary>Opens the guided builder "Build a reader" (modal, owned by the main window). Closing cancels its running work.</summary>
+    void ShowGuidedBuilder(GuidedBuilderViewModel viewModel)
+    {
+    }
+
     /// <summary>Asks for any file to scan, starting near <paramref name="currentPath"/>. Null when the user cancels.</summary>
     string? PickIntakeFile(string? currentPath);
 
