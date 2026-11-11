@@ -31,6 +31,24 @@ foreach (var row in result.Rows.Take(5))
     Console.WriteLine("  " + string.Join(", ", CsvPipeline.OutputColumns.Select(c => row[c])));
 }
 
+// A DLL made from a CSV part pipeline (task G6b) also says which part it read.
+foreach (var name in new[] { "FileName", "Match", "Similarity", "PartNumber", "FirstLine", "LastLine" })
+{
+    if (result.GetType().GetProperty(name) is { } property)
+    {
+        Console.WriteLine($"Part {name}: {property.GetValue(result)}");
+    }
+}
+
+// --all prints every row, one per line, values joined by "|" (used by the tests).
+if (args.Contains("--all"))
+{
+    foreach (var row in result.Rows)
+    {
+        Console.WriteLine("row: " + string.Join("|", CsvPipeline.OutputColumns.Select(c => row[c])));
+    }
+}
+
 Console.WriteLine(result.Rejects.Count == 0 ? "No rejected rows." : "Rejects:");
 foreach (var reject in result.Rejects)
 {

@@ -18,6 +18,8 @@
   <ItemGroup>
     <PackageReference Include="ETLBox" Version="3.11.1" />
     <PackageReference Include="ETLBox.Csv" Version="3.11.1" />
+    <!-- A DLL made from a CSV part pipeline needs YamlDotNet (the part search uses it); a CsvFile DLL does not. -->
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
   <ItemGroup>
