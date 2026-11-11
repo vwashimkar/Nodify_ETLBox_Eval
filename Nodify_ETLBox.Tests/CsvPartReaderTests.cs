@@ -135,13 +135,8 @@ public sealed class CsvPartReaderTests : IDisposable
         Assert.Equal(pathRecords.Select(r => (r.RecordNumber, string.Join("|", r.Values))), partRecords.Select(r => (r.RecordNumber, string.Join("|", r.Values))));
         Assert.Equal(pathOutcome.StructuralErrors.Select(e => e.RecordNumber), partOutcome.StructuralErrors.Select(e => e.RecordNumber));
         Assert.All(pathRecords, r => Assert.Null(r.FileLine));
-        if (delimiter == "\t" && skip > 0)
-        {
-            // Found in G6a [P]: with a tab delimiter and skip lines, ETLBox reads every line as ONE
-            // column, through the path overload as well (existing behaviour, not changed here).
-            Assert.Single(partOutcome.Columns);
-            return;
-        }
+        // G6a found one column for a tab with skip lines; fixed in G6b (ResolveDelimiter), so a tab is checked like the others.
+        Assert.Equal(header ? ["id", "name", "note"] : ["Col1", "Col2", "Col3"], partOutcome.Columns);
 
         Assert.Contains(partRecords, r => r.Values.Contains("Äpfel"));
         Assert.Contains(partRecords, r => r.Values.Contains("two\nlines"));

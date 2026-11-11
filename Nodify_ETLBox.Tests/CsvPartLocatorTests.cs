@@ -496,4 +496,37 @@ public sealed class CsvPartLocatorTests : IDisposable
 
         Assert.Empty(problems);
     }
+
+    // G6b step 0b: the two messages G6a could not reach with a real file change -----------------
+
+    [Fact]
+    public async Task TamperedExpectedDelimiter_GivesDelimiterDiffers_WithItsSentence()
+    {
+        var path = IntakeTestData.PathOf(I10);
+        var selector = await SelectorAsync(path);
+        var tampered = selector with { Expected = selector.Expected with { Delimiter = ";" } };
+
+        var location = await LocateAsync(path, tampered);
+
+        Assert.False(location.Ok);
+        Assert.Equal(CsvPartFailure.DelimiterDiffers, location.Reason);
+        Assert.Equal("Part 2 of this file is a comma table, but the pipeline expects a semicolon table.", location.Message);
+        Assert.Null(location.Part);
+    }
+
+    [Fact]
+    public async Task PartIndexOnANonTablePart_GivesNotATable_WithItsSentence()
+    {
+        var path = IntakeTestData.PathOf(I10);
+        var selector = await SelectorAsync(path);
+        var keyValue = selector.Template.Parts.Select((p, i) => (p, i)).First(x => x.p.Format is not ("csv" or "tsv")).i;
+        var tampered = selector with { PartIndex = keyValue };
+
+        var location = await LocateAsync(path, tampered);
+
+        Assert.False(location.Ok);
+        Assert.Equal(CsvPartFailure.NotATable, location.Reason);
+        Assert.Equal($"Part {keyValue + 1} of this file is not a table, but the pipeline expects a comma table.", location.Message);
+        Assert.Null(location.Part);
+    }
 }

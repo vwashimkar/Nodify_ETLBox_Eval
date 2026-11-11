@@ -343,6 +343,14 @@ public sealed partial class CsvRecordReader
     {
         error = null;
 
+        // A tab character is white space, so it must be recognised before the empty check. Before
+        // G6b it fell back to a comma; ETLBox's delimiter detection (on by default) hid that unless
+        // title lines came first (reports/taskG6b-report.md) [P].
+        if (separator == "\t")
+        {
+            return "\t";
+        }
+
         if (string.IsNullOrWhiteSpace(separator))
         {
             return ",";
