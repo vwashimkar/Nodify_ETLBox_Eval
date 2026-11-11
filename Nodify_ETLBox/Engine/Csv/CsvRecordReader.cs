@@ -54,9 +54,10 @@ public sealed partial class CsvRecordReader
     /// How to read a part of the file instead of the whole file: <see cref="Open"/> gives a stream over
     /// exactly the part's bytes, which end at <see cref="EndByte"/> of the file; <see cref="FirstFileLine"/>
     /// is the part's first line in the file. Kept free of other Engine folders, because the generated DLL
-    /// compiles this file on its own.
+    /// compiles this file on its own. <see cref="Configure"/> runs after the shared settings, so the part
+    /// overload can change ETLBox's source for a part only.
     /// </summary>
-    private sealed record PartRead(Func<Stream> Open, long EndByte, long FirstFileLine);
+    private sealed record PartRead(Func<Stream> Open, long EndByte, long FirstFileLine, Action<CsvSource<ExpandoObject>>? Configure = null);
 
     /// <summary>The one read body for a whole file and for a part; only the source creation differs.</summary>
     private static async Task<CsvReadOutcome> ReadCoreAsync(CsvFileSettings settings, PartRead? part, Func<CsvRecord, bool> onRecord, CancellationToken token)
@@ -160,6 +161,7 @@ public sealed partial class CsvRecordReader
 
                 return args.Row.Parser.Row <= settings.SkipLines;
             };
+            part?.Configure?.Invoke(source);
 
             // The record counter (spec section 0). Returning null drops the row, so nothing
             // collects in the sink and the whole file is never held in memory.

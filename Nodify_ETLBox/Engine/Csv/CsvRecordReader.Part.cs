@@ -1,3 +1,5 @@
+using System.Dynamic;
+using ETLBox.Csv;
 using EtlDesigner.Engine.Intake;
 
 namespace EtlDesigner.Engine.Csv;
@@ -21,7 +23,11 @@ public sealed partial class CsvRecordReader
         }
 
         var settings = new CsvFileSettings(part.Path, part.Delimiter, part.HasHeader, part.SkipLines, part.EncodingName);
-        var read = new PartRead(() => new PartStream(part.Path, part.StartByte, part.Length), part.StartByte + part.Length, part.FirstFileLine);
+        // CsvHelper's delimiter detection is on by default in ETLBox [P, G6b]. Title lines with commas above a
+        // semicolon or tab table made it read the part with a comma [P, G6cDelimiterDetectionTests]. A part
+        // has a known delimiter from its selector, so detection is off here only; a whole file keeps the default.
+        var read = new PartRead(() => new PartStream(part.Path, part.StartByte, part.Length), part.StartByte + part.Length, part.FirstFileLine,
+            source => source.Configuration.DetectDelimiter = false);
         return ReadCoreAsync(settings, read, onRecord, token);
     }
 }
