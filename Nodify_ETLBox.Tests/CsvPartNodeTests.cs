@@ -92,7 +92,8 @@ public sealed class CsvPartNodeTests : IDisposable
         Assert.Equal(("Rows", PortKind.Rows, false), (node.Outputs.Single().Name, node.Outputs.Single().Kind, node.Outputs.Single().IsInput));
         Assert.Empty(node.Settings);
         Assert.Equal(NodeViewModel.NoPartChosenText, node.CsvPartText);
-        Assert.Null(node.DoubleClickCommand);
+        // G6d: a double-click opens the CSV part settings dialog.
+        Assert.Same(node.ConfigureCommand, node.DoubleClickCommand);
         Assert.Null(G6cCanvas.Add(editor, NodeType.CsvFile, 100).CsvPartText);
     }
 

@@ -33,12 +33,12 @@
         <Border BorderBrush="{DynamicResource border-brush}" BorderThickness="1" Background="{DynamicResource surface-alt-brush}" Padding="{DynamicResource Thickness8}">
             <WrapPanel>
                 <TextBlock Text="Separator" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
-                <ComboBox Width="120" Margin="{DynamicResource Thickness4}" IsEditable="True" ItemsSource="{Binding SeparatorPresets}" Text="{Binding Separator, UpdateSourceTrigger=PropertyChanged}" />
-                <CheckBox Content="Header row" Margin="{DynamicResource Thickness4}" IsChecked="{Binding HasHeader, Mode=TwoWay}" VerticalAlignment="Center" />
+                <ComboBox Width="120" Margin="{DynamicResource Thickness4}" IsEditable="True" ItemsSource="{Binding SeparatorPresets}" Text="{Binding Separator, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsDialectEditable, Mode=OneWay}" ToolTip="{Binding DialectToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True" />
+                <CheckBox Content="Header row" Margin="{DynamicResource Thickness4}" IsChecked="{Binding HasHeader, Mode=TwoWay}" VerticalAlignment="Center" IsEnabled="{Binding IsDialectEditable, Mode=OneWay}" ToolTip="{Binding DialectToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True" />
                 <TextBlock Text="Skip lines" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
-                <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding SkipLines, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding SkipLines, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsDialectEditable, Mode=OneWay}" ToolTip="{Binding DialectToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True" />
                 <TextBlock Text="Encoding" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
-                <ComboBox Width="140" Margin="{DynamicResource Thickness4}" IsEditable="True" ItemsSource="{Binding EncodingPresets}" Text="{Binding EncodingName, UpdateSourceTrigger=PropertyChanged}" />
+                <ComboBox Width="140" Margin="{DynamicResource Thickness4}" IsEditable="True" ItemsSource="{Binding EncodingPresets}" Text="{Binding EncodingName, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsDialectEditable, Mode=OneWay}" ToolTip="{Binding DialectToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True" />
                 <TextBlock Text="Preview rows" VerticalAlignment="Center" Margin="{DynamicResource Thickness4}" />
                 <TextBox Width="70" Margin="{DynamicResource Thickness4}" Text="{Binding PreviewRows, UpdateSourceTrigger=PropertyChanged}" />
                 <Button Content="Reload" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}" Command="{Binding ReloadCommand}" />

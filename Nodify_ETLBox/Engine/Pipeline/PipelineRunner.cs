@@ -33,7 +33,8 @@ public sealed record PipelineResult(
 /// What a CSV part run found (task G6b): the file NAME (never the path), its SHA-256, the layout
 /// template, how well the file matched it (<see cref="Match"/> is Exact, Close or None), and the part
 /// read with its first and last file lines and column names. Set for a CSV part pipeline only,
-/// also when the part was not found, so the host can log why.
+/// also when the part was not found, so the host can log why: <see cref="Failure"/> is then the locator's
+/// reason (for example ColumnCountDiffers), null when the part was found.
 /// </summary>
 public sealed record CsvPartRunFacts(
     string FileName,
@@ -45,7 +46,8 @@ public sealed record CsvPartRunFacts(
     int? PartNumber,
     long? FirstLine,
     long? LastLine,
-    IReadOnlyList<string> ColumnNames);
+    IReadOnlyList<string> ColumnNames,
+    string? Failure = null);
 
 /// <summary>
 /// Runs CsvFile -> ParseValue -> DotNetObject over a whole file. The file is read through

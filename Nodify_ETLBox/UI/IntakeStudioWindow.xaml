@@ -522,6 +522,11 @@
         <!-- ===== Bottom: totals, messages, encoding notice, buttons ===== -->
         <DockPanel Grid.Row="2">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                <!-- The selected table part, as it is on screen, becomes the pipeline's CSV part. The tooltip says why it is disabled. -->
+                <Button x:Name="UseInPipelineButton" Style="{StaticResource ThemedButton}" Content="Use in pipeline" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}"
+                        Command="{Binding UseInPipelineCommand, Mode=OneWay}" ToolTip="{Binding UseInPipelineToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True"
+                        Visibility="{Binding CanUsePipeline, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+                        AutomationProperties.Name="Use in pipeline" />
                 <Button x:Name="SaveButton" Style="{StaticResource ThemedButton}" Content="Save settings" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}"
                         Command="{Binding SaveCommand, Mode=OneWay}" />
                 <Button x:Name="CloseButton" Style="{StaticResource ThemedButton}" Content="Close" MinWidth="110" Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness4}"

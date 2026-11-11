@@ -64,6 +64,7 @@ public partial class MainViewModel : ObservableObject
         NodeFactory.CsvPreviewHandler = ShowCsvPreview;
         NodeFactory.ParseValueConfigureHandler = ShowParseValue;
         NodeFactory.FileIntakeConfigureHandler = ShowIntakeStudio;
+        NodeFactory.CsvPartConfigureHandler = ShowCsvPartSettings;
 
         HookCountryRefreshListeners();
         HookCsvFileValidationListeners();
@@ -254,6 +255,7 @@ public partial class MainViewModel : ObservableObject
             _lastSuccessfulPipelineRun = (PipelineHash(definition), result.Columns.ToList());
         }
 
+        WritePipelineExecuted(result);
         UpdateCommandStates();
     }
 
@@ -555,7 +557,8 @@ public partial class MainViewModel : ObservableObject
                 savePlan: json => node.IntakePlanJson = json,
                 confirm: question => _dialogService.AskYesNo("Intake Studio", question),
                 templates: _templateStore ?? AppTemplates.Shared,
-                templateSettings: _templateStore is null ? AppTemplates.Settings : null);
+                templateSettings: _templateStore is null ? AppTemplates.Settings : null,
+                usePart: selector => UseCsvPart(node, selector));
 
             _dialogService.ShowIntakeStudio(viewModel);
 

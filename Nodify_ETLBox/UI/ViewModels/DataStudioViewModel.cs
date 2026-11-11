@@ -65,10 +65,14 @@ public class DataStudioViewModel : ObservableObject
     private int _missingSelectedNamesCount;
     private bool _isIgnoreMode;
 
-    /// <param name="read">Reads the preview; a <see cref="CsvPreviewReader"/> by default (tests pass a fake).</param>
+    public const string DialectFixedText = "A CSV part's separator, header, skip lines and encoding are set in Intake Studio.";
+
+    /// <param name="read">Reads the preview; a <see cref="CsvPreviewReader"/> by default (tests pass a fake, a CSV part passes its part read).</param>
+    /// <param name="dialectFixed">True for a CSV part: separator, header, skip lines and encoding come from the part and cannot be changed here.</param>
     public DataStudioViewModel(NodeViewModel node, CsvFileSettings settings, CsvPreviewReader? reader = null,
-        Func<CsvFileSettings, CancellationToken, Task<CsvPreview>>? read = null)
+        Func<CsvFileSettings, CancellationToken, Task<CsvPreview>>? read = null, bool dialectFixed = false)
     {
+        IsDialectEditable = !dialectFixed;
         _node = node ?? throw new ArgumentNullException(nameof(node));
         _read = read ?? (reader ?? new CsvPreviewReader()).ReadAsync;
         _initialSettings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -106,6 +110,11 @@ public class DataStudioViewModel : ObservableObject
     }
 
     public string FileName { get; }
+
+    /// <summary>False for a CSV part (the part fixes the dialect); the controls are disabled with <see cref="DialectToolTip"/>.</summary>
+    public bool IsDialectEditable { get; }
+
+    public string? DialectToolTip => IsDialectEditable ? null : DialectFixedText;
 
     public ObservableCollection<string> SeparatorPresets { get; }
 

@@ -28,7 +28,8 @@ public static partial class PipelineRunner
         var stopwatch = Stopwatch.StartNew();
         var location = await CsvPartLocator.LocateAsync(path, selector, token);
         var facts = new CsvPartRunFacts(location.FileName, location.Sha256, location.TemplateId, location.TemplateName, location.Similarity,
-            location.Match?.ToString(), location.PartNumber, location.FirstLine, location.LastLine, location.ColumnNames);
+            location.Match?.ToString(), location.PartNumber, location.FirstLine, location.LastLine, location.ColumnNames,
+            location.Ok ? null : location.Reason.ToString());
 
         if (!location.Ok || location.Part is not { } part)
         {

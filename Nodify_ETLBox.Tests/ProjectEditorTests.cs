@@ -66,6 +66,21 @@ public sealed class ProjectEditorTests : IDisposable
         public void ShowIntakeStudio(IntakeStudioViewModel viewModel) => OnIntakeStudio?.Invoke(viewModel);
         public string? PickIntakeFile(string? currentPath) => PathToOpen;
 
+        /// <summary>The answer to AskYesNo (No by default, like the real dialog); every question is kept in <see cref="YesNoQuestions"/>.</summary>
+        public bool YesNoAnswer { get; set; }
+        public List<string> YesNoQuestions { get; } = [];
+
+        public bool AskYesNo(string title, string question)
+        {
+            YesNoQuestions.Add(question);
+            return YesNoAnswer;
+        }
+
+        public Action<CsvPartSettingsViewModel>? OnCsvPartSettings { get; set; }
+        public void ShowCsvPartSettings(CsvPartSettingsViewModel viewModel) => OnCsvPartSettings?.Invoke(viewModel);
+        public Action<NodeViewModel, CsvPartSource>? OnCsvPartColumns { get; set; }
+        public void ShowCsvPartColumns(NodeViewModel node, CsvPartSource part) => OnCsvPartColumns?.Invoke(node, part);
+
         public UnsavedChangesChoice AskUnsavedChanges(string projectName)
         {
             Asked.Add(projectName);

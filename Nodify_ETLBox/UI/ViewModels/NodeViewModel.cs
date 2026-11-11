@@ -394,8 +394,8 @@ public class NodeViewModel : ObservableObject
     /// <summary>Opens the node's dialog (ParseValue). Null for nodes without one.</summary>
     public RelayCommand? ConfigureCommand { get; init; }
 
-    /// <summary>The double-click on the canvas: opens Intake Studio for a File intake node, nothing for the others.</summary>
-    public RelayCommand? DoubleClickCommand => NodeType == NodeType.FileIntake ? ConfigureCommand : null;
+    /// <summary>The double-click on the canvas: Intake Studio for a File intake node, the settings dialog for a CSV part, nothing for the others.</summary>
+    public RelayCommand? DoubleClickCommand => NodeType is NodeType.FileIntake or NodeType.CsvPart ? ConfigureCommand : null;
 
     /// <summary>DotNetObject only: the output settings from the "Output type" row (default when unreadable).</summary>
     public OutputSettings GetOutputSettings()

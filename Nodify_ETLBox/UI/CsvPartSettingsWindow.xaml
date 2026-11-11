@@ -1,0 +1,86 @@
+<Window x:Class="Nodify_ETLBox.UI.CsvPartSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Title, Mode=OneWay}"
+        Width="520"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        Background="{DynamicResource surface-brush}"
+        Foreground="{DynamicResource text-brush}"
+        FontFamily="{DynamicResource font-text}"
+        FontSize="{DynamicResource font-body}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/DialogStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="FactLabel" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource text-muted-brush}" />
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+            </Style>
+            <Style x:Key="FactValue" TargetType="TextBlock">
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="Margin" Value="{DynamicResource Thickness4}" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <!-- Read-only: the part is chosen in Intake Studio ("Use in pipeline"), never edited here. -->
+    <Border Padding="{DynamicResource Thickness16}">
+        <StackPanel>
+            <TextBlock Text="What this node reads" FontSize="{DynamicResource font-title}" FontWeight="SemiBold" Margin="{DynamicResource Thickness4}" />
+            <Grid x:Name="FactsGrid">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Example file" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ExampleFile, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="1" Text="SHA-256" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ExampleSha256, Mode=OneWay}" FontFamily="{DynamicResource font-data}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="2" Text="Template" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TemplateName, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="3" Text="Part" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PartText, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="4" Text="Delimiter" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Delimiter, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="5" Text="Header row" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Header, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="6" Text="Skip lines" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SkipLines, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="7" Text="Columns" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding Columns, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="8" Text="Column names" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding ColumnNames, Mode=OneWay}" FontFamily="{DynamicResource font-data}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="9" Text="Columns kept" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding KeptText, Mode=OneWay}" Style="{StaticResource FactValue}" />
+                <TextBlock Grid.Row="10" Text="Status" Style="{StaticResource FactLabel}" />
+                <TextBlock Grid.Row="10" Grid.Column="1" Text="{Binding Status, Mode=OneWay}" Style="{StaticResource FactValue}" />
+            </Grid>
+            <WrapPanel HorizontalAlignment="Right" Margin="{DynamicResource Thickness8}">
+                <Button x:Name="OpenStudioButton" Style="{StaticResource ThemedButton}" Content="Open in Intake Studio" MinWidth="100"
+                        Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
+                        Command="{Binding OpenIntakeStudioCommand, Mode=OneWay}" ToolTip="{Binding OpenIntakeStudioToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True" />
+                <Button x:Name="ChooseColumnsButton" Style="{StaticResource ThemedButton}" Content="Choose columns..." MinWidth="100"
+                        Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
+                        Command="{Binding ChooseColumnsCommand, Mode=OneWay}" ToolTip="{Binding ChooseColumnsToolTip, Mode=OneWay}" ToolTipService.ShowOnDisabled="True" />
+                <Button x:Name="CloseButton" Style="{StaticResource ThemedButton}" Content="Close" MinWidth="100" IsCancel="True" IsDefault="True"
+                        Margin="{DynamicResource Thickness4}" Padding="{DynamicResource Thickness8}"
+                        Command="{Binding CloseCommand, Mode=OneWay}" />
+            </WrapPanel>
+        </StackPanel>
+    </Border>
+</Window>

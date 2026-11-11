@@ -26,6 +26,9 @@ public static class NodeFactory
     /// <summary>Opens Intake Studio for a File intake node. Set by MainViewModel.</summary>
     public static Func<NodeViewModel, bool>? FileIntakeConfigureHandler { get; set; }
 
+    /// <summary>Opens the CSV part settings dialog for a node. Set by MainViewModel.</summary>
+    public static Func<NodeViewModel, bool>? CsvPartConfigureHandler { get; set; }
+
     /// <summary>The names a user can change (labels.txt). Read once at startup; empty labels give the defaults.</summary>
     public static Labels Labels { get; set; } = Labels.Empty;
 
@@ -378,15 +381,24 @@ public static class NodeFactory
     /// <summary>
     /// Creates a CSV part node (G6c). Input: "Parts" (PortKind.Parts), from one File intake node.
     /// Output: "Rows" (PortKind.Rows), to ParseValue. No setting rows: the node holds a part selector
-    /// (<see cref="NodeViewModel.CsvPartSelectorJson"/>), shown read-only; it is chosen in Intake Studio (G6d).
+    /// (<see cref="NodeViewModel.CsvPartSelectorJson"/>), shown read-only in the settings dialog (Configure or a
+    /// double-click); it is chosen in Intake Studio with "Use in pipeline" (G6d).
     /// </summary>
     public static NodeViewModel CreateCsvPart(Point location)
     {
-        var node = new NodeViewModel(Guid.NewGuid(), CsvPartTitle, NodeType.CsvPart)
+        NodeViewModel? node = null;
+        node = new NodeViewModel(Guid.NewGuid(), CsvPartTitle, NodeType.CsvPart)
         {
             Location = location,
             Subtitle = CsvPartSubtitle,
-            ConfigurationStatus = "Not configured"
+            ConfigurationStatus = "Not configured",
+            ConfigureCommand = new RelayCommand(_ =>
+            {
+                if (node is not null)
+                {
+                    CsvPartConfigureHandler?.Invoke(node);
+                }
+            })
         };
 
         node.Inputs.Add(new ConnectorViewModel("Parts", PortKind.Parts, isInput: true, node));

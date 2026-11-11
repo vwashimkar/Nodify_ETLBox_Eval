@@ -51,6 +51,19 @@ public interface IDialogService
     /// </summary>
     void ShowIntakeStudio(IntakeStudioViewModel viewModel);
 
+    /// <summary>Opens the read-only CSV part settings dialog (modal). The view model's <c>Next</c> says what to do after it closed.</summary>
+    void ShowCsvPartSettings(CsvPartSettingsViewModel viewModel)
+    {
+    }
+
+    /// <summary>
+    /// Opens Data Studio on a located CSV part (column choice only; the dialect is fixed by the part). Save writes
+    /// the column choice to <paramref name="node"/>.
+    /// </summary>
+    void ShowCsvPartColumns(NodeViewModel node, CsvPartSource part)
+    {
+    }
+
     /// <summary>Asks for any file to scan, starting near <paramref name="currentPath"/>. Null when the user cancels.</summary>
     string? PickIntakeFile(string? currentPath);
 

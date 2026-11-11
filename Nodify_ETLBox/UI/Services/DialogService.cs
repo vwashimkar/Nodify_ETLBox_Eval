@@ -189,6 +189,40 @@ public class DialogService : IDialogService
         window.ShowDialog();
     }
 
+    public void ShowCsvPartSettings(CsvPartSettingsViewModel viewModel)
+    {
+        var owner = Application.Current.MainWindow;
+
+        var window = new CsvPartSettingsWindow
+        {
+            Owner = owner,
+            DataContext = viewModel,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+
+        viewModel.CloseRequested += (_, _) => window.Close();
+        window.ShowDialog();
+    }
+
+    public void ShowCsvPartColumns(NodeViewModel node, CsvPartSource part)
+    {
+        var owner = Application.Current.MainWindow;
+        var reader = new CsvPreviewReader();
+        var settings = new CsvFileSettings(part.Path, part.Delimiter, part.HasHeader, part.SkipLines, part.EncodingName, CsvPreviewReader.MaxPreviewRows);
+
+        // Only Preview rows can change; every read is of the part's own bytes, through the run's reader.
+        var window = new DataStudioWindow
+        {
+            Owner = owner,
+            DataContext = new DataStudioViewModel(node, settings, read: (s, token) => reader.ReadAsync(part, s.PreviewRows, token), dialectFixed: true),
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false
+        };
+
+        window.ShowDialog();
+    }
+
     public string? PickIntakeFile(string? currentPath)
     {
         var dialog = new OpenFileDialog
