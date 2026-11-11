@@ -68,3 +68,6 @@ Nodify_ETLBox/SampleData/TestData/intake/i*.txt text eol=lf
 Nodify_ETLBox/SampleData/TestData/intake/i02_crlf.txt text eol=crlf
 
 Nodify_ETLBox/SampleData/TestData/intake/real/** -text
+
+# G6c fixture: the CSV part selector holds the SHA-256 of this exact copy of i10 (LF).
+Nodify_ETLBox.Tests/TestData/g6c_i10_example.txt text eol=lf
