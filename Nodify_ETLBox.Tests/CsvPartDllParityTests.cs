@@ -243,14 +243,15 @@ public sealed class CsvPartDllParityTests
         Assert.False(File.Exists(Path.Combine(output, "lineage.log")));
         Assert.False(Directory.Exists(Path.Combine(output, "templates")));
 
-        // (9) Without YamlDotNet.dll. With the consumer's deps.json the .NET host itself refuses to start; without
-        // deps.json (a DLL copied into a plugin folder) the DLL's own check answers with one sentence.
+        // (9) Without YamlDotNet.dll, with and without the consumer's deps.json: the host starts in both cases [P, 2026-11-11]
+        // and the DLL's own check answers with one sentence and no rows.
         var noYaml = Path.Combine(_fixture.Folder, "consumer_no_yaml");
         CopyFolder(output, noYaml);
         File.Delete(Path.Combine(noYaml, "YamlDotNet.dll"));
         var withDeps = await Exec("dotnet", [Path.Combine(noYaml, "CsvPipelineConsumer.dll"), input], noYaml);
         _output.WriteLine($"Without YamlDotNet.dll, with deps.json: exit {withDeps.Code}: {withDeps.Output}");
-        Assert.NotEqual(0, withDeps.Code);
+        Assert.Equal(2, withDeps.Code);
+        Assert.Contains("Error: " + CsvPipelineDllGenerator.MissingYamlMessage, withDeps.Output);
 
         File.Delete(Path.Combine(noYaml, "CsvPipelineConsumer.deps.json"));
         var withoutDeps = await Exec("dotnet", [Path.Combine(noYaml, "CsvPipelineConsumer.dll"), input], noYaml);
