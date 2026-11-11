@@ -269,46 +269,7 @@ public sealed class CsvPartLocatorTests : IDisposable
 
     // (8) ------------------------------------------------------------------------------------------
 
-    [Fact]
-    public void ALargePart_StreamsWithFlatMemory()
-    {
-        var slow = Environment.GetEnvironmentVariable("INTAKE_SLOW_TESTS") == "1";
-        var targetBytes = slow ? 100L * 1024 * 1024 : 2L * 1024 * 1024;
-        var path = Path.Combine(_folder, "large.txt");
-        const string head = "Instrument: X\nOperator: Y\n\n";
-        long rows = 0;
-        using (var writer = new StreamWriter(path, false, new UTF8Encoding(false)))
-        {
-            writer.Write(head);
-            writer.Write("id,value,note\n");
-            while (writer.BaseStream.Length < targetBytes)
-            {
-                writer.Write($"{++rows},{rows * 0.5},row number {rows}\n");
-            }
-
-            writer.Write("\nEnd of report\n");
-        }
-
-        var start = Encoding.UTF8.GetByteCount(head);
-        var length = new FileInfo(path).Length - start - "\nEnd of report\n".Length - 1;
-        var before = LiveMemory.Bytes();
-        var clock = Stopwatch.StartNew();
-        long lines = 0;
-        using (var reader = new StreamReader(new PartStream(path, start, length), new UTF8Encoding(false), false))
-        {
-            while (reader.ReadLine() is not null)
-            {
-                lines++;
-            }
-        }
-
-        clock.Stop();
-        var after = LiveMemory.Bytes();
-        _output.WriteLine($"Part of {length:N0} bytes, {lines:N0} lines in {clock.ElapsedMilliseconds} ms; live bytes before {before:N0}, after {after:N0}");
-        Assert.Equal(rows + 1, lines);
-        Assert.True(Math.Abs(after - before) < 5 * 1024 * 1024, $"live bytes grew from {before:N0} to {after:N0}");
-        File.Delete(path);
-    }
+    // Moved to CsvPartLargePartMemoryTests (G6d): its memory check needs the non-parallel "Intake memory" collection.
 
     // (9) ------------------------------------------------------------------------------------------
 
@@ -544,5 +505,61 @@ public sealed class CsvPartLocatorTests : IDisposable
         Assert.Equal(CsvPartFailure.NotATable, location.Reason);
         Assert.Equal($"Part {keyValue + 1} of this file is not a table, but the pipeline expects a comma table.", location.Message);
         Assert.Null(location.Part);
+    }
+}
+
+/// <summary>
+/// Task G6a step 4 (8): a large part streams with flat memory. Its own class in the non-parallel "Intake memory"
+/// collection (G6d): the live-memory numbers cover the whole process, so a test running next to it moved them.
+/// </summary>
+[Collection("Intake memory")]
+public sealed class CsvPartLargePartMemoryTests : IDisposable
+{
+    private readonly ITestOutputHelper _output;
+    private readonly string _folder = Directory.CreateTempSubdirectory("g6a_locate_memory_").FullName;
+
+    public CsvPartLargePartMemoryTests(ITestOutputHelper output) => _output = output;
+
+    public void Dispose() => ProjectEditorTests.DeleteTempFolder(_folder);
+
+    [Fact]
+    public void ALargePart_StreamsWithFlatMemory()
+    {
+        var slow = Environment.GetEnvironmentVariable("INTAKE_SLOW_TESTS") == "1";
+        var targetBytes = slow ? 100L * 1024 * 1024 : 2L * 1024 * 1024;
+        var path = Path.Combine(_folder, "large.txt");
+        const string head = "Instrument: X\nOperator: Y\n\n";
+        long rows = 0;
+        using (var writer = new StreamWriter(path, false, new UTF8Encoding(false)))
+        {
+            writer.Write(head);
+            writer.Write("id,value,note\n");
+            while (writer.BaseStream.Length < targetBytes)
+            {
+                writer.Write($"{++rows},{rows * 0.5},row number {rows}\n");
+            }
+
+            writer.Write("\nEnd of report\n");
+        }
+
+        var start = Encoding.UTF8.GetByteCount(head);
+        var length = new FileInfo(path).Length - start - "\nEnd of report\n".Length - 1;
+        var before = LiveMemory.Bytes();
+        var clock = Stopwatch.StartNew();
+        long lines = 0;
+        using (var reader = new StreamReader(new PartStream(path, start, length), new UTF8Encoding(false), false))
+        {
+            while (reader.ReadLine() is not null)
+            {
+                lines++;
+            }
+        }
+
+        clock.Stop();
+        var after = LiveMemory.Bytes();
+        _output.WriteLine($"Part of {length:N0} bytes, {lines:N0} lines in {clock.ElapsedMilliseconds} ms; live bytes before {before:N0}, after {after:N0}");
+        Assert.Equal(rows + 1, lines);
+        Assert.True(Math.Abs(after - before) < 5 * 1024 * 1024, $"live bytes grew from {before:N0} to {after:N0}");
+        File.Delete(path);
     }
 }

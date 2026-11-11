@@ -314,36 +314,47 @@ public sealed class PipelineRunnerCsvPartTests : IDisposable
         Assert.False(File.Exists(path));
     }
 
+    /// <summary>Characters added to each data row of the cancel test (about 4 MB for 4,005 rows: about 0.5 s alone, 2 to 3 s on a busy CPU).</summary>
+    private const int WideRowPadding = 1_000;
+
     [Fact]
     public async Task Cancel_DuringTheRead_ReturnsPromptly_AndReleasesTheFile()
     {
         var selector = await G6bParts.I10SelectorAsync();
-        var text = G6bParts.Variant("many rows");
+        // G6d: no timer. With short rows the 4,005-row read took only 5 to 15 ms and the old doubling cancel
+        // delays (5, 10, ... 1,280 ms) often jumped over it (4 of 6 runs alone failed). The runner's progress
+        // clock starts before the part search and the first row after 250 ms of run time is always reported,
+        // so cancelling from the progress callback lands while rows are read, on any machine, as long as the run
+        // lasts longer than 250 ms. Wide rows (a long 'result' value, about 4 MB) make sure it does; still below
+        // 5,000 rows (licence) and 16 MB (validation limit).
+        var text = string.Join("\n", G6bParts.Variant("many rows").Split('\n')
+            .Select(l => l.StartsWith("S-", StringComparison.Ordinal) ? l + new string('x', WideRowPadding) : l));
         var definition = G6bParts.Definition(G6bParts.I10Path, selector);
+        var path = G6bParts.Write(_folder, "many_wide.txt", text);
 
-        var cancelledAfterRows = false;
-        for (var delay = 5; delay <= 1280 && !cancelledAfterRows; delay *= 2)
+        using var cts = new CancellationTokenSource();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        long cancelledAt = -1;
+        var progress = new SyncProgress<PipelineProgress>(p =>
         {
-            var path = G6bParts.Write(_folder, $"many_{delay}.txt", text);
-            using var cts = new CancellationTokenSource();
-            var progress = new SyncProgress<PipelineProgress>(p =>
+            if (p.Counts.Read > 0 && !cts.IsCancellationRequested)
             {
-                if (p.Counts.Read > 0)
-                {
-                    cts.Cancel();
-                }
-            });
-            cts.CancelAfter(TimeSpan.FromMilliseconds(delay));
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            var result = await G6bParts.Run(definition, path, cts.Token, progress);
-            _output.WriteLine($"delay {delay} ms: cancelled {result.Cancelled}, read {result.Counts.Read}, {clock.ElapsedMilliseconds} ms, error {result.Error}");
-            Assert.True(result.Cancelled || result.Error is null, $"unexpected error: {result.Error}");
-            cancelledAfterRows = result.Cancelled && result.Counts.Read > 0 && result.Counts.Read < 4_005;
-            File.Delete(path);
-            Assert.False(File.Exists(path));
-        }
+                cancelledAt = clock.ElapsedMilliseconds;
+                cts.Cancel();
+            }
+        });
+        // 30 s, not the default 10 s: with 12 MB the part search alone took up to 7.3 s on a fully busy CPU (G6d).
+        // A real hang still fails here.
+        var result = await TestTimeout.Run(() => PipelineRunner.RunAsync(definition, path, progress, cts.Token), TimeSpan.FromSeconds(30));
+        var returnedAt = clock.ElapsedMilliseconds;
+        _output.WriteLine($"File of {text.Length:N0} characters: cancelled {result.Cancelled} at {cancelledAt} ms, read {result.Counts.Read}, returned at {returnedAt} ms, error {result.Error}");
 
-        Assert.True(cancelledAfterRows, "no run was cancelled after its first rows");
+        Assert.True(result.Cancelled, $"the run was not cancelled (read {result.Counts.Read}, error {result.Error})");
+        Assert.Null(result.Error);
+        Assert.InRange(result.Counts.Read, 1, 4_004);
+        Assert.True(returnedAt - cancelledAt < 2_000, $"the run returned {returnedAt - cancelledAt} ms after the cancel");
+        File.Delete(path);
+        Assert.False(File.Exists(path));
     }
 
     [Fact]

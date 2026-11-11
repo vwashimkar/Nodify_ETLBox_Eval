@@ -285,24 +285,35 @@ public class DataStudioViewModelTests
     [Fact]
     public async Task C10_WithPreviewRows6000_ShowsTheFirst1000Rows_WithoutALicenceStop()
     {
-        var node = CreateCsvNode(CompositePath("c10_large.csv"), "Comma", true, "0", "utf-8", "5");
+        // The node asks for 6,000 preview rows, so the window opens with the value cut to 1,000. G6d: the test
+        // used to set PreviewRows after opening, which also schedules a delayed reload (400 ms). Without a UI
+        // thread an older load could switch the spinner off after that reload had switched it on, and the test
+        // saw a false "done" (in the app both run on the UI thread). Now the explicit reload below is the newest
+        // and only load, so its end is final. The delayed reload's order is covered by
+        // ExplicitReload_CancelledByTheDelayedReload_KeepsTheSpinner_AndTheNewestLoadShowsTheRows.
+        var node = CreateCsvNode(CompositePath("c10_large.csv"), "Comma", true, "0", "utf-8", "6000");
         var reader = new CsvPreviewReader();
-        CsvFileSettings? lastRequest = null;
+        var requests = new List<int>();
         var vm = new DataStudioViewModel(node, BuildSettings(node), read: (settings, token) =>
         {
-            Volatile.Write(ref lastRequest, settings);
+            lock (requests)
+            {
+                requests.Add(settings.PreviewRows);
+            }
+
             return reader.ReadAsync(settings, token);
         });
-        var loaded = LoadOf1000Ended(vm, () => Volatile.Read(ref lastRequest));
-        vm.PreviewRows = 6000;
+        Assert.Equal(1000, vm.PreviewRows);
+        Assert.Equal(DataStudioViewModel.PreviewRowsLimitMessage, vm.PreviewRowsMessage);
 
-        // Setting PreviewRows also schedules a delayed reload (400 ms). When the explicit reload takes
-        // longer, the delayed one cancels it and the explicit call returns with nothing shown yet
-        // (Task P3). The promise is that the newest load fills the screen, so wait for that one.
         await TestTimeout.Run(() => vm.ReloadNowAsync());
-        await TestTimeout.Run(() => loaded);
 
-        Assert.Null(vm.PreviewError);
+        lock (requests)
+        {
+            Assert.Equal(new[] { 1000, 1000 }, requests); // the constructor's load and the explicit one, no delayed reload
+        }
+
+        Assert.True(vm.PreviewError is null, $"Preview error: {vm.PreviewError}");
         Assert.False(vm.IsLoading);
         Assert.Equal(1000, vm.LoadedRowCount);
     }
