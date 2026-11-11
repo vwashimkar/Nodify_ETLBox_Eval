@@ -91,7 +91,60 @@ public sealed class CsvPartCanvasWindowTests : IDisposable
             _output.WriteLine(string.Join(" | ", texts));
             Assert.StartsWith("The CSV part", canvas.Part.CsvPartStatus);
             Assert.Contains(canvas.Part.CsvPartStatus!, texts);
-            Assert.Contains("Not configured", texts);
+            // G6d: the generic "Idle | rows: 0" and "Configured" lines carry nothing for a CSV part, so they are hidden.
+            Assert.DoesNotContain("Not configured", texts);
+            Assert.DoesNotContain("Idle", texts);
+            return Task.CompletedTask;
+        });
+
+    /// <summary>G6d step 0: with the same node positions, the error node is as wide as the ready node and does not reach ParseValue.</summary>
+    [Theory]
+    [InlineData(WpfTheme.Light)]
+    [InlineData(WpfTheme.Dark)]
+    public async Task CsvPartNode_InAnErrorState_KeepsItsWidth_AndDoesNotOverlapParseValue(WpfTheme theme)
+    {
+        var widths = new List<double>();
+        foreach (var broken in new[] { false, true })
+        {
+            await WithCanvas(theme, 1100, 720, broken, (window, canvas) =>
+            {
+                var part = IntakeStudioOpenTests.CanvasNode(window, canvas.Part);
+                var parse = IntakeStudioOpenTests.CanvasNode(window, canvas.Parse);
+                var output = IntakeStudioOpenTests.CanvasNode(window, canvas.Output);
+                var partBox = part.TransformToVisual(window).TransformBounds(new Rect(part.RenderSize));
+                var parseBox = parse.TransformToVisual(window).TransformBounds(new Rect(parse.RenderSize));
+                var outputBox = output.TransformToVisual(window).TransformBounds(new Rect(output.RenderSize));
+                _output.WriteLine($"{theme} broken={broken}: part {partBox}, parse {parseBox}, output {outputBox}");
+                Assert.True(partBox.Right < parseBox.Left, $"The CSV part node ({partBox.Right:0}) reaches ParseValue ({parseBox.Left:0}).");
+                Assert.True(parseBox.Right < outputBox.Left, "ParseValue reaches DotNetObject.");
+                widths.Add(part.ActualWidth);
+                if (broken)
+                {
+                    // The sentence wraps inside the node; its full text is the tooltip.
+                    var status = WpfHost.Descendants<System.Windows.Controls.TextBlock>(part).Single(t => t.Text == canvas.Part.CsvPartStatus);
+                    Assert.Equal(canvas.Part.CsvPartStatus, status.ToolTip);
+                    Assert.True(status.ActualWidth <= (double)Application.Current.FindResource("node-note-width"));
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        Assert.Equal(widths[0], widths[1]);
+    }
+
+    /// <summary>The G6d error-node pictures (only with INTAKE_SCREENS=1), in reports/g6d, with the node positions of the ready picture.</summary>
+    [ScreensTheory]
+    [InlineData(WpfTheme.Light, false)]
+    [InlineData(WpfTheme.Dark, false)]
+    [InlineData(WpfTheme.Light, true)]
+    [InlineData(WpfTheme.Dark, true)]
+    public Task G6d_CanvasScreens_ForTheReport(WpfTheme theme, bool broken)
+        => WithCanvas(theme, 1100, 720, broken, (window, _) =>
+        {
+            var path = Path.Combine(WpfHost.ReportsFolder(), "g6d", $"g6d-canvas-{(broken ? "error" : "ready")}-{theme.ToString().ToLowerInvariant()}-1100.png");
+            WpfHost.RenderPng(window, 96, path);
+            Assert.True(WpfHost.DistinctColours(path) > 5, $"{path} looks blank.");
             return Task.CompletedTask;
         });
 

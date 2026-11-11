@@ -30,11 +30,25 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Node footer lines that do not apply to a File intake node ("Idle | rows: 0", "Configured"). -->
-        <Style x:Key="HiddenForFileIntake" TargetType="FrameworkElement">
+        <!-- Node footer lines that carry nothing for the intake nodes ("Idle | rows: 0", "Configured"): only the
+             legacy Run sets State and rows, and the CSV part's status line already says Ready or the problem. -->
+        <Style x:Key="HiddenForIntakeNodes" TargetType="FrameworkElement">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding NodeType, Mode=OneWay}" Value="FileIntake">
                     <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding NodeType, Mode=OneWay}" Value="CsvPart">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The CSV part's footer has a fixed width, so a long locator sentence wraps instead of widening the node. -->
+        <Style x:Key="NodeFooterPanel" TargetType="StackPanel">
+            <Setter Property="Margin" Value="4,2" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding NodeType, Mode=OneWay}" Value="CsvPart">
+                    <Setter Property="Width" Value="{DynamicResource node-note-width}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -425,14 +439,14 @@
                             </nodify:Node.OutputConnectorTemplate>
 
                             <nodify:Node.Footer>
-                                <StackPanel Margin="4,2">
+                                <StackPanel Style="{StaticResource NodeFooterPanel}">
                                     <!-- File intake: subtitle, file name (full path in the tooltip) and, after a scan, the totals.
                                          Empty for the other nodes, so hidden. -->
                                     <TextBlock Text="{Binding Subtitle, Mode=OneWay}"
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-muted-brush}"
                                                TextWrapping="Wrap"
-                                               MaxWidth="170"
+                                               MaxWidth="{DynamicResource node-note-width}"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
                                     <TextBlock Text="{Binding IntakeFileText, Mode=OneWay}"
@@ -440,20 +454,20 @@
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-brush}"
                                                TextTrimming="CharacterEllipsis"
-                                               MaxWidth="170"
+                                               MaxWidth="{DynamicResource node-note-width}"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
                                     <TextBlock Text="{Binding IntakeSummary, Mode=OneWay}"
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-brush}"
                                                TextWrapping="Wrap"
-                                               MaxWidth="170"
+                                               MaxWidth="{DynamicResource node-note-width}"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
                                     <TextBlock Text="{Binding IntakeLayoutText, Mode=OneWay}"
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-muted-brush}"
-                                               MaxWidth="170"
+                                               MaxWidth="{DynamicResource node-note-width}"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
                                     <!-- CSV part: part number, template, delimiter and columns, then the status line. Hidden for the others. -->
@@ -461,24 +475,27 @@
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-brush}"
                                                TextWrapping="Wrap"
-                                               MaxWidth="170"
+                                               MaxWidth="{DynamicResource node-note-width}"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
+                                    <!-- At most four lines; the full sentence is in the tooltip and the Issues tab. -->
                                     <TextBlock Text="{Binding CsvPartStatus, Mode=OneWay}"
                                                ToolTip="{Binding CsvPartStatus, Mode=OneWay}"
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-muted-brush}"
                                                TextWrapping="Wrap"
-                                               MaxWidth="170"
+                                               TextTrimming="WordEllipsis"
+                                               MaxHeight="{DynamicResource node-status-max-height}"
+                                               MaxWidth="{DynamicResource node-note-width}"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
-                                    <StackPanel Orientation="Horizontal" Style="{StaticResource HiddenForFileIntake}">
+                                    <StackPanel Orientation="Horizontal" Style="{StaticResource HiddenForIntakeNodes}">
                                         <TextBlock Text="{Binding State}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                         <TextBlock Text=" | rows: " FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                         <TextBlock Text="{Binding RowCount}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding ConfigurationStatus}"
-                                               Style="{StaticResource HiddenForFileIntake}"
+                                               Style="{StaticResource HiddenForIntakeNodes}"
                                                FontSize="{DynamicResource font-caption}"
                                                Foreground="{DynamicResource text-muted-brush}"
                                                Margin="0,2,0,0" />
@@ -493,7 +510,7 @@
                                                Foreground="{DynamicResource text-muted-brush}"
                                                TextTrimming="CharacterEllipsis"
                                                TextWrapping="NoWrap"
-                                               MaxWidth="170"
+                                               MaxWidth="{DynamicResource node-note-width}"
                                                Margin="0,2,0,0" />
                                 </StackPanel>
                             </nodify:Node.Footer>
@@ -540,7 +557,7 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
-                                <!-- CSV part: read-only in G6c (the part is chosen in Intake Studio in G6d). Hidden for the others. -->
+                                <!-- CSV part: read-only (the part is chosen in Intake Studio, the details are in Configure...). Hidden for the others. -->
                                 <TextBlock Text="{Binding Editor.SelectedNode.CsvPartText, Mode=OneWay}"
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource text-brush}"
@@ -578,6 +595,9 @@
                                             <Setter Property="Visibility" Value="Collapsed" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="ParseValue">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Editor.SelectedNode.NodeType}" Value="CsvPart">
                                                     <Setter Property="Visibility" Value="Visible" />
                                                 </DataTrigger>
                                             </Style.Triggers>
