@@ -11,7 +11,7 @@ namespace EtlDesigner.Engine.Pipeline;
 /// records directly: renaming a record property must not change the file format. Enums are
 /// written as their names. Property names are camelCase.
 /// </summary>
-public static class SettingsJson
+public static partial class SettingsJson
 {
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -49,25 +49,40 @@ public static class SettingsJson
     public static string Serialize(PipelineDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
+        JsonElement? part = null;
+        WritePart(definition, ref part);
         return JsonSerializer.Serialize(new PipelineJson
         {
             Version = PipelineJson.CurrentVersion,
             CsvFile = ToJson(definition.CsvFile),
             Columns = ToJson(definition.Columns),
             ParseValue = ToJson(definition.ParseValue),
-            Output = ToJson(definition.Output)
+            Output = ToJson(definition.Output),
+            CsvPart = part
         }, Options);
     }
 
     public static PipelineDefinition DeserializePipelineDefinition(string json)
     {
         var dto = Read<PipelineJson>(json);
-        return new PipelineDefinition(
+        var definition = new PipelineDefinition(
             FromJson(dto.CsvFile ?? throw new JsonException("The pipeline has no csvFile settings.")),
             FromJson(dto.Columns ?? new ColumnSelectionJson()),
             FromJson(dto.ParseValue ?? throw new JsonException("The pipeline has no parseValue settings.")),
             FromJson(dto.Output ?? new OutputJson()));
+        if (dto.CsvPart is { } part)
+        {
+            ReadPart(part, ref definition);
+        }
+
+        return definition;
     }
+
+    /// <summary>The CSV part selector as JSON; left null for a CsvFile pipeline (PipelineDefinition.Part.cs).</summary>
+    static partial void WritePart(PipelineDefinition definition, ref JsonElement? part);
+
+    /// <summary>Puts the CSV part selector into <paramref name="definition"/> (PipelineDefinition.Part.cs).</summary>
+    static partial void ReadPart(JsonElement part, ref PipelineDefinition definition);
 
     private static CsvFileJson ToJson(CsvFileSettings settings)
     {
@@ -243,5 +258,9 @@ public static class SettingsJson
         public ColumnSelectionJson? Columns { get; set; }
         public ParseValueJson? ParseValue { get; set; }
         public OutputJson? Output { get; set; }
+
+        /// <summary>Only a CSV part pipeline has it; left out of the JSON otherwise, so a CsvFile pipeline's JSON is unchanged.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JsonElement? CsvPart { get; set; }
     }
 }
