@@ -454,14 +454,16 @@ public sealed class CsvPartNodeTests : IDisposable
     }
 
     [Fact]
-    public async Task ACsvFilePipeline_StillBuildsItsOwnDefinition_WithAFileIntakeNodeBeside()
+    public void ACsvFilePipeline_StillBuildsItsOwnDefinition_WithAFileIntakeNodeBeside()
     {
         var main = new MainViewModel(new ProjectEditorTests.FakeDialogs(), new ProjectEditorTests.MemoryRecent());
         var csv = PipelineDefinitionTests.CompositePath("c01_basic.csv");
-        ProjectEditorTests.BuildC01(main.Editor, csv);
+        var (csvNode, _, _) = ProjectEditorTests.BuildC01(main.Editor, csv);
+        // The columns are set here, as in FileIntakeNodeTests.C01Graph: the app's own background read of them is not
+        // awaited by anything (CLAUDE.md), and waiting on ProjectRefresh (a project open) failed once in a full run.
+        csvNode.KnownColumns = File.ReadLines(csv).First().Split(',');
         G6cCanvas.Add(main.Editor, NodeType.FileIntake, 0);
         main.Editor.Validate();
-        await TestTimeout.Run(() => main.ProjectRefresh);
         Assert.True(main.TryBuildExecuteDefinition(out var definition, out var reason), reason);
         Assert.Null(definition!.CsvPart);
     }
