@@ -347,6 +347,9 @@ internal sealed class GeneratedDll : IDisposable
 
     public Type Entry { get; }
 
+    /// <summary>The raw result of the last <see cref="RunAsync"/>, for the fields of a CSV part DLL (task G6b).</summary>
+    public object? LastResult { get; private set; }
+
     public static GeneratedDll Create(PipelineDefinition definition, IReadOnlyList<string> columns,
         string className = CsvPipelineDllGenerator.DefaultClassName, string ns = CsvPipelineDllGenerator.DefaultNamespace)
     {
@@ -373,6 +376,7 @@ internal sealed class GeneratedDll : IDisposable
             return task.GetType().GetProperty("Result")!.GetValue(task)!;
         });
 
+        LastResult = result;
         object? Get(string name) => result.GetType().GetProperty(name)!.GetValue(result);
         List<RecordIssue> Issues(string name) => ((System.Collections.IEnumerable)Get(name)!).Cast<object>()
             .Select(i => new RecordIssue((int)i.GetType().GetProperty("RecordNumber")!.GetValue(i)!, (string)i.GetType().GetProperty("Reason")!.GetValue(i)!))

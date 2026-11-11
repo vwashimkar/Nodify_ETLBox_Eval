@@ -484,13 +484,29 @@ public sealed class CsvPartLocatorTests : IDisposable
             }
         }
 
-        // The DLL generator compiles these Engine/Csv files without Engine/Intake (until G6b adds it).
+        // G6b: a CsvFile DLL compiles CsvPipelineDllGenerator.SourceFiles without Engine/Intake; a CSV part DLL adds
+        // CsvPartSourceFiles. No embedded file may use UI, Project, Generation or WPF, and each one is an EmbeddedResource.
         var embedded = File.ReadAllText(Path.Combine(app, "Nodify_ETLBox.csproj"));
-        foreach (var file in Directory.GetFiles(Path.Combine(app, "Engine", "Csv"), "*.cs").Where(f => embedded.Contains($"Engine\\Csv\\{Path.GetFileName(f)}\"", StringComparison.Ordinal)))
+        foreach (var rel in EtlDesigner.Engine.Generation.CsvPipelineDllGenerator.SourceFiles.Concat(EtlDesigner.Engine.Generation.CsvPipelineDllGenerator.CsvPartSourceFiles))
         {
-            if (File.ReadAllText(file).Contains("EtlDesigner.Engine.Intake", StringComparison.Ordinal))
+            var file = Path.Combine(app, rel.Replace('/', Path.DirectorySeparatorChar));
+            var text = File.ReadAllText(file);
+            if (!embedded.Contains($"Include=\"{rel.Replace('/', '\\')}\"", StringComparison.Ordinal))
             {
-                problems.Add($"{Path.GetFileName(file)} is in the DLL and uses Engine/Intake");
+                problems.Add($"{rel} is not an EmbeddedResource");
+            }
+
+            if (EtlDesigner.Engine.Generation.CsvPipelineDllGenerator.SourceFiles.Contains(rel) && text.Contains("EtlDesigner.Engine.Intake", StringComparison.Ordinal))
+            {
+                problems.Add($"{rel} is in every DLL and uses Engine/Intake");
+            }
+
+            foreach (var line in text.Split('\n').Where(l => l.TrimStart().StartsWith("using ", StringComparison.Ordinal)))
+            {
+                if (new[] { "EtlDesigner.UI", "EtlDesigner.Engine.Project", "EtlDesigner.Engine.Generation", "System.Windows" }.Any(f => line.Contains(f, StringComparison.Ordinal)))
+                {
+                    problems.Add($"{rel}: {line.Trim()}");
+                }
             }
         }
 

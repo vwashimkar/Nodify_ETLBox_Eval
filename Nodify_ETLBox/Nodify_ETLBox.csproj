@@ -62,6 +62,40 @@
 	  <EmbeddedResource Include="Engine\Pipeline\PipelineRunner.cs" />
 	</ItemGroup>
 
+	<!-- The extra Engine files of a CSV part DLL (CsvPipelineDllGenerator.CsvPartSourceFiles, task G6b). -->
+	<ItemGroup>
+	  <EmbeddedResource Include="Engine\Csv\CsvRecordReader.Part.cs" />
+	  <EmbeddedResource Include="Engine\Pipeline\PipelineDefinition.Part.cs" />
+	  <EmbeddedResource Include="Engine\Pipeline\PipelineRunner.Part.cs" />
+	  <EmbeddedResource Include="Engine\Intake\AutoDetector.cs" />
+	  <EmbeddedResource Include="Engine\Intake\CsvPartLocator.cs" />
+	  <EmbeddedResource Include="Engine\Intake\CsvPartSelector.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeContracts.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeEdit.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeEditSession.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeEditSession.Templates.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeEncoding.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeModel.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakePlan.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakePlanParts.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeReader.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeScanService.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeSources.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeTemplate.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeText.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeValidation.cs" />
+	  <EmbeddedResource Include="Engine\Intake\IntakeValidator.cs" />
+	  <EmbeddedResource Include="Engine\Intake\LineIndexer.cs" />
+	  <EmbeddedResource Include="Engine\Intake\MarkerScanner.cs" />
+	  <EmbeddedResource Include="Engine\Intake\PartStream.cs" />
+	  <EmbeddedResource Include="Engine\Intake\RowShape.cs" />
+	  <EmbeddedResource Include="Engine\Intake\StructureTrackers.cs" />
+	  <EmbeddedResource Include="Engine\Intake\TemplateStore.cs" />
+	  <EmbeddedResource Include="Engine\Intake\TextFileLineageLog.cs" />
+	  <EmbeddedResource Include="Engine\Intake\YamlCheck.cs" />
+	  <EmbeddedResource Include="Engine\Intake\YamlShape.cs" />
+	</ItemGroup>
+
 	<ItemGroup>
 	  <InternalsVisibleTo Include="Nodify_ETLBox.Tests" />
 	</ItemGroup>
