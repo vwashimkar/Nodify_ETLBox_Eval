@@ -7,5 +7,8 @@ public enum PortKind
     Records,
 
     /// <summary>Rows produced by ParseValue (one per component). Not accepted by the legacy nodes.</summary>
-    ParsedRows
+    ParsedRows,
+
+    /// <summary>The parts of a File intake file. Only a CSV part node takes them (G6c).</summary>
+    Parts
 }

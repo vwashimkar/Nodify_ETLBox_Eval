@@ -18,7 +18,8 @@ public partial class EditorViewModel
         [ProjectNodeTypes.ResultJson] = NodeType.ResultJson,
         [ProjectNodeTypes.ParseValue] = NodeType.ParseValue,
         [ProjectNodeTypes.DotNetObject] = NodeType.DotNetObject,
-        [ProjectNodeTypes.FileIntake] = NodeType.FileIntake
+        [ProjectNodeTypes.FileIntake] = NodeType.FileIntake,
+        [ProjectNodeTypes.CsvPart] = NodeType.CsvPart
     };
 
     /// <summary>A connection that is not on the canvas but stays in the file. Message null: the unknown node's own line covers it.</summary>
@@ -239,6 +240,11 @@ public partial class EditorViewModel
                 node.IntakePlanJson = ProjectNodeSettings.ReadLayoutPlan(settings);
                 break;
 
+            case NodeType.CsvPart:
+                // An unreadable selector is kept as text and gives an Issues line; it is never dropped.
+                node.CsvPartSelectorJson = ProjectNodeSettings.ReadCsvPartSelector(settings);
+                break;
+
             default:
                 var values = ProjectNodeSettings.ReadLegacy(settings);
                 foreach (var setting in node.Settings)
@@ -358,6 +364,9 @@ public partial class EditorViewModel
                 var intake = node.GetFileIntakeSettings();
                 return ProjectNodeSettings.WriteFileIntake(intake, RelativePathFor(intake.Path, "path", loaded, projectFilePath), loaded, node.IntakePlanJson);
 
+            case NodeType.CsvPart:
+                return ProjectNodeSettings.WriteCsvPart(node.CsvPartSelectorJson, loaded);
+
             default:
                 var filePath = node.Settings.FirstOrDefault(s => s.Kind == SettingKind.FilePath);
                 var relativePath = filePath is null ? null : RelativePathFor(filePath.Value, filePath.Key, loaded, projectFilePath);
@@ -407,7 +416,8 @@ public partial class EditorViewModel
     private void OnNodeChangedForDirty(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(NodeViewModel.Location) or nameof(NodeViewModel.Title)
-            or nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.ColumnSelection) or nameof(NodeViewModel.IntakePlanJson))
+            or nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.ColumnSelection) or nameof(NodeViewModel.IntakePlanJson)
+            or nameof(NodeViewModel.CsvPartSelectorJson))
         {
             MarkDirty();
         }

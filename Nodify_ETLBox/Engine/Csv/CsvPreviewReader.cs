@@ -23,22 +23,33 @@ public sealed class CsvPreviewReader
     /// <summary>Called with the running row count after each row is collected. Used by tests.</summary>
     internal Action<int>? RowCollected { get; set; }
 
-    public async Task<CsvPreview> ReadAsync(CsvFileSettings settings, CancellationToken token)
+    public Task<CsvPreview> ReadAsync(CsvFileSettings settings, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        return ReadCoreAsync(settings.PreviewRows, onRecord => new CsvRecordReader().ReadAsync(settings, onRecord, token));
+    }
 
-        var previewRows = Math.Clamp(settings.PreviewRows, 1, MaxPreviewRows);
+    /// <summary>The first rows of one CSV part of a file (G6c), through the part overload of <see cref="CsvRecordReader"/>.</summary>
+    public Task<CsvPreview> ReadAsync(CsvPartSource part, int previewRows, CancellationToken token)
+    {
+        ArgumentNullException.ThrowIfNull(part);
+        return ReadCoreAsync(previewRows, onRecord => new CsvRecordReader().ReadAsync(part, onRecord, token));
+    }
+
+    private async Task<CsvPreview> ReadCoreAsync(int requestedRows, Func<Func<CsvRecord, bool>, Task<CsvReadOutcome>> read)
+    {
+        var previewRows = Math.Clamp(requestedRows, 1, MaxPreviewRows);
         var rowsToRead = previewRows + 1;
         var collectedRows = new List<IReadOnlyList<string>>(rowsToRead);
         IReadOnlyList<string> columns = Array.Empty<string>();
 
-        var outcome = await new CsvRecordReader().ReadAsync(settings, record =>
+        var outcome = await read(record =>
         {
             columns = record.Columns;
             collectedRows.Add(record.Values);
             RowCollected?.Invoke(collectedRows.Count);
             return collectedRows.Count < rowsToRead;
-        }, token);
+        });
 
         if (outcome.Cancelled)
         {

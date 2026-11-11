@@ -94,6 +94,10 @@
             <Border Style="{StaticResource TagPanel}" Tag="{Binding CancelledText, Mode=OneWay}">
                 <TextBlock Text="{Binding CancelledText, Mode=OneWay}" Style="{StaticResource MutedText}" />
             </Border>
+            <!-- A CSV part run: which file, template and part were read. -->
+            <Border Style="{StaticResource TagPanel}" Tag="{Binding PartFactsText, Mode=OneWay}">
+                <TextBlock Text="{Binding PartFactsText, Mode=OneWay}" Style="{StaticResource MutedText}" />
+            </Border>
         </StackPanel>
 
         <TabControl Grid.Row="4" Margin="{DynamicResource Thickness4}">

@@ -20,8 +20,11 @@ public enum NodeType
     ParseValue,
     DotNetObject,
 
-    /// <summary>Reads a file and finds its parts (containers). No ports yet; not part of Run, Execute or the DLL.</summary>
+    /// <summary>Reads a file and finds its parts (containers). Its "Parts" output feeds a CSV part node (G6c); Run ignores it.</summary>
     FileIntake,
+
+    /// <summary>One csv or tsv part of the File intake node's file, chosen by a selector (G6c). Feeds ParseValue like CsvFile.</summary>
+    CsvPart,
 
     /// <summary>A placeholder for a node in a project file that this version cannot use. Never in the palette.</summary>
     Unknown
@@ -55,6 +58,11 @@ public class NodeViewModel : ObservableObject
     private string? _intakeSummary;
     private string? _intakePlanJson;
     private bool _intakePlanReadable;
+    private IReadOnlyList<string>? _knownColumns;
+    private string? _csvPartSelectorJson;
+    private CsvPartSelector? _csvPartSelector;
+    private string? _csvPartSelectorError;
+    private string? _csvPartStatus;
 
     public NodeViewModel(Guid id, string title, NodeType nodeType, Func<CsvFileSettings, bool>? loadPreviewAction = null)
     {
@@ -272,10 +280,96 @@ public class NodeViewModel : ObservableObject
     public void NotifyColumnSelectionChanged() => OnPropertyChanged(nameof(ColumnSelection));
 
     /// <summary>
-    /// CsvFile only: the column names of the file as last read with the current settings, or
-    /// null when not known (never read, or a setting changed since).
+    /// CsvFile and CSV part: the column names as last read with the current settings, or null when not
+    /// known (never read, or a setting changed since). A CSV part's columns come from the run's reader.
     /// </summary>
-    public IReadOnlyList<string>? KnownColumns { get; set; }
+    public IReadOnlyList<string>? KnownColumns
+    {
+        get => _knownColumns;
+        set
+        {
+            if (SetProperty(ref _knownColumns, value))
+            {
+                OnPropertyChanged(nameof(CsvPartText));
+            }
+        }
+    }
+
+    public const string NoPartChosenText = "No part chosen";
+
+    /// <summary>
+    /// CSV part only: the selector as <c>CsvPartSelectorJson</c> text, saved in the project as it is.
+    /// Null while no part is chosen. A text that cannot be read is kept and gives <see cref="CsvPartSelectorError"/>.
+    /// Setting it forgets the columns and the location of the old selector.
+    /// </summary>
+    public string? CsvPartSelectorJson
+    {
+        get => _csvPartSelectorJson;
+        set
+        {
+            if (!SetProperty(ref _csvPartSelectorJson, value))
+            {
+                return;
+            }
+
+            string? error = null;
+            _csvPartSelector = value is null ? null : EtlDesigner.Engine.Intake.CsvPartSelectorJson.Deserialize(value, out error);
+            _csvPartSelectorError = error;
+            CsvPartRead = null;
+            KnownColumns = null;
+            OnPropertyChanged(nameof(CsvPartSelector));
+            OnPropertyChanged(nameof(CsvPartSelectorError));
+            OnPropertyChanged(nameof(CsvPartText));
+        }
+    }
+
+    /// <summary>CSV part only: the readable selector, or null (none chosen, or unreadable).</summary>
+    public CsvPartSelector? CsvPartSelector => _csvPartSelector;
+
+    /// <summary>CSV part only: why the saved selector cannot be used (<c>CsvPartSelectorJson</c>'s sentence), or null.</summary>
+    public string? CsvPartSelectorError => _csvPartSelectorError;
+
+    /// <summary>
+    /// CSV part only: the last column read in this session (location and columns, or the locator's sentence),
+    /// for the file and selector it was made with. Never saved. See <see cref="EditorViewModel.CurrentCsvPartRead"/>.
+    /// </summary>
+    public CsvPartRead? CsvPartRead { get; set; }
+
+    /// <summary>CSV part only: one status line (ready, or the first problem, for example the locator's sentence). Never saved.</summary>
+    public string? CsvPartStatus
+    {
+        get => _csvPartStatus;
+        set => SetProperty(ref _csvPartStatus, value);
+    }
+
+    /// <summary>
+    /// CSV part only, read-only: "Part N of the file", the template name and "Comma table, N columns"
+    /// (the columns once read). "No part chosen" without a readable selector. Null for other nodes.
+    /// </summary>
+    public string? CsvPartText
+    {
+        get
+        {
+            if (NodeType != NodeType.CsvPart)
+            {
+                return null;
+            }
+
+            if (_csvPartSelector is not { } selector)
+            {
+                return NoPartChosenText;
+            }
+
+            var word = CsvPartLocator.DelimiterWord(selector.Expected.Delimiter);
+            var table = char.ToUpperInvariant(word[0]) + word[1..] + " table";
+            var columns = KnownColumns is { } known
+                ? $"{known.Count} column{(known.Count == 1 ? "" : "s")}"
+                : "columns not read yet";
+            return $"Part {selector.PartIndex + 1} of the file" + Environment.NewLine
+                + $"Template: {selector.Template.Name}" + Environment.NewLine
+                + $"{table}, {columns}";
+        }
+    }
 
     /// <summary>ParseValue only: the node's settings. Null for other node types.</summary>
     public ParseValueSettings? ParseValueSettings

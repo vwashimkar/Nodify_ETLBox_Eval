@@ -46,6 +46,7 @@ public static class NodeFactory
             NodeType.ParseValue => CreateParseValue(location),
             NodeType.DotNetObject => CreateDotNetObject(location),
             NodeType.FileIntake => CreateFileIntake(location),
+            NodeType.CsvPart => CreateCsvPart(location),
             _ => throw new ArgumentException($"Unknown node type: {nodeType}")
         };
 
@@ -316,7 +317,7 @@ public static class NodeFactory
     }
 
     /// <summary>
-    /// Creates a File intake node. No ports yet (container ports come in G6). Settings: FilePath,
+    /// Creates a File intake node. Output: "Parts" (PortKind.Parts), to CSV part nodes only. Settings: FilePath,
     /// Mode (Choice), Encoding (Choice) and MaxFileSizeMb, edited in Intake Studio or the settings
     /// panel. The canvas shows the file name and, after a scan in this session, its totals.
     /// </summary>
@@ -349,6 +350,8 @@ public static class NodeFactory
             encoding.Choices.Add(new SettingChoice(name, IntakeEncodingLabel(name), true));
         }
 
+        node.Outputs.Add(new ConnectorViewModel("Parts", PortKind.Parts, isInput: false, node));
+
         node.Settings.Add(new SettingViewModel("FilePath", "File path", SettingKind.FilePath, required: false) { FileFilter = FileFilters.Intake });
         node.Settings.Add(mode);
         node.Settings.Add(encoding);
@@ -365,6 +368,29 @@ public static class NodeFactory
             };
         }
 
+        return node;
+    }
+
+    public const string CsvPartTitle = "CSV part";
+
+    public const string CsvPartSubtitle = "One table of the File intake file";
+
+    /// <summary>
+    /// Creates a CSV part node (G6c). Input: "Parts" (PortKind.Parts), from one File intake node.
+    /// Output: "Rows" (PortKind.Rows), to ParseValue. No setting rows: the node holds a part selector
+    /// (<see cref="NodeViewModel.CsvPartSelectorJson"/>), shown read-only; it is chosen in Intake Studio (G6d).
+    /// </summary>
+    public static NodeViewModel CreateCsvPart(Point location)
+    {
+        var node = new NodeViewModel(Guid.NewGuid(), CsvPartTitle, NodeType.CsvPart)
+        {
+            Location = location,
+            Subtitle = CsvPartSubtitle,
+            ConfigurationStatus = "Not configured"
+        };
+
+        node.Inputs.Add(new ConnectorViewModel("Parts", PortKind.Parts, isInput: true, node));
+        node.Outputs.Add(new ConnectorViewModel("Rows", PortKind.Rows, isInput: false, node));
         return node;
     }
 

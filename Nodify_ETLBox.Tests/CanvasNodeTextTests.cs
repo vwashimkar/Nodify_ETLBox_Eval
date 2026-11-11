@@ -37,26 +37,27 @@ public sealed class CanvasNodeTextTests
             {
                 var node = IntakeStudioOpenTests.Add(main, NodeType.FileIntake);
 
+                // G6c: the "Parts" output port label comes after the title.
                 var empty = await TextsOf(window, node);
-                Assert.Equal([node.Title, node.Subtitle!, NodeViewModel.NoFileChosenText], empty);
+                Assert.Equal([node.Title, "Parts", node.Subtitle!, NodeViewModel.NoFileChosenText], empty);
                 AssertNoGenericLines(empty);
 
                 var path = IntakeTestData.PathOf("i01_sample");
                 node.SetFileIntakeSettings(node.GetFileIntakeSettings() with { Path = path });
                 var chosen = await TextsOf(window, node);
-                Assert.Equal([node.Title, node.Subtitle!, "i01_sample.txt"], chosen);
+                Assert.Equal([node.Title, "Parts", node.Subtitle!, "i01_sample.txt"], chosen);
                 Assert.Equal(path, node.CanvasNoteToolTip);
                 AssertNoGenericLines(chosen);
 
                 node.IntakeSummary = "27 containers, 3 warnings";
                 var scanned = await TextsOf(window, node);
-                Assert.Equal([node.Title, node.Subtitle!, "i01_sample.txt", "27 containers, 3 warnings"], scanned);
+                Assert.Equal([node.Title, "Parts", node.Subtitle!, "i01_sample.txt", "27 containers, 3 warnings"], scanned);
                 AssertNoGenericLines(scanned);
 
                 // G5b: a saved layout adds one short line; removing it hides the line again.
                 node.IntakePlanJson = IntakePlanJson.Serialize(new IntakePlan(IntakePlan.CurrentFormatVersion, "00", 1, null, IntakeMode.AutoDetect, []));
                 var edited = await TextsOf(window, node);
-                Assert.Equal([node.Title, node.Subtitle!, "i01_sample.txt", "27 containers, 3 warnings", NodeViewModel.LayoutEditedText], edited);
+                Assert.Equal([node.Title, "Parts", node.Subtitle!, "i01_sample.txt", "27 containers, 3 warnings", NodeViewModel.LayoutEditedText], edited);
                 node.IntakePlanJson = null;
                 Assert.Equal(scanned, await TextsOf(window, node));
             }

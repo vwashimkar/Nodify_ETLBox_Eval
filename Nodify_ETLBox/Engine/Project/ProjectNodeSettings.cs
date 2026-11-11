@@ -18,10 +18,13 @@ public static class ProjectNodeSettings
     private const string Columns = "columns";
 
     /// <summary>Optional properties the serializers leave out when empty. They are known, so never kept from the old file.</summary>
-    private static readonly HashSet<string> KnownOptional = new() { RelativePath, "subPartColumn", LayoutPlan };
+    private static readonly HashSet<string> KnownOptional = new() { RelativePath, "subPartColumn", LayoutPlan, Selector };
 
     /// <summary>File intake: the saved layout (an <c>IntakePlan</c> as JSON). Absent when the layout is automatic.</summary>
     public const string LayoutPlan = "layoutPlan";
+
+    /// <summary>CSV part: the part selector (<c>CsvPartSelectorJson</c>). Absent while no part is chosen.</summary>
+    public const string Selector = "selector";
 
     public static JsonElement WriteCsvFile(CsvFileSettings settings, CsvColumnSelection columns, string? relativePath, JsonElement? loaded = null)
     {
@@ -147,6 +150,27 @@ public static class ProjectNodeSettings
         => settings.EnumerateObject()
             .Where(p => p.Name != RelativePath)
             .ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString()! : p.Value.GetRawText());
+
+    /// <summary>
+    /// A CSV part node: only its selector, as one JSON string (like <see cref="LayoutPlan"/>), written as it
+    /// is, so a selector this version cannot read is kept. Nothing derived (columns, location) is saved.
+    /// </summary>
+    public static JsonElement WriteCsvPart(string? selectorJson, JsonElement? loaded = null)
+    {
+        var json = new JsonObject();
+        if (selectorJson is not null)
+        {
+            json[Selector] = JsonValue.Create(selectorJson);
+        }
+
+        return Finish(json, loaded);
+    }
+
+    /// <summary>The saved selector text, or null when none is saved. An object (not a string) is read as its JSON text.</summary>
+    public static string? ReadCsvPartSelector(JsonElement settings)
+        => settings.ValueKind == JsonValueKind.Object && settings.TryGetProperty(Selector, out var selector) && selector.ValueKind != JsonValueKind.Null
+            ? selector.ValueKind == JsonValueKind.String ? selector.GetString() : selector.GetRawText()
+            : null;
 
     public static string? ReadRelativePath(JsonElement settings)
         => settings.TryGetProperty(RelativePath, out var element) && element.ValueKind == JsonValueKind.String

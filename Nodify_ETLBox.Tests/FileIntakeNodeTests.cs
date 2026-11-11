@@ -41,14 +41,16 @@ public sealed class FileIntakeNodeTests : IDisposable
     }
 
     [Fact]
-    public void NewNode_HasTheDefaults_NoPorts_AndSaysNoFileChosen()
+    public void NewNode_HasTheDefaults_OnePartsOutput_AndSaysNoFileChosen()
     {
         var node = AddIntake(new EditorViewModel());
 
         Assert.Equal("File intake", node.Title);
         Assert.Equal("Reads a file and finds its parts", node.Subtitle);
         Assert.Empty(node.Inputs);
-        Assert.Empty(node.Outputs);
+        // G6c: one output, "Parts", for CSV part nodes.
+        var output = Assert.Single(node.Outputs);
+        Assert.Equal(("Parts", PortKind.Parts), (output.Name, output.Kind));
         Assert.Equal(NodeViewModel.NoFileChosenText, node.CanvasNote);
         Assert.Null(node.CanvasNoteToolTip);
         Assert.Equal(FileIntakeNodeSettings.Default, node.GetFileIntakeSettings());

@@ -302,6 +302,10 @@
                         Click="PaletteButton_Click"
                         PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
                         PreviewMouseMove="PaletteButton_PreviewMouseMove" />
+                <Button Content="CSV part" Tag="CsvPart" Margin="0,2" Padding="4"
+                        Click="PaletteButton_Click"
+                        PreviewMouseLeftButtonDown="PaletteButton_PreviewMouseLeftButtonDown"
+                        PreviewMouseMove="PaletteButton_PreviewMouseMove" />
             </StackPanel>
 
             <!-- ===== Center: Nodify editor. NOT wrapped in a ScrollViewer: Nodify owns pan/zoom. ===== -->
@@ -452,6 +456,22 @@
                                                MaxWidth="170"
                                                HorizontalAlignment="Left"
                                                Style="{StaticResource NodeNoteText}" />
+                                    <!-- CSV part: part number, template, delimiter and columns, then the status line. Hidden for the others. -->
+                                    <TextBlock Text="{Binding CsvPartText, Mode=OneWay}"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-brush}"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="170"
+                                               HorizontalAlignment="Left"
+                                               Style="{StaticResource NodeNoteText}" />
+                                    <TextBlock Text="{Binding CsvPartStatus, Mode=OneWay}"
+                                               ToolTip="{Binding CsvPartStatus, Mode=OneWay}"
+                                               FontSize="{DynamicResource font-caption}"
+                                               Foreground="{DynamicResource text-muted-brush}"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="170"
+                                               HorizontalAlignment="Left"
+                                               Style="{StaticResource NodeNoteText}" />
                                     <StackPanel Orientation="Horizontal" Style="{StaticResource HiddenForFileIntake}">
                                         <TextBlock Text="{Binding State}" FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
                                         <TextBlock Text=" | rows: " FontSize="{DynamicResource font-caption}" Foreground="{DynamicResource text-brush}" />
@@ -520,6 +540,16 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
+                                <!-- CSV part: read-only in G6c (the part is chosen in Intake Studio in G6d). Hidden for the others. -->
+                                <TextBlock Text="{Binding Editor.SelectedNode.CsvPartText, Mode=OneWay}"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource text-brush}"
+                                           Style="{StaticResource NodeNoteText}" />
+                                <TextBlock Text="{Binding Editor.SelectedNode.CsvPartStatus, Mode=OneWay}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"
+                                           Foreground="{DynamicResource text-muted-brush}"
+                                           Style="{StaticResource NodeNoteText}" />
                                 <ItemsControl ItemsSource="{Binding Editor.SelectedNode.Settings}"
                                               ItemTemplate="{StaticResource SettingRowTemplate}" />
                                 <Button Content="Load preview"

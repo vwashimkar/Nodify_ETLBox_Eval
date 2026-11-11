@@ -138,6 +138,7 @@ public partial class MainViewModel
         try
         {
             _columnReadsTried.Clear();
+            _partReadsTried.Clear();
             Editor.FromProject(project, path);
             ForgetRunResults();
             SetProject(path, string.IsNullOrWhiteSpace(project.ProjectName) ? Path.GetFileNameWithoutExtension(path) : project.ProjectName);
@@ -281,6 +282,9 @@ public partial class MainViewModel
                 node.IsRefreshing = false;
             }
         }
+
+        // CSV part nodes: the locator and the run's reader (G6c); this validates again when it read anything.
+        await RefreshCsvPartColumnsAsync(token);
 
         if (!token.IsCancellationRequested)
         {

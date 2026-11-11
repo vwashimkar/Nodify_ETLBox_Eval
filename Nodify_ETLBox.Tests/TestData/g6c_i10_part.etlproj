@@ -1,0 +1,107 @@
+{
+  "formatVersion": 1,
+  "savedUtc": "2026-11-11T00:00:00Z",
+  "toolVersion": "1.0.0.0",
+  "projectName": "g6c_i10_part",
+  "nodes": [
+    {
+      "id": "5a698bee-8168-49c0-a980-69d559800d59",
+      "type": "FileIntake",
+      "name": "File intake",
+      "x": 0,
+      "y": 60,
+      "settings": {
+        "path": "C:\\codes\\Nodify_ETLBox_Eval\\Nodify_ETLBox.Tests\\TestData\\g6c_i10_example.txt",
+        "relativePath": "g6c_i10_example.txt",
+        "mode": "autodetect",
+        "encoding": "auto",
+        "maxFileSizeMb": 500
+      }
+    },
+    {
+      "id": "dfc707a9-c427-48c7-9890-29f03b39aaa0",
+      "type": "CsvPart",
+      "name": "CSV part",
+      "x": 220,
+      "y": 60,
+      "settings": {
+        "selector": "{\"formatVersion\":1,\"mode\":\"AutoDetect\",\"encoding\":\"auto\",\"template\":{\"formatVersion\":1,\"id\":\"9397da51-a30c-4a80-9280-ad0aaf62e0a0\",\"name\":\"g6c_i10_example\",\"createdUtc\":\"2026-11-11T04:29:00.2986334Z\",\"fingerprint\":{\"entries\":[{\"group\":[{\"format\":\"keyvalue\",\"delimiter\":null,\"columns\":null,\"header\":null}],\"repeats\":false},{\"group\":[{\"format\":\"csv\",\"delimiter\":\",\",\"columns\":5,\"header\":true}],\"repeats\":false},{\"group\":[{\"format\":\"text\",\"delimiter\":null,\"columns\":null,\"header\":null}],\"repeats\":false}],\"text\":\"keyvalue csv[,|5|h] text\"},\"parts\":[{\"format\":\"keyvalue\",\"name\":\"keyvalue-1\",\"delimiter\":null,\"header\":null,\"skipLines\":0,\"keyValueForm\":\"Colon\",\"columns\":null,\"anchor\":\"Instrument: TitroLine 7750\",\"from\":[{\"format\":\"keyvalue\",\"delimiter\":null,\"columns\":null,\"header\":null}],\"startsInside\":false,\"columnNames\":null},{\"format\":\"csv\",\"name\":\"csv-1\",\"delimiter\":\",\",\"header\":\"Yes\",\"skipLines\":0,\"keyValueForm\":null,\"columns\":5,\"anchor\":\"sample_id,weight_g,volume_ml,chloride_pct,result\",\"from\":[{\"format\":\"csv\",\"delimiter\":\",\",\"columns\":5,\"header\":true}],\"startsInside\":false,\"columnNames\":[\"sample_id\",\"weight_g\",\"volume_ml\",\"chloride_pct\",\"result\"]},{\"format\":\"text\",\"name\":\"text-1\",\"delimiter\":null,\"header\":null,\"skipLines\":0,\"keyValueForm\":null,\"columns\":null,\"anchor\":\"End of report\",\"from\":[{\"format\":\"text\",\"delimiter\":null,\"columns\":null,\"header\":null}],\"startsInside\":false,\"columnNames\":null}],\"notes\":null},\"partIndex\":1,\"expected\":{\"delimiter\":\",\",\"hasHeader\":true,\"skipLines\":0,\"columnCount\":5,\"columnNames\":[\"sample_id\",\"weight_g\",\"volume_ml\",\"chloride_pct\",\"result\"]},\"exampleSha256\":\"ca5103aa562cdb577048f6ceda60b8f07cef17c1ca4bc223c9c437fdaa03336d\",\"exampleFirstLine\":22,\"exampleLastLine\":27}"
+      }
+    },
+    {
+      "id": "277c5f49-b2af-4a27-8ea7-b4124b591fb4",
+      "type": "ParseValue",
+      "name": "ParseValue",
+      "x": 440,
+      "y": 60,
+      "settings": {
+        "sourceColumn": "sample_id",
+        "delimiterLevels": [
+          {
+            "delimiter": "-",
+            "mode": "Once"
+          },
+          {
+            "delimiter": "|",
+            "mode": "All"
+          }
+        ],
+        "trim": true,
+        "dropEmpty": true,
+        "slots": [
+          {
+            "name": "S1",
+            "columns": [
+              "weight_g",
+              "volume_ml",
+              "chloride_pct",
+              "result"
+            ]
+          }
+        ],
+        "excessPolicy": "Reject",
+        "duplicatePolicy": "Allow",
+        "carryColumns": {
+          "mode": "None",
+          "names": []
+        },
+        "outputShape": "Long"
+      }
+    },
+    {
+      "id": "18be922c-84d6-43ec-989f-3e1263083ed5",
+      "type": "DotNetObject",
+      "name": "DotNetObject",
+      "x": 660,
+      "y": 60,
+      "settings": {
+        "kind": "ListOfStringDictionary"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "fromNode": "5a698bee-8168-49c0-a980-69d559800d59",
+      "fromConnector": "Parts",
+      "toNode": "dfc707a9-c427-48c7-9890-29f03b39aaa0",
+      "toConnector": "Parts"
+    },
+    {
+      "fromNode": "dfc707a9-c427-48c7-9890-29f03b39aaa0",
+      "fromConnector": "Rows",
+      "toNode": "277c5f49-b2af-4a27-8ea7-b4124b591fb4",
+      "toConnector": "Rows"
+    },
+    {
+      "fromNode": "277c5f49-b2af-4a27-8ea7-b4124b591fb4",
+      "fromConnector": "Parsed",
+      "toNode": "18be922c-84d6-43ec-989f-3e1263083ed5",
+      "toConnector": "Parsed"
+    }
+  ],
+  "view": {
+    "zoom": 1,
+    "offsetX": 0,
+    "offsetY": 0
+  }
+}
