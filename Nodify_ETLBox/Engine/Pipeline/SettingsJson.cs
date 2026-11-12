@@ -11,7 +11,7 @@ namespace EtlDesigner.Engine.Pipeline;
 /// records directly: renaming a record property must not change the file format. Enums are
 /// written as their names. Property names are camelCase.
 /// </summary>
-public static class SettingsJson
+public static partial class SettingsJson
 {
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -49,25 +49,57 @@ public static class SettingsJson
     public static string Serialize(PipelineDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
+        JsonElement? part = null;
+        WritePart(definition, ref part);
+        JsonElement? guided = null;
+        WriteGuided(definition, ref guided);
         return JsonSerializer.Serialize(new PipelineJson
         {
             Version = PipelineJson.CurrentVersion,
             CsvFile = ToJson(definition.CsvFile),
             Columns = ToJson(definition.Columns),
-            ParseValue = ToJson(definition.ParseValue),
-            Output = ToJson(definition.Output)
+            // A guided pipeline runs no ParseValue, so it has none in its JSON.
+            ParseValue = guided is null ? ToJson(definition.ParseValue) : null,
+            Output = ToJson(definition.Output),
+            CsvPart = part,
+            Guided = guided
         }, Options);
     }
 
     public static PipelineDefinition DeserializePipelineDefinition(string json)
     {
         var dto = Read<PipelineJson>(json);
-        return new PipelineDefinition(
-            FromJson(dto.CsvFile ?? throw new JsonException("The pipeline has no csvFile settings.")),
-            FromJson(dto.Columns ?? new ColumnSelectionJson()),
-            FromJson(dto.ParseValue ?? throw new JsonException("The pipeline has no parseValue settings.")),
-            FromJson(dto.Output ?? new OutputJson()));
+        var csvFile = FromJson(dto.CsvFile ?? throw new JsonException("The pipeline has no csvFile settings."));
+        var columns = FromJson(dto.Columns ?? new ColumnSelectionJson());
+        var output = FromJson(dto.Output ?? new OutputJson());
+        PipelineDefinition? definition = null;
+        if (dto.Guided is { } guided)
+        {
+            ReadGuided(guided, csvFile, columns, output, ref definition);
+        }
+
+        definition ??= new PipelineDefinition(csvFile, columns,
+            FromJson(dto.ParseValue ?? throw new JsonException("The pipeline has no parseValue settings.")), output);
+        if (dto.CsvPart is { } part)
+        {
+            ReadPart(part, ref definition);
+        }
+
+        return definition;
     }
+
+    /// <summary>The CSV part selector as JSON; left null for a CsvFile pipeline (PipelineDefinition.Part.cs).</summary>
+    static partial void WritePart(PipelineDefinition definition, ref JsonElement? part);
+
+    /// <summary>Puts the CSV part selector into <paramref name="definition"/> (PipelineDefinition.Part.cs).</summary>
+    static partial void ReadPart(JsonElement part, ref PipelineDefinition definition);
+
+    /// <summary>The guided steps as JSON; left null for any other pipeline (PipelineDefinition.Part.cs).</summary>
+    static partial void WriteGuided(PipelineDefinition definition, ref JsonElement? guided);
+
+    /// <summary>Makes the guided definition of <paramref name="guided"/> (PipelineDefinition.Part.cs).</summary>
+    static partial void ReadGuided(JsonElement guided, CsvFileSettings csvFile, CsvColumnSelection columns, OutputSettings output,
+        ref PipelineDefinition? definition);
 
     private static CsvFileJson ToJson(CsvFileSettings settings)
     {
@@ -241,7 +273,18 @@ public static class SettingsJson
         public int Version { get; set; }
         public CsvFileJson? CsvFile { get; set; }
         public ColumnSelectionJson? Columns { get; set; }
+        /// <summary>Left out for a guided pipeline (task G7a); every other pipeline has it, so their JSON is unchanged.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public ParseValueJson? ParseValue { get; set; }
+
         public OutputJson? Output { get; set; }
+
+        /// <summary>Only a CSV part pipeline has it; left out of the JSON otherwise, so a CsvFile pipeline's JSON is unchanged.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JsonElement? CsvPart { get; set; }
+
+        /// <summary>Only a guided pipeline has it (task G7a); left out otherwise.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JsonElement? Guided { get; set; }
     }
 }

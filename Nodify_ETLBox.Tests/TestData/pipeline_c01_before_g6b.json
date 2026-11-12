@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "csvFile": {
+    "path": "C:\\codes\\Nodify_ETLBox_Eval\\Nodify_ETLBox.Tests\\bin\\Debug\\net10.0-windows\\SampleData\\TestData\\composite\\c01_basic.csv",
+    "separator": ",",
+    "hasHeader": true,
+    "skipLines": 0,
+    "encodingName": "utf-8",
+    "previewRows": 5
+  },
+  "columns": {
+    "mode": "Ignore",
+    "names": []
+  },
+  "parseValue": {
+    "sourceColumn": "sample",
+    "delimiterLevels": [
+      {
+        "delimiter": ":",
+        "mode": "Once"
+      },
+      {
+        "delimiter": "|",
+        "mode": "All"
+      }
+    ],
+    "trim": true,
+    "dropEmpty": true,
+    "slots": [
+      {
+        "name": "S1",
+        "columns": [
+          "r01",
+          "r02",
+          "r03"
+        ]
+      },
+      {
+        "name": "S2",
+        "columns": [
+          "r04",
+          "r05",
+          "r06"
+        ]
+      },
+      {
+        "name": "S3",
+        "columns": [
+          "r07",
+          "r08",
+          "r09"
+        ]
+      },
+      {
+        "name": "S4",
+        "columns": [
+          "r10",
+          "r11",
+          "r12"
+        ]
+      },
+      {
+        "name": "S5",
+        "columns": [
+          "r13",
+          "r14",
+          "r15"
+        ]
+      },
+      {
+        "name": "S6",
+        "columns": [
+          "r16",
+          "r17",
+          "r18"
+        ]
+      }
+    ],
+    "excessPolicy": "Reject",
+    "duplicatePolicy": "Allow",
+    "carryColumns": {
+      "mode": "None",
+      "names": []
+    },
+    "outputShape": "Long"
+  },
+  "output": {
+    "kind": "ListOfStringDictionary"
+  }
+}

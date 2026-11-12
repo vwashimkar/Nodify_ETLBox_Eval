@@ -7,8 +7,10 @@ namespace EtlDesigner.Engine.Pipeline;
 /// Everything needed to run CsvFile -> ParseValue -> DotNetObject without the editor.
 /// Immutable: the column selection is copied in and every read of it returns a new copy,
 /// because <see cref="CsvColumnSelection"/> itself is a mutable class.
+/// A pipeline that reads one CSV part of a larger file is in PipelineDefinition.Part.cs, which
+/// only a CSV part DLL compiles; without that file the hooks below do nothing.
 /// </summary>
-public sealed record PipelineDefinition
+public sealed partial record PipelineDefinition
 {
     private readonly CsvColumnSelection _columns;
 
@@ -34,12 +36,23 @@ public sealed record PipelineDefinition
     public OutputSettings Output { get; init; }
 
     public bool Equals(PipelineDefinition? other)
-        => other is not null
-           && CsvFile == other.CsvFile
-           && _columns.Mode == other._columns.Mode
-           && _columns.Names.SequenceEqual(other._columns.Names)
-           && SettingsJson.Serialize(ParseValue) == SettingsJson.Serialize(other.ParseValue)
-           && Output == other.Output;
+    {
+        var equal = other is not null
+                    && CsvFile == other.CsvFile
+                    && _columns.Mode == other._columns.Mode
+                    && _columns.Names.SequenceEqual(other._columns.Names)
+                    && SettingsJson.Serialize(ParseValue) == SettingsJson.Serialize(other.ParseValue)
+                    && Output == other.Output;
+        if (equal)
+        {
+            PartEquals(other!, ref equal);
+        }
+
+        return equal;
+    }
+
+    /// <summary>Sets <paramref name="equal"/> to false when the CSV parts differ (PipelineDefinition.Part.cs).</summary>
+    partial void PartEquals(PipelineDefinition other, ref bool equal);
 
     public override int GetHashCode() => HashCode.Combine(CsvFile, _columns.Mode, Output);
 }
@@ -48,7 +61,7 @@ public sealed record PipelineDefinition
 /// Checks a whole pipeline before Execute. Messages come from the node validators, prefixed by
 /// the node name. Pure apart from the file checks of <see cref="CsvFileValidator"/>.
 /// </summary>
-public static class PipelineDefinitionValidator
+public static partial class PipelineDefinitionValidator
 {
     public const string WrongShape = "Pipeline: the pipeline needs exactly CsvFile -> ParseValue -> DotNetObject.";
 
@@ -63,6 +76,13 @@ public static class PipelineDefinitionValidator
         IReadOnlyList<string>? graphChain = null)
     {
         var messages = new List<string>();
+
+        var handled = false;
+        ValidatePart(definition, keptColumns, graphChain, messages, ref handled);
+        if (handled)
+        {
+            return messages.Distinct().ToList();
+        }
 
         if (definition is null || (graphChain is not null && !graphChain.SequenceEqual(ExpectedChain, StringComparer.Ordinal)))
         {
@@ -80,4 +100,8 @@ public static class PipelineDefinitionValidator
 
         return messages.Distinct().ToList();
     }
+
+    /// <summary>Checks a CSV part pipeline and sets <paramref name="handled"/> (PipelineDefinition.Part.cs).</summary>
+    static partial void ValidatePart(PipelineDefinition? definition, IReadOnlyList<string>? keptColumns, IReadOnlyList<string>? graphChain,
+        List<string> messages, ref bool handled);
 }

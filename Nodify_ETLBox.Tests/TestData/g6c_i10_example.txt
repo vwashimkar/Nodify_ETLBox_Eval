@@ -1,0 +1,30 @@
+Instrument: TitroLine 7750
+Serial number: 4471-0093
+Software: LabControl 4.2.1
+Method: Chloride_by_AgNO3
+Operator: A. Verma
+Date: 2026-11-05
+Start time: 09:14:02
+End time: 10:02:47
+Laboratory: QC Lab 2
+Site: Kolkata
+Sample batch: B-2026-1105
+Temperature: 22.4 C
+Humidity: 41 %
+Calibration date: 2026-10-30
+Calibration status: OK
+Titrant: AgNO3 0.1 mol/L
+Titrant lot: T-88213
+Electrode: Ag Titrode
+Report version: 3
+Comment: routine release testing
+
+sample_id,weight_g,volume_ml,chloride_pct,result
+S-001,1.0021,12.31,4.35,PASS
+S-002,0.9987,12.02,4.27,PASS
+S-003,1.0104,13.40,4.70,FAIL
+S-004,1.0050,12.15,4.28,PASS
+S-005,0.9993,12.20,4.33,PASS
+
+End of report
+Printed by LabControl

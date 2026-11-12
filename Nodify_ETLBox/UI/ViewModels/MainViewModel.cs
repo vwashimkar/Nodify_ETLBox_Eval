@@ -64,6 +64,7 @@ public partial class MainViewModel : ObservableObject
         NodeFactory.CsvPreviewHandler = ShowCsvPreview;
         NodeFactory.ParseValueConfigureHandler = ShowParseValue;
         NodeFactory.FileIntakeConfigureHandler = ShowIntakeStudio;
+        NodeFactory.CsvPartConfigureHandler = ShowCsvPartSettings;
 
         HookCountryRefreshListeners();
         HookCsvFileValidationListeners();
@@ -130,7 +131,7 @@ public partial class MainViewModel : ObservableObject
     public string GenerateDllHint => GenerateDllBlockedReason ?? GenerateDllReadyHint;
 
     private bool IsNewPipelineGraph
-        => Editor.Nodes.Any(n => n.NodeType is NodeType.CsvFile or NodeType.ParseValue or NodeType.DotNetObject);
+        => Editor.Nodes.Any(n => n.NodeType is NodeType.CsvFile or NodeType.CsvPart or NodeType.ParseValue or NodeType.DotNetObject);
 
     /// <summary>The key of "last successful run": a SHA-256 of the definition JSON.</summary>
     internal static string PipelineHash(PipelineDefinition definition)
@@ -142,31 +143,52 @@ public partial class MainViewModel : ObservableObject
     /// <summary>The Execute button's tooltip: the reason it is disabled, or what it does.</summary>
     public string ExecuteHint => ExecuteBlockedReason ?? ExecuteReadyHint;
 
+    public const string ExecutePartChainReason = "Execute needs exactly File intake -> CSV part -> ParseValue -> DotNetObject, or File intake -> CSV part -> DotNetObject, on the canvas, connected in that order.";
+
     /// <summary>
-    /// The graph must be exactly CsvFile -> ParseValue -> DotNetObject (three nodes, two
-    /// connections), every node Configured, and no Issues line for those nodes.
+    /// The graph must be exactly CsvFile -> ParseValue -> DotNetObject (three nodes, two connections),
+    /// or File intake -> CSV part -> ParseValue -> DotNetObject (G6c: the File intake node and its
+    /// connection come in addition), every node Configured, and no Issues line for those nodes.
     /// </summary>
     public bool TryBuildExecuteDefinition(out PipelineDefinition? definition, out string? reason)
     {
         definition = null;
 
-        // An unknown node from a project file, and a File intake node (not run yet), are ignored.
+        // An unknown node from a project file, and a File intake node, are not pipeline steps.
         var nodes = Editor.Nodes.Where(n => n.NodeType is not (NodeType.Unknown or NodeType.FileIntake)).ToList();
         var csv = nodes.FirstOrDefault(n => n.NodeType == NodeType.CsvFile);
+        var part = nodes.FirstOrDefault(n => n.NodeType == NodeType.CsvPart);
         var parse = nodes.FirstOrDefault(n => n.NodeType == NodeType.ParseValue);
         var output = nodes.FirstOrDefault(n => n.NodeType == NodeType.DotNetObject);
 
         bool Linked(NodeViewModel? from, NodeViewModel? to)
             => from is not null && to is not null && Editor.Connections.Any(c => c.Source.ParentNode == from && c.Target.ParentNode == to);
 
-        if (nodes.Count != 3 || csv is null || parse is null || output is null
+        if (part is not null)
+        {
+            var intake = Editor.FileIntakeOf(part);
+            if (parse is null && nodes.Count == 2 && output is not null && intake is not null
+                && Editor.Connections.Count == 2 && Linked(intake, part) && Linked(part, output))
+            {
+                return TryBuildGuidedDefinition(part, output, out definition, out reason);
+            }
+
+            if (nodes.Count != 3 || parse is null || output is null || intake is null
+                || Editor.Connections.Count != 3 || !Linked(intake, part) || !Linked(part, parse) || !Linked(parse, output))
+            {
+                reason = ExecutePartChainReason;
+                return false;
+            }
+        }
+        else if (nodes.Count != 3 || csv is null || parse is null || output is null
             || Editor.Connections.Count != 2 || !Linked(csv, parse) || !Linked(parse, output))
         {
             reason = "Execute needs exactly CsvFile -> ParseValue -> DotNetObject on the canvas, connected in that order.";
             return false;
         }
 
-        foreach (var node in new[] { csv, parse, output })
+        var source = (part ?? csv)!;
+        foreach (var node in new[] { source, parse!, output! })
         {
             if (!string.Equals(node.ConfigurationStatus, "Configured", StringComparison.Ordinal))
             {
@@ -181,13 +203,31 @@ public partial class MainViewModel : ObservableObject
             }
         }
 
-        if (parse.ParseValueSettings is null)
+        if (parse!.ParseValueSettings is null)
         {
             reason = "Configure the ParseValue node first.";
             return false;
         }
 
-        definition = new PipelineDefinition(csv.GetCsvFileSettings(), csv.ColumnSelection, parse.ParseValueSettings, output.GetOutputSettings());
+        if (part is not null)
+        {
+            // Configured means the selector is readable and the File intake file is set (EditorViewModel.CsvPart).
+            definition = EtlDesigner.Engine.Pipeline.PipelineDefinition.ForCsvPart(Editor.CsvPartFilePath(part)!, part.CsvPartSelector!,
+                part.ColumnSelection, parse.ParseValueSettings, output!.GetOutputSettings());
+            var problems = PipelineDefinitionValidator.Validate(definition, part.KnownColumns is { } known ? part.ColumnSelection.KeptColumns(known) : null,
+                ["FileIntake", "CsvPart", "ParseValue", "DotNetObject"]);
+            if (problems.Count > 0)
+            {
+                definition = null;
+                reason = problems[0];
+                return false;
+            }
+
+            reason = null;
+            return true;
+        }
+
+        definition = new PipelineDefinition(csv!.GetCsvFileSettings(), csv.ColumnSelection, parse.ParseValueSettings, output!.GetOutputSettings());
         reason = null;
         return true;
     }
@@ -221,6 +261,7 @@ public partial class MainViewModel : ObservableObject
             _lastSuccessfulPipelineRun = (PipelineHash(definition), result.Columns.ToList());
         }
 
+        WritePipelineExecuted(result);
         UpdateCommandStates();
     }
 
@@ -249,7 +290,7 @@ public partial class MainViewModel : ObservableObject
 
     private void OnNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(NodeViewModel.ParseValueSettings))
+        if (e.PropertyName is nameof(NodeViewModel.ParseValueSettings) or nameof(NodeViewModel.CsvPartSelectorJson) or nameof(NodeViewModel.ColumnSplit))
         {
             ClearSuccessfulPipelineRun();
         }
@@ -291,11 +332,15 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Adds <see cref="FileIntakeNotRunMessage"/> once when the canvas has a File intake node.</summary>
-    private void AddFileIntakeNotRunLine(string prefix = "")
+    /// <summary>
+    /// Adds <see cref="FileIntakeNotRunMessage"/> once when the canvas has a File intake node. With
+    /// <paramref name="onlyUnused"/>, a File intake node that feeds a CSV part does not count (its pipeline is run).
+    /// </summary>
+    private void AddFileIntakeNotRunLine(string prefix = "", bool onlyUnused = false)
     {
         var line = prefix + FileIntakeNotRunMessage;
-        if (Editor.Nodes.Any(n => n.NodeType == NodeType.FileIntake) && !Editor.Issues.Contains(line))
+        if (Editor.Nodes.Any(n => n.NodeType == NodeType.FileIntake && !(onlyUnused && Editor.Connections.Any(c => c.Source.ParentNode == n)))
+            && !Editor.Issues.Contains(line))
         {
             Editor.Issues.Remove("No issues found.");
             Editor.Issues.Add(line);
@@ -406,6 +451,7 @@ public partial class MainViewModel : ObservableObject
     {
         Editor.ValidationStateChanged += (_, _) => UpdateCommandStates();
         Editor.ValidationStateChanged += (_, _) => _ = RefreshParseValueUpstreamColumnsAsync();
+        Editor.ValidationStateChanged += (_, _) => _ = RefreshCsvPartColumnsAsync();
 
         Editor.Nodes.CollectionChanged += (_, _) =>
         {
@@ -517,7 +563,8 @@ public partial class MainViewModel : ObservableObject
                 savePlan: json => node.IntakePlanJson = json,
                 confirm: question => _dialogService.AskYesNo("Intake Studio", question),
                 templates: _templateStore ?? AppTemplates.Shared,
-                templateSettings: _templateStore is null ? AppTemplates.Settings : null);
+                templateSettings: _templateStore is null ? AppTemplates.Settings : null,
+                usePart: selector => UseCsvPart(node, selector));
 
             _dialogService.ShowIntakeStudio(viewModel);
 
@@ -654,7 +701,7 @@ public partial class MainViewModel : ObservableObject
         }
         finally
         {
-            AddFileIntakeNotRunLine("Generate DLL: ");
+            AddFileIntakeNotRunLine("Generate DLL: ", onlyUnused: true);
         }
     }
 
@@ -810,7 +857,7 @@ public partial class MainViewModel : ObservableObject
 
     internal static bool IsInsideProjectFolder(string folderPath) => OutputFolderCheck.IsInsideProject(folderPath);
 
-    private static string SanitizeAssemblyName(string selectedName)
+    internal static string SanitizeAssemblyName(string selectedName)
     {
         if (string.IsNullOrWhiteSpace(selectedName))
         {

@@ -367,6 +367,7 @@ public partial class EditorViewModel : ObservableObject
         }
 
         ValidateCsvFileNodes();
+        ValidateCsvPartNodes();
         ValidateParseValueNodes();
         ValidateDotNetObjectNodes();
         AddProjectIssues();
@@ -379,9 +380,9 @@ public partial class EditorViewModel : ObservableObject
         ValidationStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>True when the canvas has a CsvFile, ParseValue or DotNetObject node and no legacy node.</summary>
+    /// <summary>True when the canvas has a CsvFile, CSV part, ParseValue or DotNetObject node and no legacy node.</summary>
     public bool HasOnlyNewStyleNodes
-        => !HasAnyLegacyNode() && Nodes.Any(n => n.NodeType is NodeType.CsvFile or NodeType.ParseValue or NodeType.DotNetObject);
+        => !HasAnyLegacyNode() && Nodes.Any(n => n.NodeType is NodeType.CsvFile or NodeType.CsvPart or NodeType.ParseValue or NodeType.DotNetObject);
 
     private bool HasAnyLegacyNode()
     {
@@ -406,8 +407,8 @@ public partial class EditorViewModel : ObservableObject
             NodeType.ResultJson
         };
 
-        // An unknown node from a project file, and a File intake node (not run yet), are ignored.
-        var nodeCount = Nodes.Count(n => n.NodeType is not (NodeType.Unknown or NodeType.FileIntake));
+        // An unknown node from a project file, and a File intake or CSV part node (not run by Run), are ignored.
+        var nodeCount = Nodes.Count(n => n.NodeType is not (NodeType.Unknown or NodeType.FileIntake or NodeType.CsvPart));
         if (nodeCount != expectedOrder.Length)
         {
             issues.Add($"Graph supports only a linear 5-node chain (CsvSource -> FilterByCountry -> ToJson -> ParseJson -> ResultJson). Found {nodeCount} nodes.");
@@ -542,27 +543,47 @@ public partial class EditorViewModel : ObservableObject
         if (!target.IsInput)
             return new ConnectionValidationResult { IsValid = false, ErrorMessage = "Target must be an input." };
 
-        // ParseValue takes its rows from one CsvFile node only (for now).
+        // A CSV part takes the parts of one File intake node (G6c).
+        if (target.ParentNode.NodeType == NodeType.CsvPart)
+        {
+            if (source.ParentNode.NodeType != NodeType.FileIntake)
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input accepts only a File intake node. Connect the output of a File intake node." };
+
+            if (target.IsConnected || Connections.Any(c => c.Target == target))
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input already has a connection. Remove it before connecting another node." };
+        }
+
+        // A File intake node feeds CSV part nodes only (for now).
+        if (source.ParentNode.NodeType == NodeType.FileIntake && target.ParentNode.NodeType != NodeType.CsvPart)
+            return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{source.ParentNode.Title}: the output feeds only a CSV part node for now. Connect it to the input of a CSV part node." };
+
+        // A CSV part feeds ParseValue, or DotNetObject directly (a guided pipeline, task G7a).
+        if (source.ParentNode.NodeType == NodeType.CsvPart && target.ParentNode.NodeType is not (NodeType.ParseValue or NodeType.DotNetObject))
+            return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{source.ParentNode.Title}: the output feeds only a ParseValue or DotNetObject node. Connect it to the input of one of those." };
+
+        // ParseValue takes its rows from one CsvFile or CSV part node only (for now).
         if (target.ParentNode.NodeType == NodeType.ParseValue)
         {
-            if (source.ParentNode.NodeType != NodeType.CsvFile)
-                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input accepts only a CsvFile node for now. Connect the output of a CsvFile node." };
+            if (source.ParentNode.NodeType is not (NodeType.CsvFile or NodeType.CsvPart))
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input accepts only a CsvFile or CSV part node for now. Connect the output of a CsvFile or CSV part node." };
 
             if (target.IsConnected || Connections.Any(c => c.Target == target))
                 return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input already has a connection. Remove it before connecting another node." };
         }
 
-        // DotNetObject takes the rows of one ParseValue node.
+        // DotNetObject takes the rows of one ParseValue node, or of one CSV part node (a guided pipeline, task G7a).
         if (target.ParentNode.NodeType == NodeType.DotNetObject)
         {
-            if (source.ParentNode.NodeType != NodeType.ParseValue)
-                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input accepts only a ParseValue node. Connect the output of a ParseValue node." };
+            if (source.ParentNode.NodeType is not (NodeType.ParseValue or NodeType.CsvPart))
+                return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input accepts only a ParseValue or CSV part node. Connect the output of one of those." };
 
             if (target.IsConnected || Connections.Any(c => c.Target == target))
                 return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"{target.ParentNode.Title}: the input already has a connection. Remove it before connecting another node." };
         }
 
-        if (source.Kind != target.Kind)
+        // A guided pipeline (task G7a) passes the part's rows straight to the output, so Rows may feed the Parsed input.
+        var guidedOutput = source.ParentNode.NodeType == NodeType.CsvPart && target.ParentNode.NodeType == NodeType.DotNetObject;
+        if (source.Kind != target.Kind && !guidedOutput)
             return new ConnectionValidationResult { IsValid = false, ErrorMessage = $"Port kind mismatch: {source.Kind} → {target.Kind}." };
 
         if (source.ParentNode == target.ParentNode)
@@ -584,10 +605,10 @@ public partial class EditorViewModel : ObservableObject
         return new ConnectionValidationResult { IsValid = true };
     }
 
-    /// <summary>True when a new-workflow node (ParseValue, DotNetObject) is at either end; their state depends on the connection.</summary>
+    /// <summary>True when a new-workflow node (ParseValue, DotNetObject, CSV part) is at either end; their state depends on the connection.</summary>
     private static bool InvolvesParseValue(ConnectionViewModel connection)
-        => connection.Source.ParentNode.NodeType is NodeType.ParseValue or NodeType.DotNetObject
-           || connection.Target.ParentNode.NodeType is NodeType.ParseValue or NodeType.DotNetObject;
+        => connection.Source.ParentNode.NodeType is NodeType.ParseValue or NodeType.DotNetObject or NodeType.CsvPart
+           || connection.Target.ParentNode.NodeType is NodeType.ParseValue or NodeType.DotNetObject or NodeType.CsvPart;
 
     /// <summary>
     /// Checks if nodeA is downstream of nodeB (i.e., nodeB → ... → nodeA).
@@ -831,15 +852,15 @@ public partial class EditorViewModel : ObservableObject
         }
     }
 
-    public const string DotNetObjectNotConnected = "Connect a ParseValue node to the input of this node.";
+    public const string DotNetObjectNotConnected = "Connect a ParseValue or CSV part node to the input of this node.";
 
-    /// <summary>Each problem once, with the node title in front. Configured = connected to a ParseValue node and a supported output type.</summary>
+    /// <summary>Each problem once, with the node title in front. Configured = connected to a ParseValue or CSV part node and a supported output type.</summary>
     private void ValidateDotNetObjectNodes()
     {
         foreach (var node in Nodes.Where(n => n.NodeType == NodeType.DotNetObject))
         {
             var messages = new List<string>();
-            var connected = Connections.Any(c => c.Target.ParentNode == node && c.Source.ParentNode.NodeType == NodeType.ParseValue);
+            var connected = Connections.Any(c => c.Target.ParentNode == node && c.Source.ParentNode.NodeType is NodeType.ParseValue or NodeType.CsvPart);
             if (!connected)
             {
                 messages.Add(DotNetObjectNotConnected);

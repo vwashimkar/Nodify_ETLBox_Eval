@@ -36,6 +36,7 @@ public sealed class ExecuteViewModel : ObservableObject
     private string? _outputNote;
     private DataView? _outputRowsView;
     private PipelineResult? _result;
+    private string? _partFactsText;
 
     /// <param name="pickFile">Shows a file dialog, starting at the given path; null when the user cancels.</param>
     /// <param name="copyText">Puts text on the clipboard.</param>
@@ -128,6 +129,40 @@ public sealed class ExecuteViewModel : ObservableObject
     {
         get => _summary;
         private set => SetProperty(ref _summary, value);
+    }
+
+    /// <summary>
+    /// A CSV part run only: "CSV part: file f.txt · template 'X' · Exact match, similarity 1.00 · part 2, lines 21 to 27"
+    /// (the facts known, also when the part was not found). Null for a CsvFile run.
+    /// </summary>
+    public string? PartFactsText
+    {
+        get => _partFactsText;
+        private set => SetProperty(ref _partFactsText, value);
+    }
+
+    /// <summary>The <see cref="PartFactsText"/> of a result's part facts, or null.</summary>
+    public static string? PartFacts(CsvPartRunFacts? facts)
+    {
+        if (facts is null)
+        {
+            return null;
+        }
+
+        var parts = new List<string> { $"file {facts.FileName}", $"template '{facts.TemplateName}'" };
+        if (facts.Match is not null || facts.Similarity is not null)
+        {
+            var match = facts.Match is null ? "" : facts.Match + " match";
+            var similarity = facts.Similarity is { } s ? "similarity " + s.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "";
+            parts.Add(string.Join(", ", new[] { match, similarity }.Where(t => t.Length > 0)));
+        }
+
+        if (facts.PartNumber is { } number)
+        {
+            parts.Add(facts.FirstLine is { } first && facts.LastLine is { } last ? $"part {number}, lines {first:N0} to {last:N0}" : $"part {number}");
+        }
+
+        return "CSV part: " + string.Join(" · ", parts);
     }
 
     /// <summary>"Cancelled after N records. Rows so far are shown." after a cancel; otherwise null.</summary>
@@ -223,6 +258,7 @@ public sealed class ExecuteViewModel : ObservableObject
         Message = result.Error;
         IsLicenceMessage = result.LicenceLimitReached;
         CancelledText = result.Cancelled ? $"Cancelled after {result.Counts.Read:N0} records. Rows so far are shown." : null;
+        PartFactsText = PartFacts(result.CsvPart);
 
         Summary = $"Read {result.Counts.Read:N0} · Parsed {result.Counts.Parsed:N0} · Rejected {result.Counts.Rejected:N0} · "
                   + $"Flagged {result.Counts.Flagged:N0} · Out {result.Counts.Out:N0} · {result.ElapsedMs:N0} ms";

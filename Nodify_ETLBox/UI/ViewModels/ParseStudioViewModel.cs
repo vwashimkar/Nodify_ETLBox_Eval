@@ -697,7 +697,10 @@ public partial class ParseStudioViewModel : ObservableObject
 
         _ = ShowCancelAfterDelayAsync(requestToken);
 
-        _currentLoadTask = _reader.ReadAsync(_upstream.Settings, requestToken);
+        // A CSV part's sample comes from the part only, never from the whole file (G6c).
+        _currentLoadTask = _upstream.Part is { } part
+            ? _reader.ReadAsync(part, _upstream.Settings.PreviewRows, requestToken)
+            : _reader.ReadAsync(_upstream.Settings, requestToken);
         CsvPreview preview;
 
         try

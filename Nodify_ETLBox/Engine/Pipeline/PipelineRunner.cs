@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using EtlDesigner.Engine.Csv;
 using EtlDesigner.Engine.Parsing;
 
@@ -25,13 +26,35 @@ public sealed record PipelineResult(
     bool Cancelled,
     long ElapsedMs,
     string? Error = null,
-    bool LicenceLimitReached = false);
+    bool LicenceLimitReached = false,
+    CsvPartRunFacts? CsvPart = null);
+
+/// <summary>
+/// What a CSV part run found (task G6b): the file NAME (never the path), its SHA-256, the layout
+/// template, how well the file matched it (<see cref="Match"/> is Exact, Close or None), and the part
+/// read with its first and last file lines and column names. Set for a CSV part pipeline only,
+/// also when the part was not found, so the host can log why: <see cref="Failure"/> is then the locator's
+/// reason (for example ColumnCountDiffers), null when the part was found.
+/// </summary>
+public sealed record CsvPartRunFacts(
+    string FileName,
+    string? Sha256,
+    Guid TemplateId,
+    string TemplateName,
+    double? Similarity,
+    string? Match,
+    int? PartNumber,
+    long? FirstLine,
+    long? LastLine,
+    IReadOnlyList<string> ColumnNames,
+    string? Failure = null);
 
 /// <summary>
 /// Runs CsvFile -> ParseValue -> DotNetObject over a whole file. The file is read through
-/// <see cref="CsvRecordReader"/>, so the caller's token never reaches ETLBox.
+/// <see cref="CsvRecordReader"/>, so the caller's token never reaches ETLBox. A pipeline that reads one
+/// CSV part of a file is started in PipelineRunner.Part.cs and then runs the same steps.
 /// </summary>
-public static class PipelineRunner
+public static partial class PipelineRunner
 {
     public static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
 
@@ -51,8 +74,40 @@ public static class PipelineRunner
     {
         ArgumentNullException.ThrowIfNull(definition);
 
+        Task<PipelineResult>? partRun = null;
+        RunCsvPart(definition, filePath, progress, token, ref partRun);
+        if (partRun is not null)
+        {
+            return await partRun;
+        }
+
         var stopwatch = Stopwatch.StartNew();
         var settings = string.IsNullOrWhiteSpace(filePath) ? definition.CsvFile : definition.CsvFile with { Path = filePath };
+        return await RunStepsAsync(definition, onRecord => new CsvRecordReader().ReadAsync(settings, onRecord, token), progress, stopwatch);
+    }
+
+    /// <summary>The step of a guided pipeline (task G7a) instead of ParseValue; left null otherwise (PipelineRunner.Part.cs).</summary>
+    /// <exception cref="ArgumentException">The guided settings cannot run on these columns.</exception>
+    static partial void PrepareGuided(PipelineDefinition definition, IReadOnlyList<string> keptColumns,
+        ref Func<ParseValueRecord, RecordOutcome>? step, ref IReadOnlyList<string>? columns);
+
+    /// <summary>Sets <paramref name="guided"/> for a guided pipeline (PipelineRunner.Part.cs).</summary>
+    static partial void IsGuidedDefinition(PipelineDefinition definition, ref bool guided);
+
+    /// <summary>Starts the run of a CSV part pipeline and sets <paramref name="run"/>; leaves it null otherwise (PipelineRunner.Part.cs).</summary>
+    static partial void RunCsvPart(PipelineDefinition definition, string? filePath, IProgress<PipelineProgress>? progress, CancellationToken token,
+        ref Task<PipelineResult>? run);
+
+    /// <summary>
+    /// ParseValue and output over the records that <paramref name="readRecords"/> delivers. A record or error with a
+    /// file line (a part read) gets that line in its reject and flag reasons.
+    /// </summary>
+    private static async Task<PipelineResult> RunStepsAsync(
+        PipelineDefinition definition,
+        Func<Func<CsvRecord, bool>, Task<CsvReadOutcome>> readRecords,
+        IProgress<PipelineProgress>? progress,
+        Stopwatch stopwatch)
+    {
         var selection = definition.Columns;
         var kind = definition.Output.Kind;
 
@@ -61,7 +116,8 @@ public static class PipelineRunner
         var flagged = new List<RecordIssue>();
         IReadOnlyList<string> outputColumns = Array.Empty<string>();
         int read = 0, parsed = 0, flaggedRecords = 0;
-        ParseValueStep? step = null;
+        Func<ParseValueRecord, RecordOutcome>? step = null;
+        var guided = false;
         int[]? keptIndexes = null;
         IReadOnlyList<string>? keptColumns = null;
         string? setupError = null;
@@ -83,7 +139,7 @@ public static class PipelineRunner
             return Result(outputErrors[0]);
         }
 
-        var outcome = await new CsvRecordReader().ReadAsync(settings, record =>
+        var outcome = await readRecords(record =>
         {
             if (step is null)
             {
@@ -92,8 +148,21 @@ public static class PipelineRunner
                     keptColumns = selection.KeptColumns(record.Columns);
                     var position = record.Columns.Select((c, i) => (c, i)).GroupBy(p => p.c).ToDictionary(g => g.Key, g => g.First().i);
                     keptIndexes = keptColumns.Select(c => position[c]).ToArray();
-                    step = ParseValueTransform.Prepare(keptColumns, definition.ParseValue);
-                    outputColumns = step.OutputColumns;
+                    Func<ParseValueRecord, RecordOutcome>? guidedStep = null;
+                    IReadOnlyList<string>? guidedColumns = null;
+                    PrepareGuided(definition, keptColumns, ref guidedStep, ref guidedColumns);
+                    if (guidedStep is not null)
+                    {
+                        guided = true;
+                        step = guidedStep;
+                        outputColumns = guidedColumns!;
+                    }
+                    else
+                    {
+                        var parseStep = ParseValueTransform.Prepare(keptColumns, definition.ParseValue);
+                        step = parseStep.Process;
+                        outputColumns = parseStep.OutputColumns;
+                    }
                 }
                 catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
                 {
@@ -109,10 +178,10 @@ public static class PipelineRunner
                 values[keptColumns![i]] = record.Values[keptIndexes[i]];
             }
 
-            var result = step.Process(new ParseValueRecord(record.RecordNumber, values));
+            var result = step(new ParseValueRecord(record.RecordNumber, values));
             if (result.Reject is not null)
             {
-                rejects.Add(result.Reject);
+                rejects.Add(AtFileLine(result.Reject, record.FileLine));
             }
             else
             {
@@ -121,7 +190,7 @@ public static class PipelineRunner
 
             if (result.Flags.Count > 0)
             {
-                flagged.AddRange(result.Flags);
+                flagged.AddRange(result.Flags.Select(f => AtFileLine(f, record.FileLine)));
                 flaggedRecords++;
             }
 
@@ -137,12 +206,12 @@ public static class PipelineRunner
             }
 
             return true;
-        }, token);
+        });
 
         foreach (var error in outcome.StructuralErrors)
         {
             read++;
-            rejects.Add(new RecordIssue(error.RecordNumber, StructuralReason(error.ErrorText)));
+            rejects.Add(AtFileLine(new RecordIssue(error.RecordNumber, StructuralReason(error.ErrorText)), error.FileLine));
         }
 
         if (outcome.Cancelled)
@@ -157,7 +226,11 @@ public static class PipelineRunner
 
         if (setupError is not null)
         {
-            return Result($"The file does not match the ParseValue settings: {setupError}");
+            var isGuided = guided;
+            IsGuidedDefinition(definition, ref isGuided);
+            return Result(isGuided
+                ? $"The file does not match the pipeline settings: {setupError}"
+                : $"The file does not match the ParseValue settings: {setupError}");
         }
 
         if (outcome.LicenceLimitReached)
@@ -172,6 +245,10 @@ public static class PipelineRunner
 
         return Result();
     }
+
+    /// <summary>The reason with the record's first file line, when the read was a part of a file; unchanged otherwise.</summary>
+    private static RecordIssue AtFileLine(RecordIssue issue, long? fileLine)
+        => fileLine is null ? issue : issue with { Reason = $"{issue.Reason} (file line {fileLine.Value.ToString("N0", CultureInfo.InvariantCulture)})" };
 
     /// <summary>One output row as the chosen .NET object kind. Only ListOfStringDictionary is built.</summary>
     private static Dictionary<string, string> Shape(ObjectKind kind, IReadOnlyList<string> columns, IReadOnlyList<string> row)

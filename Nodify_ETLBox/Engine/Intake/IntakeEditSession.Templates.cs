@@ -10,8 +10,11 @@ public sealed record TemplateSaveResult(EditResult Result, Guid? TemplateId);
 /// sentence. <see cref="PartsApplied"/> of the <see cref="PartsTotal"/> parts of the new layout come
 /// from the template; the others are left as detected. <see cref="Skipped"/> says, per template part
 /// (per repeat) that could not be placed, why; those lines stay as the detector found them.
+/// <see cref="PartMap"/> has one entry per part of the new layout: the index in the template's parts
+/// it was made from, or -1 for a part left as detected (one template part can make many parts in a
+/// repeating group). Empty when nothing was applied.
 /// </summary>
-public sealed record TemplateApplyResult(bool Ok, string Message, int PartsApplied, int PartsTotal, IReadOnlyList<string> Skipped);
+public sealed record TemplateApplyResult(bool Ok, string Message, int PartsApplied, int PartsTotal, IReadOnlyList<string> Skipped, IReadOnlyList<int>? PartMap = null);
 
 /// <summary>Layout templates (G5c1): save the corrected layout as a template, suggest templates for the automatic layout, apply one.</summary>
 public sealed partial class IntakeEditSession
@@ -44,6 +47,20 @@ public sealed partial class IntakeEditSession
 
         Log("template.saved", new() { ["templateId"] = template.Id.ToString("D"), ["templateName"] = template.Name, ["parts"] = template.Parts.Count });
         return new TemplateSaveResult(EditResult.Done, template.Id);
+    }
+
+    /// <summary>
+    /// The template of the current layout, as <see cref="SaveAsTemplate"/> builds it, without a store:
+    /// nothing is saved and nothing is logged. Part k of the template describes container k.
+    /// </summary>
+    public IntakeTemplate ToTemplate(string name, TemplateSettings? settings = null)
+    {
+        if (IntakeEditRules.NameProblem(name) is { } problem)
+        {
+            throw new ArgumentException(problem, nameof(name));
+        }
+
+        return BuildTemplate(name.Trim(), settings ?? new TemplateSettings());
     }
 
     /// <summary>
@@ -94,6 +111,13 @@ public sealed partial class IntakeEditSession
         var signatures = ScanSignatures();
         var layout = new List<ContainerInfo>(auto.Count);
         var checks = new List<ContainerValidation?>(auto.Count);
+        var origin = new List<int>(auto.Count);
+        var partIndex = new Dictionary<TemplatePart, int>(ReferenceEqualityComparer.Instance);
+        for (var k = 0; k < template.Parts.Count; k++)
+        {
+            partIndex.TryAdd(template.Parts[k], k);
+        }
+
         var skipped = new List<string>();
         var applied = 0;
         var next = 0;
@@ -105,6 +129,7 @@ public sealed partial class IntakeEditSession
             {
                 layout.Add(auto[next]);
                 checks.Add(_scanValidation[next]);
+                origin.Add(-1);
             }
         }
 
@@ -124,6 +149,7 @@ public sealed partial class IntakeEditSession
 
         void Place(TemplatePart part, bool repeat)
         {
+            var templateIndex = partIndex.GetValueOrDefault(part, -1);
             // In a repeat a numbered name of the detector ("csv-2") is not copied; the part keeps its own.
             part = repeat && NumberedName(part.Name) ? part with { Name = "" } : part;
             var from = part.From ?? [];
@@ -152,6 +178,7 @@ public sealed partial class IntakeEditSession
 
                 layout.Add(Shaped(bottom, part));
                 checks.Add(null);
+                origin.Add(templateIndex);
                 applied++;
                 return;
             }
@@ -181,6 +208,7 @@ public sealed partial class IntakeEditSession
             next = start + from.Count;
             var shaped = Shaped(merged, part);
             layout.Add(shaped);
+            origin.Add(templateIndex);
             // Only the name changed: the detector's check of these bytes still holds.
             checks.Add(from.Count == 1 && SameChecks(shaped, auto[start]) ? _scanValidation[start] : null);
             applied++;
@@ -249,7 +277,7 @@ public sealed partial class IntakeEditSession
         var message = $"Applied '{IntakeEditRules.Cut(template.Name)}': {applied.ToString("N0", CultureInfo.InvariantCulture)} of {IntakeText.Count(layout.Count, "part")}; "
             + $"{(left == 0 ? "none" : left.ToString("N0", CultureInfo.InvariantCulture))} left as detected";
         message += skipped.Count == 0 ? "." : $"; {IntakeText.Count(skipped.Count, "saved part")} could not be placed ({string.Join("; ", skipped.Distinct().Take(3))}).";
-        return new TemplateApplyResult(true, message, applied, layout.Count, skipped);
+        return new TemplateApplyResult(true, message, applied, layout.Count, skipped, origin);
     }
 
     // ---- Template internals ----------------------------------------------------------------------

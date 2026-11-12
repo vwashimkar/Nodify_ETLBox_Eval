@@ -60,6 +60,54 @@ public static class CsvPipelineDllGenerator
         "Engine/Pipeline/PipelineRunner.cs"
     };
 
+    /// <summary>
+    /// The extra Engine files of a DLL whose pipeline reads one CSV part of a larger file (task G6b): the part
+    /// halves of the reader, definition and runner, and the intake code that finds the part. Only such a DLL
+    /// compiles them, so a CsvFile DLL is built from exactly the files above. Each one is an EmbeddedResource.
+    /// </summary>
+    public static readonly IReadOnlyList<string> CsvPartSourceFiles = new[]
+    {
+        "Engine/Csv/CsvRecordReader.Part.cs",
+        "Engine/Pipeline/PipelineDefinition.Part.cs",
+        "Engine/Pipeline/PipelineRunner.Part.cs",
+        "Engine/Pipeline/ColumnSplit.cs",
+        "Engine/Intake/AutoDetector.cs",
+        "Engine/Intake/CsvPartLocator.cs",
+        "Engine/Intake/CsvPartSelector.cs",
+        "Engine/Intake/IntakeContracts.cs",
+        "Engine/Intake/IntakeEdit.cs",
+        "Engine/Intake/IntakeEditSession.cs",
+        "Engine/Intake/IntakeEditSession.Templates.cs",
+        "Engine/Intake/IntakeEncoding.cs",
+        "Engine/Intake/IntakeModel.cs",
+        "Engine/Intake/IntakePlan.cs",
+        "Engine/Intake/IntakePlanParts.cs",
+        "Engine/Intake/IntakeReader.cs",
+        "Engine/Intake/IntakeScanService.cs",
+        "Engine/Intake/IntakeSources.cs",
+        "Engine/Intake/IntakeTemplate.cs",
+        "Engine/Intake/IntakeText.cs",
+        "Engine/Intake/IntakeValidation.cs",
+        "Engine/Intake/IntakeValidator.cs",
+        "Engine/Intake/LineIndexer.cs",
+        "Engine/Intake/MarkerScanner.cs",
+        "Engine/Intake/PartStream.cs",
+        "Engine/Intake/RowShape.cs",
+        "Engine/Intake/StructureTrackers.cs",
+        "Engine/Intake/TemplateStore.cs",
+        "Engine/Intake/TextFileLineageLog.cs",
+        "Engine/Intake/YamlCheck.cs",
+        "Engine/Intake/YamlShape.cs"
+    };
+
+    /// <summary>The Engine files compiled into the DLL of <paramref name="definition"/>.</summary>
+    public static IReadOnlyList<string> SourceFilesFor(PipelineDefinition definition)
+        => definition.CsvPart is null ? SourceFiles : SourceFiles.Concat(CsvPartSourceFiles).ToList();
+
+    /// <summary>What a CSV part DLL returns when YamlDotNet.dll cannot be loaded (the part search needs it).</summary>
+    public const string MissingYamlMessage =
+        "YamlDotNet.dll was not found next to the pipeline DLL; copy YamlDotNet.dll (version 18.1.0) into the app folder and run again.";
+
     /// <summary>The public types the generated wrapper defines; the entry class may not use these names.</summary>
     public static readonly IReadOnlyList<string> PublicTypeNames = new[] { "PipelineRunResult", "RejectInfo", "PipelineRunProgress" };
 
@@ -145,9 +193,9 @@ public static class CsvPipelineDllGenerator
 
             var definitionJson = SettingsJson.Serialize(request.Definition);
             var sources = new List<(string FileName, string Content)>();
-            foreach (var rel in SourceFiles)
+            foreach (var rel in SourceFilesFor(request.Definition))
             {
-                sources.Add((Path.GetFileName(rel), MakeTypesInternal(DllGenerator.ReadSourceContent(rel))));
+                sources.Add((Path.GetFileName(rel), MakeTypesInternal(ReplaceGeneratedRegex(DllGenerator.ReadSourceContent(rel)))));
             }
 
             sources.Add(("Generated.GlobalUsings.g.cs", GlobalUsings));
@@ -220,6 +268,40 @@ public static class CsvPipelineDllGenerator
     }
 
     /// <summary>
+    /// <c>[GeneratedRegex(pattern[, options])] partial Regex Name();</c> needs the regex source generator, which this
+    /// compile does not run (task G6b, YamlShape.cs). Each such method becomes a cached <c>new Regex(pattern[, options])</c>
+    /// with the same arguments; .NET documents both as the same regex semantics [D]. Other forms are left as they are,
+    /// so the compiler names them.
+    /// </summary>
+    internal static string ReplaceGeneratedRegex(string source)
+    {
+        if (!source.Contains("GeneratedRegex", StringComparison.Ordinal))
+        {
+            return source;
+        }
+
+        var root = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest)).GetRoot();
+        var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Select(m => (Method: m, Attribute: m.AttributeLists.SelectMany(a => a.Attributes)
+                .FirstOrDefault(a => a.Name.ToString() is "GeneratedRegex" or "GeneratedRegexAttribute")))
+            .Where(x => x.Attribute is { ArgumentList.Arguments.Count: 1 or 2 } && x.Method.Body is null && x.Method.ExpressionBody is null)
+            .OrderByDescending(x => x.Method.SpanStart)
+            .ToList();
+
+        var text = new StringBuilder(source);
+        foreach (var (method, attribute) in methods)
+        {
+            var name = method.Identifier.Text;
+            var modifiers = string.Join(" ", method.Modifiers.Where(t => !t.IsKind(SyntaxKind.PartialKeyword)).Select(t => t.Text));
+            var replacement = $"private static global::System.Text.RegularExpressions.Regex? __{name};\n\n    "
+                              + $"{modifiers} global::System.Text.RegularExpressions.Regex {name}() => __{name} ??= new global::System.Text.RegularExpressions.Regex{attribute!.ArgumentList};";
+            text.Remove(method.Span.Start, method.Span.Length).Insert(method.Span.Start, replacement);
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>
     /// A raw string literal that cannot be broken by the text: the quote run is longer than any run
     /// of quotes inside, and the text sits on its own lines.
     /// </summary>
@@ -237,15 +319,75 @@ public static class CsvPipelineDllGenerator
         return $"{quotes}\n{text.ReplaceLineEndings("\n")}\n{quotes}";
     }
 
+    /// <summary>The additive result fields of a CSV part DLL: what the run found (the file name, never its path).</summary>
+    private const string PartResultFields = """
+,
+    string? FileName = null,
+    string? Sha256 = null,
+    Guid? TemplateId = null,
+    string? TemplateName = null,
+    double? Similarity = null,
+    string? Match = null,
+    int? PartNumber = null,
+    long? FirstLine = null,
+    long? LastLine = null,
+    IReadOnlyList<string>? PartColumns = null
+""";
+
+    /// <summary>Map of a CSV part DLL: the CsvFile mapping plus the facts. ENGINE is replaced by the engine namespace.</summary>
+    private const string PartMap = """
+MapCore(r) with
+    {
+        FileName = r.CsvPart?.FileName,
+        Sha256 = r.CsvPart?.Sha256,
+        TemplateId = r.CsvPart?.TemplateId,
+        TemplateName = r.CsvPart?.TemplateName,
+        Similarity = r.CsvPart?.Similarity,
+        Match = r.CsvPart?.Match,
+        PartNumber = r.CsvPart?.PartNumber,
+        FirstLine = r.CsvPart?.FirstLine,
+        LastLine = r.CsvPart?.LastLine,
+        PartColumns = r.CsvPart?.ColumnNames.ToArray()
+    };
+
+    private static PipelineRunResult MapCore(ENGINE.PipelineResult r) => new(
+""";
+
+    /// <summary>The YamlDotNet check of a CSV part DLL: a missing YamlDotNet.dll gives one sentence instead of a load error.</summary>
+    private const string PartMembers = """
+
+    private static string? MissingYaml()
+    {
+        try
+        {
+            System.Reflection.Assembly.Load(new System.Reflection.AssemblyName("YamlDotNet"));
+            return null;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or BadImageFormatException)
+        {
+            return "YamlDotNet.dll was not found next to the pipeline DLL; copy YamlDotNet.dll (version 18.1.0) into the app folder and run again.";
+        }
+    }
+
+""";
+
     private static string BuildEntrySource(CsvPipelineDllRequest request, string definitionJson)
     {
         const string engine = "global::EtlDesigner.Engine.Pipeline";
         var columns = string.Join(", ", request.OutputColumns.Select(c => SymbolDisplay.FormatLiteral(c, quote: true)));
         var cls = request.AssemblyName;
+        var isPart = request.Definition.CsvPart is not null;
+        var header = isPart
+            ? $"// Generated by Nodify_ETLBox_Eval: {PartChain(request.Definition)}. It finds one CSV part of a larger\n"
+              + "// file by its structure and reads only that part. Needs ETLBox, ETLBox.Csv, ETLBox.Json 3.11.1 and YamlDotNet 18.1.0"
+            : "// Generated by Nodify_ETLBox_Eval: CsvFile -> ParseValue -> DotNetObject.\n// Needs the ETLBox and ETLBox.Csv 3.11.1 packages";
+        var partFields = isPart ? PartResultFields : string.Empty;
+        var yamlCheck = isPart ? "\n        if (MissingYaml() is { } missing)\n        {\n            return Failed(missing);\n        }\n" : string.Empty;
+        var partMembers = isPart ? PartMembers : string.Empty;
+        var map = isPart ? PartMap.Replace("ENGINE", engine) : "new(";
 
         return $$"""
-// Generated by Nodify_ETLBox_Eval: CsvFile -> ParseValue -> DotNetObject.
-// Needs the ETLBox and ETLBox.Csv 3.11.1 packages at run time. The consuming app does its own
+{{header}} at run time. The consuming app does its own
 // ETLBox licensing; this DLL contains no licence key and never sets one.
 #nullable enable
 namespace {{request.Namespace}};
@@ -266,7 +408,7 @@ public sealed record PipelineRunResult(
     bool Cancelled,
     string? Error,
     bool LicenceLimitReached,
-    long ElapsedMs);
+    long ElapsedMs{{partFields}});
 
 /// <summary>The pipeline with its settings baked in.</summary>
 public static class {{cls}}
@@ -288,7 +430,7 @@ public static class {{cls}}
         {
             return Failed("No file was given. Pass the path of the CSV file to run.");
         }
-
+{{yamlCheck}}
         try
         {
             var relay = progress is null ? null : new ProgressRelay(progress);
@@ -306,7 +448,7 @@ public static class {{cls}}
 
     private static (int, int, int, int, int) Counts({{engine}}.PipelineCounts c) => (c.Read, c.Parsed, c.Rejected, c.Flagged, c.Out);
 
-    private static PipelineRunResult Map({{engine}}.PipelineResult r) => new(
+    private static PipelineRunResult Map({{engine}}.PipelineResult r) => {{map}}
         r.Rows,
         r.Columns.ToArray(),
         r.Rejects.Select(i => new RejectInfo(i.RecordNumber, i.Reason)).ToArray(),
@@ -325,7 +467,7 @@ public static class {{cls}}
 
         public void Report({{engine}}.PipelineProgress value) => _target.Report(new PipelineRunProgress(Counts(value.Counts), value.ElapsedMs));
     }
-}
+{{partMembers}}}
 
 """;
     }
@@ -333,6 +475,12 @@ public static class {{cls}}
     private static string BuildReadme(CsvPipelineDllRequest request, string definitionJson, DateTime generatedAt)
     {
         var text = new StringBuilder();
+        if (request.Definition.CsvPart is not null)
+        {
+            AppendPartReadme(text, request, definitionJson, generatedAt);
+            return text.ToString();
+        }
+
         text.AppendLine($"{request.AssemblyName}.dll: CsvFile -> ParseValue -> DotNetObject");
         text.AppendLine($"Generated: {generatedAt:yyyy-MM-dd HH:mm}");
         text.AppendLine();
@@ -354,5 +502,51 @@ public static class {{cls}}
         text.AppendLine("Baked settings (the path is the file used at design time; RunAsync takes the file to run):");
         text.AppendLine(definitionJson);
         return text.ToString();
+    }
+
+    /// <summary>The steps of a CSV part DLL as text; a guided pipeline (task G7a) has no ParseValue.</summary>
+    private static string PartChain(PipelineDefinition definition)
+        => definition.Guided is null ? "CSV part -> ParseValue -> DotNetObject" : "CSV part -> DotNetObject";
+
+    /// <summary>The README of a CSV part DLL: what it reads, what to deploy, and each failure in one line.</summary>
+    private static void AppendPartReadme(StringBuilder text, CsvPipelineDllRequest request, string definitionJson, DateTime generatedAt)
+    {
+        var part = request.Definition.CsvPart!;
+        text.AppendLine($"{request.AssemblyName}.dll: {PartChain(request.Definition)}");
+        text.AppendLine($"Generated: {generatedAt:yyyy-MM-dd HH:mm}");
+        text.AppendLine();
+        text.AppendLine("What it does:");
+        text.AppendLine($"  It reads one CSV part of a larger file: the part '{part.PartName}' of the example layout. It scans the file,");
+        text.AppendLine("  finds the part by the file's structure (the saved layout), checks it, and reads only that part.");
+        text.AppendLine("  It writes no file: no lineage log and no templates. The facts of the run come back in the result");
+        text.AppendLine("  (FileName, Sha256, TemplateId, TemplateName, Similarity, Match, PartNumber, FirstLine, LastLine, PartColumns).");
+        text.AppendLine();
+        text.AppendLine("Put these next to the DLL (or reference the NuGet packages in the consuming app):");
+        text.AppendLine("  ETLBox.dll, ETLBox.Csv.dll, ETLBox.Json.dll (3.11.1), CsvHelper.dll (as ETLBox.Csv needs it), YamlDotNet.dll (18.1.0).");
+        text.AppendLine("  Generate DLL does not copy them. Without YamlDotNet.dll, RunAsync returns this Error:");
+        text.AppendLine($"  {MissingYamlMessage}");
+        text.AppendLine("Target framework: net10.0.");
+        text.AppendLine();
+        text.AppendLine("Licence:");
+        text.AppendLine("  The free edition stops after 5,000 rows read; the consuming app needs its own valid ETLBox licence.");
+        text.AppendLine("  This DLL contains no licence key and never sets one.");
+        text.AppendLine();
+        text.AppendLine("When the part is not found, RunAsync returns no rows and one sentence in Error:");
+        text.AppendLine("  The file is missing or open in another program.");
+        text.AppendLine("  The file does not look like the example (the similarity is given).");
+        text.AppendLine("  The part was not found in the file.");
+        text.AppendLine("  The file has several parts like it; the pipeline reads one.");
+        text.AppendLine("  The part is not a table, or it has another delimiter.");
+        text.AppendLine("  The part has another number of columns, or other column names.");
+        text.AppendLine("  On the example file itself: the part is no longer where it was chosen.");
+        text.AppendLine();
+        text.AppendLine("Usage:");
+        text.AppendLine();
+        text.Append(UsageExample(request.AssemblyName, request.Namespace));
+        text.AppendLine();
+        text.AppendLine($"Output columns: {string.Join(", ", request.OutputColumns)}");
+        text.AppendLine();
+        text.AppendLine("Baked settings (csvFile.path is the example file; csvPart is the saved layout and the expected columns; RunAsync takes the file to run):");
+        text.AppendLine(definitionJson);
     }
 }

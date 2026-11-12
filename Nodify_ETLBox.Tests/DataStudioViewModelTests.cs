@@ -285,14 +285,106 @@ public class DataStudioViewModelTests
     [Fact]
     public async Task C10_WithPreviewRows6000_ShowsTheFirst1000Rows_WithoutALicenceStop()
     {
-        var node = CreateCsvNode(CompositePath("c10_large.csv"), "Comma", true, "0", "utf-8", "5");
-        var vm = new DataStudioViewModel(node, BuildSettings(node)) { PreviewRows = 6000 };
+        // The node asks for 6,000 preview rows, so the window opens with the value cut to 1,000. G6d: the test
+        // used to set PreviewRows after opening, which also schedules a delayed reload (400 ms). Without a UI
+        // thread an older load could switch the spinner off after that reload had switched it on, and the test
+        // saw a false "done" (in the app both run on the UI thread). Now the explicit reload below is the newest
+        // and only load, so its end is final. The delayed reload's order is covered by
+        // ExplicitReload_CancelledByTheDelayedReload_KeepsTheSpinner_AndTheNewestLoadShowsTheRows.
+        var node = CreateCsvNode(CompositePath("c10_large.csv"), "Comma", true, "0", "utf-8", "6000");
+        var reader = new CsvPreviewReader();
+        var requests = new List<int>();
+        var vm = new DataStudioViewModel(node, BuildSettings(node), read: (settings, token) =>
+        {
+            lock (requests)
+            {
+                requests.Add(settings.PreviewRows);
+            }
+
+            return reader.ReadAsync(settings, token);
+        });
+        Assert.Equal(1000, vm.PreviewRows);
+        Assert.Equal(DataStudioViewModel.PreviewRowsLimitMessage, vm.PreviewRowsMessage);
 
         await TestTimeout.Run(() => vm.ReloadNowAsync());
 
+        lock (requests)
+        {
+            Assert.Equal(new[] { 1000, 1000 }, requests); // the constructor's load and the explicit one, no delayed reload
+        }
+
+        Assert.True(vm.PreviewError is null, $"Preview error: {vm.PreviewError}");
+        Assert.False(vm.IsLoading);
+        Assert.Equal(1000, vm.LoadedRowCount);
+    }
+
+    /// <summary>
+    /// The explicit reload is cancelled by the delayed reload that setting PreviewRows schedules.
+    /// The fake reader holds every read until the test releases it, so the order is forced:
+    /// the explicit call returns with 0 rows and no error while the spinner stays on, and the
+    /// newest load then shows the rows. A user sees the spinner, never an empty grid without it.
+    /// </summary>
+    [Fact]
+    public async Task ExplicitReload_CancelledByTheDelayedReload_KeepsTheSpinner_AndTheNewestLoadShowsTheRows()
+    {
+        var node = CreateCsvNode(CompositePath("c01_basic.csv"), "Comma", true, "0", "utf-8", "5");
+        var reads = new List<(CsvFileSettings Settings, TaskCompletionSource<CsvPreview> Result)>();
+        var thirdRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = new DataStudioViewModel(node, BuildSettings(node), read: (settings, _) =>
+        {
+            var result = new TaskCompletionSource<CsvPreview>(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (reads)
+            {
+                reads.Add((settings, result));
+                if (reads.Count == 3)
+                {
+                    thirdRead.TrySetResult();
+                }
+            }
+
+            return result.Task;
+        });
+        CsvFileSettings? LastRequest() { lock (reads) { return reads[^1].Settings; } }
+        var loaded = LoadOf1000Ended(vm, LastRequest);
+
+        vm.PreviewRows = 6000;
+        var explicitReload = vm.ReloadNowAsync();
+        await TestTimeout.Run(() => thirdRead.Task);
+
+        reads[0].Result.SetResult(Rows(5));
+        reads[1].Result.SetResult(Rows(1000));
+        await TestTimeout.Run(() => explicitReload);
+
+        Assert.Equal(1000, reads[1].Settings.PreviewRows);
+        Assert.Equal(1000, reads[2].Settings.PreviewRows);
+        Assert.Equal(0, vm.LoadedRowCount);
+        Assert.Null(vm.PreviewError);
+        Assert.True(vm.IsLoading, "The spinner must stay on while the newest load runs.");
+
+        reads[2].Result.SetResult(Rows(1000));
+        await TestTimeout.Run(() => loaded);
+
+        Assert.False(vm.IsLoading);
         Assert.Null(vm.PreviewError);
         Assert.Equal(1000, vm.LoadedRowCount);
     }
+
+    /// <summary>Ends when the spinner goes off after a load of 1,000 rows was asked for.</summary>
+    private static Task LoadOf1000Ended(DataStudioViewModel vm, Func<CsvFileSettings?> lastRequest)
+    {
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DataStudioViewModel.IsLoading) && !vm.IsLoading && lastRequest()?.PreviewRows == 1000)
+            {
+                ended.TrySetResult();
+            }
+        };
+        return ended.Task;
+    }
+
+    private static CsvPreview Rows(int count)
+        => new(["id"], Enumerable.Range(1, count).Select(i => (IReadOnlyList<string>)[i.ToString()]).ToList(), false, null, 1);
 
     [Fact]
     public async Task LicenceStop_HasNoFormatHint_AndClearsTheOldData()

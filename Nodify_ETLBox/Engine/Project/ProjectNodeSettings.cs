@@ -18,10 +18,16 @@ public static class ProjectNodeSettings
     private const string Columns = "columns";
 
     /// <summary>Optional properties the serializers leave out when empty. They are known, so never kept from the old file.</summary>
-    private static readonly HashSet<string> KnownOptional = new() { RelativePath, "subPartColumn", LayoutPlan };
+    private static readonly HashSet<string> KnownOptional = new() { RelativePath, "subPartColumn", LayoutPlan, Selector, Columns, Split };
 
     /// <summary>File intake: the saved layout (an <c>IntakePlan</c> as JSON). Absent when the layout is automatic.</summary>
     public const string LayoutPlan = "layoutPlan";
+
+    /// <summary>CSV part: the part selector (<c>CsvPartSelectorJson</c>). Absent while no part is chosen.</summary>
+    public const string Selector = "selector";
+
+    /// <summary>CSV part: the column split of a guided pipeline (task G7a). Absent when there is none.</summary>
+    public const string Split = "split";
 
     public static JsonElement WriteCsvFile(CsvFileSettings settings, CsvColumnSelection columns, string? relativePath, JsonElement? loaded = null)
     {
@@ -147,6 +153,64 @@ public static class ProjectNodeSettings
         => settings.EnumerateObject()
             .Where(p => p.Name != RelativePath)
             .ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString()! : p.Value.GetRawText());
+
+    /// <summary>
+    /// A CSV part node: its selector, as one JSON string (like <see cref="LayoutPlan"/>), written as it
+    /// is, so a selector this version cannot read is kept; the column choice only when it is not the default
+    /// (keep all), and the column split only when there is one (task G7a). Nothing derived (read columns,
+    /// location) is saved, so a project without a column choice or split is written as before.
+    /// </summary>
+    public static JsonElement WriteCsvPart(string? selectorJson, JsonElement? loaded = null, CsvColumnSelection? columns = null,
+        ColumnSplitSettings? split = null)
+    {
+        var json = new JsonObject();
+        if (selectorJson is not null)
+        {
+            json[Selector] = JsonValue.Create(selectorJson);
+        }
+
+        if (columns is not null && (columns.Mode != CsvColumnSelectionMode.Ignore || columns.Names.Count > 0))
+        {
+            json[Columns] = JsonNode.Parse(SettingsJson.Serialize(columns));
+        }
+
+        if (split is not null)
+        {
+            json[Split] = JsonNode.Parse(ColumnSplit.Serialize(new GuidedSteps(split)))![nameof(Split).ToLowerInvariant()]!.DeepClone();
+        }
+
+        return Finish(json, loaded);
+    }
+
+    /// <summary>A CSV part's column choice; keep all when none is saved.</summary>
+    public static CsvColumnSelection ReadCsvPartColumns(JsonElement settings)
+        => settings.ValueKind == JsonValueKind.Object && settings.TryGetProperty(Columns, out var element)
+            ? SettingsJson.DeserializeColumnSelection(element.GetRawText())
+            : new CsvColumnSelection();
+
+    /// <summary>A CSV part's column split, or null when none is saved or it cannot be read (a damaged one never stops a load).</summary>
+    public static ColumnSplitSettings? ReadCsvPartSplit(JsonElement settings)
+    {
+        if (settings.ValueKind != JsonValueKind.Object || !settings.TryGetProperty(Split, out var element) || element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        try
+        {
+            return ColumnSplit.Deserialize($"{{\"split\":{element.GetRawText()}}}").Split;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The saved selector text, or null when none is saved. An object (not a string) is read as its JSON text.</summary>
+    public static string? ReadCsvPartSelector(JsonElement settings)
+        => settings.ValueKind == JsonValueKind.Object && settings.TryGetProperty(Selector, out var selector) && selector.ValueKind != JsonValueKind.Null
+            ? selector.ValueKind == JsonValueKind.String ? selector.GetString() : selector.GetRawText()
+            : null;
 
     public static string? ReadRelativePath(JsonElement settings)
         => settings.TryGetProperty(RelativePath, out var element) && element.ValueKind == JsonValueKind.String

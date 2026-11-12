@@ -11,12 +11,16 @@ namespace EtlDesigner.Engine.Csv;
 /// <summary>
 /// One data record. <see cref="RecordNumber"/> is 1-based from the first data record: header and
 /// skipped lines are not counted, and a record over two lines counts once (spec section 0).
-/// <see cref="Columns"/> is the same list for every record of a read.
+/// <see cref="Columns"/> is the same list for every record of a read. <see cref="FileLine"/> is the
+/// record's first line in the file, set only when a part of a file is read (null for a whole file).
 /// </summary>
-public sealed record CsvRecord(int RecordNumber, IReadOnlyList<string> Columns, IReadOnlyList<string> Values);
+public sealed record CsvRecord(int RecordNumber, IReadOnlyList<string> Columns, IReadOnlyList<string> Values, long? FileLine = null);
 
-/// <summary>A record ETLBox could not parse (LinkErrorTo). <see cref="RecordNumber"/> is 0 when the text has no row number.</summary>
-public sealed record CsvStructuralError(int RecordNumber, string ErrorText);
+/// <summary>
+/// A record ETLBox could not parse (LinkErrorTo). <see cref="RecordNumber"/> is 0 when the text has no row number.
+/// <see cref="FileLine"/> is the record's first line in the file, set only when a part of a file is read.
+/// </summary>
+public sealed record CsvStructuralError(int RecordNumber, string ErrorText, long? FileLine = null);
 
 /// <summary>How a read ended.</summary>
 public sealed record CsvReadOutcome(
@@ -34,13 +38,30 @@ public sealed record CsvReadOutcome(
 /// keeping the records. The preview (<see cref="CsvPreviewReader"/>) and the full run both read
 /// through this class, so there is one CSV code path.
 /// </summary>
-public sealed class CsvRecordReader
+public sealed partial class CsvRecordReader
 {
+    public const string PartChangedMessage = "The file is shorter than when its parts were found; read the file again.";
+
     /// <param name="onRecord">Called for each record on an ETLBox thread. Return false to stop reading.</param>
-    public async Task<CsvReadOutcome> ReadAsync(CsvFileSettings settings, Func<CsvRecord, bool> onRecord, CancellationToken token)
+    public Task<CsvReadOutcome> ReadAsync(CsvFileSettings settings, Func<CsvRecord, bool> onRecord, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(onRecord);
+        return ReadCoreAsync(settings, null, onRecord, token);
+    }
+
+    /// <summary>
+    /// How to read a part of the file instead of the whole file: <see cref="Open"/> gives a stream over
+    /// exactly the part's bytes, which end at <see cref="EndByte"/> of the file; <see cref="FirstFileLine"/>
+    /// is the part's first line in the file. Kept free of other Engine folders, because the generated DLL
+    /// compiles this file on its own. <see cref="Configure"/> runs after the shared settings, so the part
+    /// overload can change ETLBox's source for a part only.
+    /// </summary>
+    private sealed record PartRead(Func<Stream> Open, long EndByte, long FirstFileLine, Action<CsvSource<ExpandoObject>>? Configure = null);
+
+    /// <summary>The one read body for a whole file and for a part; only the source creation differs.</summary>
+    private static async Task<CsvReadOutcome> ReadCoreAsync(CsvFileSettings settings, PartRead? part, Func<CsvRecord, bool> onRecord, CancellationToken token)
+    {
 
         var stopwatch = Stopwatch.StartNew();
         IReadOnlyList<string> columns = Array.Empty<string>();
@@ -55,6 +76,7 @@ public sealed class CsvRecordReader
             return Outcome(cancelled: true);
         }
 
+        Stream? partStream = null;
         try
         {
             if (string.IsNullOrWhiteSpace(settings.Path))
@@ -79,7 +101,7 @@ public sealed class CsvRecordReader
             Encoding encoding;
             try
             {
-                encoding = Encoding.GetEncoding(encodingName);
+                encoding = EncodingOf(encodingName);
             }
             catch (Exception)
             {
@@ -97,15 +119,41 @@ public sealed class CsvRecordReader
             // cancel is checked before the start and on every row.
             using var stopCts = new CancellationTokenSource();
 
-            var source = new CsvSource<ExpandoObject>(settings.Path)
+            CsvSource<ExpandoObject> source;
+            var lines = part is null ? null : new PartLines(part.FirstFileLine);
+            if (part is null)
             {
-                Encoding = encoding
-            };
+                source = new CsvSource<ExpandoObject>(settings.Path)
+                {
+                    Encoding = encoding
+                };
+            }
+            else
+            {
+                if (part.EndByte > new FileInfo(settings.Path).Length)
+                {
+                    return Outcome(PartChangedMessage);
+                }
+
+                // Closed in finally as well, because it is not known whether ETLBox closes it [U: probe-intake.md].
+                source = new CsvSource<ExpandoObject>
+                {
+                    CreateStreamReader = _ =>
+                    {
+                        partStream?.Dispose();
+                        partStream = part.Open();
+                        return new StreamReader(partStream, encoding, detectEncodingFromByteOrderMarks: false);
+                    }
+                };
+            }
 
             source.Configuration.Delimiter = delimiter;
             source.Configuration.HasHeaderRecord = settings.HasHeader;
             source.Configuration.ShouldSkipRecord = args =>
             {
+                // Parser.Row counts records from the start of the stream, header and skipped lines
+                // included; RawRow counts physical lines (reports/taskG6a-probes.md a) [P].
+                lines?.Seen(args.Row.Parser.Row, args.Row.Parser.RawRow);
                 if (settings.SkipLines <= 0)
                 {
                     return false;
@@ -113,6 +161,7 @@ public sealed class CsvRecordReader
 
                 return args.Row.Parser.Row <= settings.SkipLines;
             };
+            part?.Configure?.Invoke(source);
 
             // The record counter (spec section 0). Returning null drops the row, so nothing
             // collects in the sink and the whole file is never held in memory.
@@ -136,7 +185,9 @@ public sealed class CsvRecordReader
                 }
 
                 recordsRead++;
-                var keepGoing = onRecord(new CsvRecord(recordsRead, columns, values));
+                // Exact when no bad record came before this one in the part [U: rule chosen in G6a].
+                var fileLine = lines?.FileLineOf(recordsRead + (settings.HasHeader ? 1 : 0) + Math.Max(0, settings.SkipLines));
+                var keepGoing = onRecord(new CsvRecord(recordsRead, columns, values, fileLine));
 
                 if (!keepGoing || token.IsCancellationRequested)
                 {
@@ -175,7 +226,8 @@ public sealed class CsvRecordReader
                     return Outcome(licence: true);
                 }
 
-                structuralErrors.Add(new CsvStructuralError(RecordNumberOf(error.ErrorText, settings), error.ErrorText ?? string.Empty));
+                var fileLine = lines is not null && CsvErrorText.TryGetRowNumber(error.ErrorText, out var row) ? lines.FileLineOf(row) : (long?)null;
+                structuralErrors.Add(new CsvStructuralError(RecordNumberOf(error.ErrorText, settings), error.ErrorText ?? string.Empty, fileLine));
             }
 
             return Outcome(cancelled: token.IsCancellationRequested);
@@ -187,6 +239,60 @@ public sealed class CsvRecordReader
         catch (Exception ex)
         {
             return Outcome(failure: ex);
+        }
+        finally
+        {
+            partStream?.Dispose();
+        }
+    }
+
+    /// <summary>The encodings the intake scan names (utf-16le, utf-16be) and any name .NET knows.</summary>
+    internal static Encoding EncodingOf(string name) => name.Trim().ToLowerInvariant() switch
+    {
+        "utf-16le" => new UnicodeEncoding(bigEndian: false, byteOrderMark: false),
+        "utf-16be" => new UnicodeEncoding(bigEndian: true, byteOrderMark: false),
+        _ => Encoding.GetEncoding(name)
+    };
+
+    /// <summary>
+    /// Turns a part-relative record number (<c>Parser.Row</c>) into its first file line. Keeps, from
+    /// the <c>ShouldSkipRecord</c> calls, the extra lines (<c>RawRow - Row</c>) each time they change,
+    /// that is only after a record with a quoted line break, so it stays small for any part size.
+    /// </summary>
+    private sealed class PartLines(long firstFileLine)
+    {
+        private readonly List<(int Row, int Extra)> _changes = [];
+        private int _extra;
+
+        public void Seen(int row, int rawRow)
+        {
+            lock (_changes)
+            {
+                if (rawRow - row != _extra)
+                {
+                    _extra = rawRow - row;
+                    _changes.Add((row, _extra));
+                }
+            }
+        }
+
+        /// <summary>The first line of record <paramref name="row"/> is the line after the end of record row - 1.</summary>
+        public long FileLineOf(int row)
+        {
+            var extra = 0;
+            lock (_changes)
+            {
+                for (var i = _changes.Count - 1; i >= 0; i--)
+                {
+                    if (_changes[i].Row < row)
+                    {
+                        extra = _changes[i].Extra;
+                        break;
+                    }
+                }
+            }
+
+            return firstFileLine + row - 1 + extra;
         }
     }
 
@@ -238,6 +344,14 @@ public sealed class CsvRecordReader
     internal static string ResolveDelimiter(string separator, out string? error)
     {
         error = null;
+
+        // A tab character is white space, so it must be recognised before the empty check. Before
+        // G6b it fell back to a comma; ETLBox's delimiter detection (on by default) hid that unless
+        // title lines came first (reports/taskG6b-report.md) [P].
+        if (separator == "\t")
+        {
+            return "\t";
+        }
 
         if (string.IsNullOrWhiteSpace(separator))
         {

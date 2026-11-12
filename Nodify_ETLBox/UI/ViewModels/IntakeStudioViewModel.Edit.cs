@@ -352,6 +352,7 @@ public sealed partial class IntakeStudioViewModel
         }
 
         RaiseTemplateStates();
+        RaisePipelineStates();
     }
 
     /// <summary>Scan with a confirmation when the layout has changes that are not saved (default answer No).</summary>

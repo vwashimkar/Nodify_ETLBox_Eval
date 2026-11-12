@@ -79,7 +79,8 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         Func<string, bool>? confirm = null,
         Func<string, bool>? copyText = null,
         ITemplateStore? templates = null,
-        TemplateSettings? templateSettings = null)
+        TemplateSettings? templateSettings = null,
+        Func<CsvPartSelector, UsePartOutcome>? usePart = null)
     {
         _savedSettings = settings ?? throw new ArgumentNullException(nameof(settings));
         _labels = labels ?? Labels.Empty;
@@ -115,6 +116,7 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         CloseCommand = new RelayCommand(_ => RequestClose());
         CreateEditCommands();
         CreateTemplateCommands();
+        CreatePipelineCommands(usePart);
         EscapeCommand = new RelayCommand(_ =>
         {
             if (IsScanning)
@@ -529,6 +531,7 @@ public sealed partial class IntakeStudioViewModel : ObservableObject
         _layoutDirty = _session is not null && !SameLayout(_session.Containers, _savedLayout);
         OnPropertyChanged(nameof(HasUnsavedChanges));
         SaveCommand.RaiseCanExecuteChanged();
+        RaisePipelineStates();
     }
 
     private void ClearResult()

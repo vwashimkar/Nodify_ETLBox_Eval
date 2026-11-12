@@ -32,7 +32,7 @@ public class ParseValueConnectionTests
 
         Assert.Empty(editor.Connections);
         Assert.False(parse.Inputs[0].IsConnected);
-        Assert.Equal(["ParseValue: the input accepts only a CsvFile node for now. Connect the output of a CsvFile node."], editor.Issues);
+        Assert.Equal(["ParseValue: the input accepts only a CsvFile or CSV part node for now. Connect the output of a CsvFile or CSV part node."], editor.Issues);
     }
 
     [Fact]

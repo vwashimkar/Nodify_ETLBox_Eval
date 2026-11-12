@@ -47,6 +47,9 @@
     <sys:Double x:Key="spacing-12">12</sys:Double>
     <sys:Double x:Key="spacing-16">16</sys:Double>
     <sys:Double x:Key="spacing-24">24</sys:Double>
+    <!-- Canvas node notes: the width a note line wraps at, and the most a status line may grow (four caption lines). -->
+    <sys:Double x:Key="node-note-width">170</sys:Double>
+    <sys:Double x:Key="node-status-max-height">60</sys:Double>
 
     <Thickness x:Key="Thickness4">4</Thickness>
     <Thickness x:Key="Thickness8">8</Thickness>
